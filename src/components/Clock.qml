@@ -1,31 +1,6 @@
-// Clock.qml - Time and Date Display Component
+// Clock.qml - Modern Time and Date Display
 //
-// Displays a large clock with the current time and date below it.
-// Uses Quickshell's SystemClock for efficient time updates.
-//
-// Visual Structure:
-//   +------------------+
-//   |      14:32       |  <- Large time display
-//   | Wednesday, Apr 9 |  <- Smaller date display
-//   +------------------+
-//
-// Features:
-// - Auto-updating time display via SystemClock
-// - Configurable precision (Seconds or Minutes)
-// - Customizable time and date formats
-// - Theme-aware styling
-//
-// Usage:
-//   Clock {
-//       precision: SystemClock.Seconds
-//       timeFormat: "HH:mm"
-//       dateFormat: "dddd, MMMM d"
-//   }
-//
-// Properties:
-//   precision - Update frequency (SystemClock.Seconds or SystemClock.Minutes)
-//   timeFormat - Qt datetime format string for time
-//   dateFormat - Qt datetime format string for date
+// Large clock with text shadow for readability over video backgrounds.
 
 import QtQuick
 import Quickshell
@@ -34,73 +9,74 @@ import "../services"
 Item {
     id: root
 
-    // ========================================================================
-    // Layout
-    // ========================================================================
+    implicitWidth: column.implicitWidth
+    implicitHeight: column.implicitHeight
 
-    // Calculate implicit size based on text content
-    implicitWidth: clockText.implicitWidth
-    implicitHeight: clockText.implicitHeight + dateText.implicitHeight + Theme.spacing.medium
-
-    // ========================================================================
-    // Public Properties
-    // ========================================================================
-
-    // Clock update precision
-    // SystemClock.Seconds - Update every second (default, shows seconds)
-    // SystemClock.Minutes - Update every minute (saves power)
     property int precision: SystemClock.Seconds
-
-    // Time format string (Qt datetime format)
-    // "HH:mm" - 24-hour format (default)
-    // "h:mm AP" - 12-hour format with AM/PM
-    // "HH:mm:ss" - Include seconds
     property string timeFormat: "HH:mm"
-
-    // Date format string (Qt datetime format)
-    // "dddd, MMMM d" - Full day name, full month (default)
-    // "MM/dd/yyyy" - Numeric format
-    // "ddd MMM d" - Short day name
     property string dateFormat: "dddd, MMMM d"
-
-    // ========================================================================
-    // Time Source
-    // ========================================================================
 
     SystemClock {
         id: systemClock
-        // Use the precision property to control update frequency
-        // This affects both battery usage and displayed precision
         precision: root.precision
     }
-
-    // ========================================================================
-    // Visual Layout
-    // ========================================================================
 
     Column {
         id: column
         anchors.centerIn: parent
-        spacing: Theme.spacing.medium
+        spacing: Theme.spacing.small
 
-        // Time display - Large, prominent
+        // Time display - Large, ultra-light
         Text {
             id: clockText
             anchors.horizontalCenter: parent.horizontalCenter
             text: Qt.formatDateTime(systemClock.date, root.timeFormat)
-            font.pixelSize: Theme.fonts.textSizeClock  // 72px by default
-            font.weight: Font.Light  // Thin weight for elegance
-            color: Theme.colors.text  // High contrast
+            font.pixelSize: Theme.fonts.textSizeClock
+            font.family: Theme.fonts.fontFamily
+            font.weight: Font.Thin
+            color: Theme.colors.text
+
+            // Drop shadow for video readability
+            layer.enabled: true
+            layer.effect: Item {
+                property var source
+                ShaderEffect {
+                    anchors.fill: parent
+                    property var source: parent.source
+                }
+            }
+
+            // Manual text shadow using duplicate
+            Text {
+                z: -1
+                anchors.fill: parent
+                anchors.topMargin: Theme.effects.shadowOffset
+                anchors.leftMargin: Theme.effects.shadowOffset
+                text: parent.text
+                font: parent.font
+                color: Qt.rgba(0, 0, 0, Theme.effects.shadowOpacity)
+            }
         }
 
-        // Date display - Smaller, subtle
+        // Date display
         Text {
             id: dateText
             anchors.horizontalCenter: parent.horizontalCenter
             text: Qt.formatDateTime(systemClock.date, root.dateFormat)
-            font.pixelSize: Theme.fonts.textSizeDate  // 24px by default
+            font.pixelSize: Theme.fonts.textSizeDate
+            font.family: Theme.fonts.fontFamily
             font.weight: Font.Light
-            color: Theme.colors.textSubtle  // Lower contrast
+            color: Theme.colors.textSubtle
+
+            Text {
+                z: -1
+                anchors.fill: parent
+                anchors.topMargin: Theme.effects.shadowOffset
+                anchors.leftMargin: Theme.effects.shadowOffset
+                text: parent.text
+                font: parent.font
+                color: Qt.rgba(0, 0, 0, Theme.effects.shadowOpacity)
+            }
         }
     }
 }

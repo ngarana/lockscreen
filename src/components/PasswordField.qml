@@ -1,35 +1,7 @@
-// PasswordField.qml - Password Input Component
+// PasswordField.qml - Glassmorphic Password Input
 //
-// A styled password input field with focus indicators and keyboard shortcuts.
-// Designed for use in lockscreen authentication.
-//
-// Visual Structure:
-//   +---------------------------+
-//   |    Enter password...      |  <- Placeholder text
-//   +---------------------------+
-//          (border changes on focus)
-//
-// Features:
-// - Password masking (dots instead of characters)
-// - Focus state styling (accent border)
-// - Enter key to submit
-// - Escape key to clear
-// - Theme-aware styling
-//
-// Usage:
-//   PasswordField {
-//       placeholderText: "Enter password"
-//       onSubmitted: (password) => authenticate(password)
-//       onEscaped: clear()
-//   }
-//
-// Signals:
-//   submitted(password) - Emitted when Enter is pressed
-//   escaped()           - Emitted when Escape is pressed
-//
-// Methods:
-//   clear()  - Clear the password field
-//   setFocus() - Focus the field for input
+// Modern pill-shaped password field with frosted glass effect.
+// Features focus glow, smooth animations, and text shadow.
 
 import QtQuick
 import QtQuick.Controls
@@ -38,120 +10,100 @@ import "../services"
 Item {
     id: root
 
-    // ========================================================================
-    // Layout
-    // ========================================================================
+    implicitWidth: 420
+    implicitHeight: 56
 
-    // Default size for a password field
-    implicitWidth: 400
-    implicitHeight: 50
-
-    // ========================================================================
-    // Public Properties
-    // ========================================================================
-
-    // Placeholder text shown when field is empty
-    property string placeholderText: "Enter password"
-
-    // Current password text (read/write)
-    // Use 'text' property alias to access password value
+    property string placeholderText: "Enter password..."
     property alias text: passwordField.text
-
-    // Indicates if the field has keyboard focus
-    // Used to style the border differently when focused
     property bool hasFocus: passwordField.activeFocus
 
-    // ========================================================================
-    // Signals
-    // ========================================================================
-
-    // Emitted when user presses Enter with non-empty text
-    // password: The entered password
     signal submitted(string password)
-
-    // Emitted when user presses Escape
     signal escaped()
 
-    // ========================================================================
-    // Public Methods
-    // ========================================================================
-
-    // Clear the password field
-    // Should be called after failed authentication
     function clear() {
         passwordField.text = ""
     }
 
-    // Focus the password field
-    // Call this to ready the field for user input
     function setFocus() {
         passwordField.forceActiveFocus()
     }
 
     // ========================================================================
-    // Container (Background + Border)
+    // Glassmorphic Container
     // ========================================================================
 
     Rectangle {
         id: container
         anchors.fill: parent
 
-        // Background color
-        color: Theme.colors.surface
-        radius: Theme.radius.medium
+        color: Theme.colors.glass
+        radius: Theme.radius.round
+        border.width: 1
+        border.color: root.hasFocus ? Theme.colors.primary : Theme.colors.glassBorder
 
-        // Border styling changes based on focus state
-        // Thicker, accent-colored border when focused
-        border.width: root.hasFocus ? 2 : 1
-        border.color: root.hasFocus ? Theme.colors.primary : Theme.colors.surfaceHover
-
-        // Smooth border color transition
         Behavior on border.color {
-            ColorAnimation {
-                duration: Theme.animation.fast
+            ColorAnimation { duration: Theme.animation.medium }
+        }
+
+        // Focus glow effect
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -3
+            radius: parent.radius + 3
+            color: "transparent"
+            border.width: root.hasFocus ? 2 : 0
+            border.color: Theme.colors.primaryGlow
+            opacity: root.hasFocus ? 1.0 : 0.0
+
+            Behavior on opacity {
+                NumberAnimation { duration: Theme.animation.medium }
             }
         }
     }
 
     // ========================================================================
-    // Text Field (Input)
+    // Lock Icon
+    // ========================================================================
+
+    Text {
+        id: lockIcon
+        anchors.left: parent.left
+        anchors.leftMargin: Theme.spacing.large
+        anchors.verticalCenter: parent.verticalCenter
+        text: "🔒"
+        font.pixelSize: Theme.fonts.textSize
+        opacity: 0.7
+    }
+
+    // ========================================================================
+    // Text Field
     // ========================================================================
 
     TextField {
         id: passwordField
         anchors.fill: parent
-        anchors.margins: Theme.spacing.medium
+        anchors.leftMargin: lockIcon.width + Theme.spacing.large + Theme.spacing.medium
+        anchors.rightMargin: Theme.spacing.large
 
-        // Password masking - shows dots instead of characters
         echoMode: TextInput.Password
-
-        // Placeholder configuration
         placeholderText: root.placeholderText
         font.pixelSize: Theme.fonts.textSize
+        font.family: Theme.fonts.fontFamily
 
-        // Text colors
-        color: Theme.colors.text              // Entered text
-        placeholderTextColor: Theme.colors.textMuted  // Placeholder
+        color: Theme.colors.text
+        placeholderTextColor: Theme.colors.textMuted
 
-        // Center the text
-        horizontalAlignment: Text.AlignHCenter
+        horizontalAlignment: Text.AlignLeft
         verticalAlignment: Text.AlignVCenter
 
-        // Transparent background (container provides styling)
         background: null
 
-        // ====================================================================
-        // Keyboard Handlers
-        // ====================================================================
-
-        // Enter key - Submit password
         onAccepted: {
             if (text.length > 0) {
                 root.submitted(text)
             }
         }
 
-        // Escape key - Clear field
         Keys.onEscapePressed: {
             root.escaped()
         }

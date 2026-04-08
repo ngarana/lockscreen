@@ -1,100 +1,76 @@
-// LockScreen.qml - Main Lockscreen UI Widget
+// LockScreen.qml - Modern Lockscreen Widget
 //
-// The primary lockscreen interface combining all components.
-// Displays clock, password field, status, and power buttons.
+// Premium lockscreen with aerial video background.
+// Default state: clock + power button visible.
+// On interaction (hover/keypress): reveals password field + power options.
 //
-// Visual Layout:
+// Layout:
 //   +------------------------------------------+
+//   |          (Video Background)              |
 //   |                                          |
-//   |              14:32                       |  <- Clock
-//   |         Wednesday, April 9               |
+//   |              21:47                       |  <- Always visible
+//   |        Wednesday, April 9               |
 //   |                                          |
-//   |      +--------------------+              |
-//   |      |  Enter password... |              |  <- Password Field
-//   |      +--------------------+              |
+//   |      +------------------------+         |  <- Revealed on interaction
+//   |      |  🔒  Enter password   |         |
+//   |      +------------------------+         |
+//   |        Authentication failed            |
 //   |                                          |
-//   |       Authenticating...                  |  <- Status Message
-//   |                                          |
-//   |  +------+ +-------+ +------+ +--------+  |
-//   |  | ⏾   | | ⏻    | | ↻   | | ⏼    |      |  <- Power Buttons
-//   |  |Suspnd| |Hybrnt| |Rebt| |Shutdn|      |
-//   |  +------+ +-------+ +------+ +--------+  |
-//   |                                          |
+//   |    ○ ⏾   ○ ⏻   ○ ↻   ○ ⏼             |  <- Revealed on interaction
+//   |                           ○ ⏻           |  <- Always visible (single power btn)
 //   +------------------------------------------+
-//
-// Features:
-// - Centered layout with responsive sizing
-// - Clock with time and date
-// - Password input with authentication
-// - Status message display
-// - Power action buttons (suspend, hibernate, reboot, shutdown)
-// - Click anywhere to focus password field
-//
-// Architecture:
-// - Uses LockController for authentication
-// - Uses PowerManager for power actions
-// - Uses Theme for styling
-// - Composes Clock, PasswordField, StatusMessage, ActionButton
-//
-// Usage:
-//   LockScreen {
-//       anchors.fill: parent
-//       onUnlockRequested: sessionLock.locked = false
-//   }
-//
-// Signals:
-//   unlockRequested - Emitted when authentication succeeds
 
 import QtQuick
 import QtQuick.Layouts
 import "../services"
 import "../components"
 
-Rectangle {
+Item {
     id: root
 
     // ========================================================================
     // Signals
     // ========================================================================
 
-    // Emitted when authentication succeeds
-    // Parent should set WlSessionLock.locked = false in response
     signal unlockRequested()
 
     // ========================================================================
-    // Visual Configuration
+    // State
     // ========================================================================
 
-    // Background color from theme
-    color: Theme.colors.background
-
-    // ========================================================================
-    // Internal State
-    // ========================================================================
-
-    // Tracks if currently unlocking (for animation/state purposes)
+    // UI revealed when user interacts (hover/keypress)
+    property bool uiRevealed: false
     property bool isUnlocking: false
+
+    // Auto-hide timer: hide UI after inactivity
+    Timer {
+        id: hideTimer
+        interval: 15000
+        running: root.uiRevealed && !passwordField.hasFocus
+        repeat: false
+        onTriggered: {
+            if (passwordField.text === "") {
+                root.uiRevealed = false
+            }
+        }
+    }
 
     // ========================================================================
     // Controller Connections
     // ========================================================================
-    // React to authentication events from LockController
 
     Connections {
         target: LockController
 
-        // Authentication succeeded
         function onUnlockSuccess() {
             root.isUnlocking = true
             root.unlockRequested()
         }
 
-        // Authentication started - clear field for new attempt
         function onAuthenticationStarted() {
             passwordField.clear()
         }
 
-        // Authentication failed - clear and refocus for retry
         function onUnlockFailed(message) {
             passwordField.clear()
             passwordField.setFocus()
@@ -102,120 +78,224 @@ Rectangle {
     }
 
     // ========================================================================
-    // Background Click Handler
+    // Layer 0: Video Background
     // ========================================================================
-    // Allow clicking anywhere to focus the password field
 
-    MouseArea {
+    VideoBackground {
+        id: videoBackground
         anchors.fill: parent
-        onClicked: passwordField.setFocus()
     }
 
     // ========================================================================
-    // Main Content Layout
+    // Layer 1: Dark Overlay (subtle, improves text readability)
     // ========================================================================
 
-    ColumnLayout {
-        id: mainLayout
-        anchors.centerIn: parent
+    Rectangle {
+        anchors.fill: parent
+        color: "black"
+        opacity: root.uiRevealed ? 0.35 : 0.15
 
-        // Responsive width: 40% of parent, max 400px
-        width: Math.min(parent.width * 0.4, 400)
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.animation.reveal
+                easing.type: Easing.InOutQuad
+            }
+        }
+    }
 
-        // Generous spacing between elements
-        spacing: Theme.spacing.xlarge
+    // ========================================================================
+    // Interaction Capture
+    // ========================================================================
+    // Any mouse movement or keypress reveals the UI
+
+    MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        propagateComposedEvents: true
+
+        onPositionChanged: {
+            root.revealUI()
+        }
+
+        onClicked: function(mouse) {
+            root.revealUI()
+            if (root.uiRevealed) {
+                passwordField.setFocus()
+            }
+            mouse.accepted = false
+        }
+    }
+
+    // Global key capture
+    Keys.onPressed: function(event) {
+        if (!root.uiRevealed) {
+            root.revealUI()
+            // Forward printable characters to password field
+            if (event.text.length > 0 && !event.modifiers) {
+                passwordField.setFocus()
+            }
+        }
+    }
+
+    // ========================================================================
+    // Main Content
+    // ========================================================================
+
+    Item {
+        anchors.fill: parent
 
         // ====================================================================
-        // Clock Display
+        // Clock - Always Visible (upper center)
         // ====================================================================
 
         Clock {
             id: clock
-            Layout.alignment: Qt.AlignHCenter
-        }
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: parent.height * 0.22
 
-        // Visual separator
-        Item {
-            Layout.preferredHeight: Theme.spacing.large
+            // Slight upward shift when UI reveals to make room
+            Behavior on y {
+                NumberAnimation {
+                    duration: Theme.animation.reveal
+                    easing.type: Easing.InOutQuad
+                }
+            }
         }
 
         // ====================================================================
-        // Password Input
+        // Password Field - Revealed on Interaction
         // ====================================================================
 
         PasswordField {
             id: passwordField
-            Layout.fillWidth: true
-            Layout.preferredHeight: implicitHeight
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: clock.y + clock.height + Theme.spacing.xxlarge
+            width: Math.min(parent.width * 0.35, 420)
 
-            // Submit password to LockController on Enter
+            opacity: root.uiRevealed ? 1.0 : 0.0
+            visible: opacity > 0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.animation.reveal
+                    easing.type: Easing.InOutQuad
+                }
+            }
+
             onSubmitted: function(password) {
                 LockController.authenticate(password)
             }
 
-            // Clear field on Escape
             onEscaped: {
                 clear()
-            }
-
-            // Focus field on creation
-            Component.onCompleted: {
-                setFocus()
+                root.uiRevealed = false
             }
         }
 
         // ====================================================================
-        // Status Message
+        // Status Message - Below Password (revealed)
         // ====================================================================
 
         StatusMessage {
-            Layout.alignment: Qt.AlignHCenter
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: passwordField.y + passwordField.height + Theme.spacing.medium
             message: LockController.statusMessage
             isError: LockController.hasError
-            visible: LockController.statusMessage !== ""
-        }
 
-        // Visual separator
-        Item {
-            Layout.preferredHeight: Theme.spacing.large
+            opacity: root.uiRevealed ? 1.0 : 0.0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.animation.reveal
+                    easing.type: Easing.InOutQuad
+                }
+            }
         }
 
         // ====================================================================
-        // Power Action Buttons
+        // Power Buttons Row - Revealed on Interaction
         // ====================================================================
 
-        RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: Theme.spacing.medium
+        Row {
+            id: powerButtonsRow
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Theme.spacing.xxlarge
+            spacing: Theme.spacing.large
 
-            // Suspend button - Sleep mode, fast resume
+            opacity: root.uiRevealed ? 1.0 : 0.0
+            visible: opacity > 0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.animation.reveal
+                    easing.type: Easing.InOutQuad
+                }
+            }
+
             ActionButton {
                 icon: "⏾"
                 label: "Suspend"
                 onClicked: PowerManager.suspend()
             }
 
-            // Hibernate button - Suspend to disk
             ActionButton {
                 icon: "⏻"
                 label: "Hibernate"
                 onClicked: PowerManager.hibernate()
             }
 
-            // Reboot button - Restart system
             ActionButton {
                 icon: "↻"
                 label: "Reboot"
                 onClicked: PowerManager.reboot()
             }
 
-            // Shutdown button - Power off
             ActionButton {
                 icon: "⏼"
                 label: "Shutdown"
                 onClicked: PowerManager.shutdown()
             }
         }
+
+        // ====================================================================
+        // Single Power Button - Always Visible (bottom right)
+        // ====================================================================
+
+        ActionButton {
+            id: alwaysVisiblePower
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.rightMargin: Theme.spacing.xlarge
+            anchors.bottomMargin: Theme.spacing.xlarge
+
+            icon: "⏻"
+            label: "Power"
+
+            // Hide when full power row is visible to avoid duplication
+            opacity: root.uiRevealed ? 0.0 : 0.7
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.animation.reveal
+                    easing.type: Easing.InOutQuad
+                }
+            }
+
+            onClicked: {
+                root.revealUI()
+            }
+        }
+    }
+
+    // ========================================================================
+    // Methods
+    // ========================================================================
+
+    function revealUI() {
+        root.uiRevealed = true
+        hideTimer.restart()
+        passwordField.setFocus()
     }
 
     // ========================================================================
@@ -223,7 +303,6 @@ Rectangle {
     // ========================================================================
 
     Component.onCompleted: {
-        // Ensure password field has focus on load
-        passwordField.setFocus()
+        root.forceActiveFocus()
     }
 }

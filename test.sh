@@ -23,6 +23,19 @@ test_file_exists() {
     fi
 }
 
+test_dir_exists() {
+    local dir="$1"
+    local description="$2"
+    
+    if [ -d "$dir" ]; then
+        echo "✓ PASS: $description"
+        PASS=$((PASS + 1))
+    else
+        echo "✗ FAIL: $description (directory not found: $dir)"
+        FAIL=$((FAIL + 1))
+    fi
+}
+
 test_dependency() {
     local cmd="$1"
     local description="$2"
@@ -38,17 +51,40 @@ test_dependency() {
 
 echo "=== File Structure Tests ==="
 test_file_exists "$SCRIPT_DIR/shell.qml" "Main shell.qml exists"
+
+echo ""
+echo "--- Services ---"
+test_file_exists "$SCRIPT_DIR/src/services/qmldir" "Services qmldir exists"
 test_file_exists "$SCRIPT_DIR/src/services/LockController.qml" "LockController service exists"
 test_file_exists "$SCRIPT_DIR/src/services/PowerManager.qml" "PowerManager service exists"
 test_file_exists "$SCRIPT_DIR/src/services/Theme.qml" "Theme service exists"
+test_file_exists "$SCRIPT_DIR/src/services/VideoConfig.qml" "VideoConfig service exists"
+
+echo ""
+echo "--- Components ---"
+test_file_exists "$SCRIPT_DIR/src/components/qmldir" "Components qmldir exists"
 test_file_exists "$SCRIPT_DIR/src/components/PasswordField.qml" "PasswordField component exists"
 test_file_exists "$SCRIPT_DIR/src/components/Clock.qml" "Clock component exists"
 test_file_exists "$SCRIPT_DIR/src/components/ActionButton.qml" "ActionButton component exists"
 test_file_exists "$SCRIPT_DIR/src/components/StatusMessage.qml" "StatusMessage component exists"
+test_file_exists "$SCRIPT_DIR/src/components/VideoBackground.qml" "VideoBackground component exists"
+
+echo ""
+echo "--- Widgets ---"
+test_file_exists "$SCRIPT_DIR/src/widgets/qmldir" "Widgets qmldir exists"
 test_file_exists "$SCRIPT_DIR/src/widgets/LockScreen.qml" "LockScreen widget exists"
+
+echo ""
+echo "--- Scripts ---"
 test_file_exists "$SCRIPT_DIR/run.sh" "Run script exists"
 test_file_exists "$SCRIPT_DIR/lock.sh" "Lock script exists"
 test_file_exists "$SCRIPT_DIR/README.md" "README exists"
+
+echo ""
+echo "--- Video Assets ---"
+test_dir_exists "$SCRIPT_DIR/videos" "Videos directory/symlink exists"
+test_file_exists "$SCRIPT_DIR/playlists/day.m3u" "Day playlist exists"
+test_file_exists "$SCRIPT_DIR/playlists/night.m3u" "Night playlist exists"
 
 echo ""
 echo "=== Dependency Tests ==="

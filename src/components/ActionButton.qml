@@ -1,35 +1,7 @@
-// ActionButton.qml - Power Action Button Component
+// ActionButton.qml - Circular Glassmorphic Power Button
 //
-// A styled button for power actions (suspend, reboot, shutdown).
-// Features hover effects and an icon + label layout.
-//
-// Visual Structure:
-//   +----------+
-//   |   (⏻)   |  <- Icon (large)
-//   | Shutdown |  <- Label (smaller)
-//   +----------+
-//
-// Features:
-// - Icon + label vertical layout
-// - Hover state styling
-// - Smooth color transitions
-// - Pointing hand cursor
-// - Theme-aware styling
-//
-// Usage:
-//   ActionButton {
-//       icon: "⏻"
-//       label: "Shutdown"
-//       onClicked: PowerManager.shutdown()
-//   }
-//
-// Properties:
-//   icon - Unicode symbol or text for the icon
-//   label - Button label text
-//   hovered - Read-only, true when mouse is over button
-//
-// Signals:
-//   clicked - Emitted when button is clicked
+// Modern icon-only circular button with glass effect.
+// Scale animation on hover, translucent background.
 
 import QtQuick
 import "../services"
@@ -37,101 +9,86 @@ import "../services"
 Rectangle {
     id: root
 
-    // ========================================================================
-    // Layout
-    // ========================================================================
+    implicitWidth: 52
+    implicitHeight: 52
 
-    // Square button size
-    implicitWidth: 80
-    implicitHeight: 80
-
-    // ========================================================================
-    // Public Properties
-    // ========================================================================
-
-    // Icon text/symbol (Unicode characters work well)
-    // Examples: "⏻" (power), "↻" (reboot), "⏾" (suspend)
     property string icon: ""
-
-    // Button label text
-    // Short labels work best (e.g., "Shutdown", "Reboot")
-    property string label: ""
-
-    // Indicates if mouse is hovering over the button
-    // Read-only, used internally for styling
+    property string label: ""  // Used for tooltip only
     property bool hovered: mouseArea.containsMouse
 
-    // ========================================================================
-    // Signals
-    // ========================================================================
-
-    // Emitted when the button is clicked
     signal clicked()
 
-    // ========================================================================
-    // Styling
-    // ========================================================================
+    // Circular shape with glassmorphism
+    color: hovered ? Theme.colors.glassHover : Theme.colors.glass
+    radius: width / 2
+    border.width: 1
+    border.color: hovered ? Theme.colors.primary : Theme.colors.glassBorder
 
-    // Background color changes on hover
-    color: hovered ? Theme.colors.surfaceHover : Theme.colors.surface
-    radius: Theme.radius.large
-    border.width: 2
-    border.color: hovered ? Theme.colors.primary : Theme.colors.surfaceHover
+    // Scale animation on hover
+    scale: hovered ? 1.1 : 1.0
 
-    // Smooth color transitions for hover effect
     Behavior on color {
-        ColorAnimation {
-            duration: Theme.animation.fast
-        }
+        ColorAnimation { duration: Theme.animation.fast }
     }
 
     Behavior on border.color {
-        ColorAnimation {
-            duration: Theme.animation.fast
+        ColorAnimation { duration: Theme.animation.fast }
+    }
+
+    Behavior on scale {
+        NumberAnimation {
+            duration: Theme.animation.medium
+            easing.type: Easing.OutBack
         }
     }
 
-    // ========================================================================
-    // Content Layout
-    // ========================================================================
-
-    Column {
+    // Icon text
+    Text {
         anchors.centerIn: parent
-        spacing: Theme.spacing.small
+        text: root.icon
+        font.pixelSize: 20
+        font.family: "Noto Sans"
+        color: root.hovered ? Theme.colors.primary : Theme.colors.text
 
-        // Icon - Larger text
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: root.icon
-            font.pixelSize: Theme.fonts.textSizeLarge  // 24px
-            font.family: "Noto Sans"  // Ensures Unicode symbols render
-            color: Theme.colors.text
+        Behavior on color {
+            ColorAnimation { duration: Theme.animation.fast }
+        }
+    }
+
+    // Tooltip on hover
+    Rectangle {
+        id: tooltip
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.top
+        anchors.bottomMargin: 8
+        width: tooltipText.implicitWidth + Theme.spacing.medium
+        height: tooltipText.implicitHeight + Theme.spacing.small
+        color: Theme.colors.glass
+        radius: Theme.radius.medium
+        border.width: 1
+        border.color: Theme.colors.glassBorder
+        visible: root.hovered && root.label !== ""
+
+        opacity: root.hovered ? 1.0 : 0.0
+        Behavior on opacity {
+            NumberAnimation { duration: Theme.animation.fast }
         }
 
-        // Label - Smaller text
         Text {
-            anchors.horizontalCenter: parent.horizontalCenter
+            id: tooltipText
+            anchors.centerIn: parent
             text: root.label
-            font.pixelSize: Theme.fonts.textSize - 4  // 12px
+            font.pixelSize: 12
+            font.family: Theme.fonts.fontFamily
             color: Theme.colors.textSubtle
         }
     }
 
-    // ========================================================================
-    // Mouse Interaction
-    // ========================================================================
-
     MouseArea {
         id: mouseArea
         anchors.fill: parent
-
-        // Enable hover detection for styling changes
         hoverEnabled: true
-
-        // Show pointing hand cursor to indicate clickability
         cursorShape: Qt.PointingHandCursor
-
-        // Emit clicked signal on mouse press
         onClicked: root.clicked()
     }
 }

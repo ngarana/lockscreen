@@ -1,24 +1,8 @@
 // Theme.qml - Centralized Theme Configuration
 //
-// This singleton provides a single source of truth for all visual styling.
-// Uses the Catppuccin Mocha color palette for a modern, dark aesthetic.
-//
-// Color Palette: Catppuccin Mocha
-// - Background: Dark blue-gray base
-// - Surface: Elevated surface colors
-// - Text: High contrast text colors
-// - Accent: Blue primary accent
-//
-// Usage:
-//   color: Theme.colors.background
-//   font.pixelSize: Theme.fonts.textSize
-//   radius: Theme.radius.medium
-//
-// Benefits:
-// - Single location for all theme values
-// - Easy to modify entire look from one file
-// - Consistent spacing, fonts, and colors across components
-// - Type-safe property access
+// Singleton providing all visual styling constants.
+// Uses Catppuccin Mocha palette with glassmorphism extensions
+// for modern lockscreen aesthetics over video backgrounds.
 
 pragma Singleton
 import Quickshell
@@ -28,79 +12,90 @@ QtObject {
     id: theme
 
     // ========================================================================
-    // Color Palette (Catppuccin Mocha)
+    // Color Palette (Catppuccin Mocha + Glassmorphism)
     // ========================================================================
-    // All colors are defined as readonly for immutability
-    // Access via: Theme.colors.<name>
 
     property var colors: QtObject {
-        // Base colors - Background layers
-        readonly property color background: "#1e1e2e"    // Main background (base)
-        readonly property color surface: "#313244"      // Elevated surfaces (surface0)
-        readonly property color surfaceHover: "#45475a" // Hover state (surface1)
+        // Base colors
+        readonly property color background: "#1e1e2e"
+        readonly property color surface: "#313244"
+        readonly property color surfaceHover: "#45475a"
+
+        // Glassmorphism surfaces (semi-transparent)
+        readonly property color glass: "#40313244"
+        readonly property color glassHover: "#60454a5a"
+        readonly property color glassBorder: "#30cdd6f4"
+        readonly property color glassActive: "#50899b4fa"
 
         // Accent colors
-        readonly property color primary: "#89b4fa"      // Primary accent (blue)
+        readonly property color primary: "#89b4fa"
+        readonly property color primaryGlow: "#4089b4fa"
 
-        // Text colors - Different emphasis levels
-        readonly property color text: "#cdd6f4"         // Primary text (text)
-        readonly property color textSubtle: "#a6adc8"   // Secondary text (subtext0)
-        readonly property color textMuted: "#6c7086"    // Tertiary text (overlay0)
+        // Text colors
+        readonly property color text: "#cdd6f4"
+        readonly property color textSubtle: "#a6adc8"
+        readonly property color textMuted: "#6c7086"
 
-        // Semantic colors - Status indicators
-        readonly property color error: "#f38ba8"        // Error/danger (red)
-        readonly property color success: "#a6e3a1"      // Success (green)
-        readonly property color warning: "#f9e2af"      // Warning (yellow)
+        // Semantic colors
+        readonly property color error: "#f38ba8"
+        readonly property color success: "#a6e3a1"
+        readonly property color warning: "#f9e2af"
     }
 
     // ========================================================================
     // Typography
     // ========================================================================
-    // Font sizes in pixels
-    // Access via: Theme.fonts.<name>
 
     property var fonts: QtObject {
-        readonly property int textSize: 16       // Standard text
-        readonly property int textSizeLarge: 24  // Large text (headers, buttons)
-        readonly property int textSizeClock: 72  // Clock display
-        readonly property int textSizeDate: 24   // Date display
+        readonly property int textSize: 16
+        readonly property int textSizeLarge: 24
+        readonly property int textSizeClock: 96
+        readonly property int textSizeDate: 28
+        readonly property string fontFamily: "Inter"
     }
 
     // ========================================================================
     // Spacing Scale
     // ========================================================================
-    // Consistent spacing values for margins and padding
-    // Access via: Theme.spacing.<name>
 
     property var spacing: QtObject {
-        readonly property int small: 8    // Tight spacing
-        readonly property int medium: 16  // Standard spacing
-        readonly property int large: 24   // Generous spacing
-        readonly property int xlarge: 40  // Extra spacing (section breaks)
+        readonly property int small: 8
+        readonly property int medium: 16
+        readonly property int large: 24
+        readonly property int xlarge: 48
+        readonly property int xxlarge: 80
     }
 
     // ========================================================================
     // Border Radius
     // ========================================================================
-    // Rounded corner values
-    // Access via: Theme.radius.<name>
 
     property var radius: QtObject {
-        readonly property int small: 4     // Subtle rounding
-        readonly property int medium: 8    // Standard rounding
-        readonly property int large: 12    // Prominent rounding
-        readonly property int round: 9999  // Fully rounded (pills)
+        readonly property int small: 4
+        readonly property int medium: 8
+        readonly property int large: 16
+        readonly property int xlarge: 24
+        readonly property int round: 9999
     }
 
     // ========================================================================
     // Animation Durations
     // ========================================================================
-    // Transition timing in milliseconds
-    // Access via: Theme.animation.<name>
 
     property var animation: QtObject {
-        readonly property int fast: 150    // Quick interactions
-        readonly property int medium: 250  // Standard transitions
-        readonly property int slow: 400    // Deliberate animations
+        readonly property int fast: 150
+        readonly property int medium: 300
+        readonly property int slow: 500
+        readonly property int reveal: 600
+    }
+
+    // ========================================================================
+    // Shadow & Effects
+    // ========================================================================
+
+    property var effects: QtObject {
+        readonly property int blurRadius: 40
+        readonly property real shadowOpacity: 0.6
+        readonly property int shadowOffset: 2
     }
 }
