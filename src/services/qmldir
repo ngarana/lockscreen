@@ -1,0 +1,4 @@
+module Services
+singleton LockController 1.0 LockController.qml
+singleton PowerManager 1.0 PowerManager.qml
+singleton Theme 1.0 Theme.qml

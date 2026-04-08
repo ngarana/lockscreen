@@ -1,0 +1,4 @@
+ActionButton 1.0 ActionButton.qml
+Clock 1.0 Clock.qml
+PasswordField 1.0 PasswordField.qml
+StatusMessage 1.0 StatusMessage.qml
