@@ -181,8 +181,6 @@ Item {
             }
         }
 
-
-
         // Shuffle using Fisher-Yates
         for (var j = videos.length - 1; j > 0; j--) {
             var k = Math.floor(Math.random() * (j + 1))
