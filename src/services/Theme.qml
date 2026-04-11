@@ -98,4 +98,19 @@ QtObject {
         readonly property real shadowOpacity: 0.6
         readonly property int shadowOffset: 2
     }
+
+    // ========================================================================
+    // Audio Controller
+    // ========================================================================
+
+    property var audio: QtObject {
+        readonly property int buttonSize: 48
+        readonly property int buttonIconSize: 20
+        readonly property int minWidth: 320
+        readonly property int maxWidth: 420
+        readonly property int progressHeight: 4
+        readonly property int volumeSliderWidth: 150
+        readonly property int spacing: 12
+        readonly property int panelPadding: 16
+    }
 }

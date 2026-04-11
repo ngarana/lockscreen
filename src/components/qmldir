@@ -1,4 +1,7 @@
 ActionButton 1.0 ActionButton.qml
+AudioController 1.0 AudioController.qml
+AudioMetadata 1.0 AudioMetadata.qml
+AudioPlayerButton 1.0 AudioPlayerButton.qml
 Clock 1.0 Clock.qml
 PasswordField 1.0 PasswordField.qml
 StatusMessage 1.0 StatusMessage.qml

@@ -152,6 +152,7 @@ Item {
             id: clock
             anchors.horizontalCenter: parent.horizontalCenter
             y: parent.height * 0.22
+            z: 3
 
             // Slight upward shift when UI reveals to make room
             Behavior on y {
@@ -197,6 +198,7 @@ Item {
         // ====================================================================
 
         StatusMessage {
+            id: statusMessage
             anchors.horizontalCenter: parent.horizontalCenter
             y: passwordField.y + passwordField.height + Theme.spacing.medium
             message: LockController.statusMessage
@@ -210,6 +212,22 @@ Item {
                     easing.type: Easing.InOutQuad
                 }
             }
+        }
+
+        // ====================================================================
+        // Audio Controller - Revealed when audio is active
+        // ====================================================================
+
+        AudioController {
+            id: audioController
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: statusMessage.y + statusMessage.height + Theme.spacing.medium
+            width: Math.min(parent.width - Theme.spacing.xlarge * 2, Theme.audio.maxWidth)
+
+            revealed: root.uiRevealed
+            showVolume: true
+            showProgress: true
+            z: 2
         }
 
         // ====================================================================

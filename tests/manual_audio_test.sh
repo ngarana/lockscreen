@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "=== Audio Controller Manual Tests ==="
+
+echo ""
+echo "Active MPRIS players:"
+playerctl -l 2>/dev/null || echo "  (playerctl not available or no players found)"
+
+echo ""
+echo "--- Phase 1: Service Detection ---"
+echo "1. Verify AudioService singleton loads without errors"
+echo "   Check: No QML import errors for Quickshell.Services.Mpris"
+echo "   Check: AudioService.hasPlayer reflects actual MPRIS state"
+
+echo ""
+echo "--- Phase 2: UI Components ---"
+echo "2. AudioPlayerButton rendering"
+echo "   Check: Play/pause, next, previous buttons visible when audio active"
+echo "   Check: Buttons disabled when capability not supported"
+echo "   Check: Hover scale animation works"
+
+echo ""
+echo "3. AudioMetadata display"
+echo "   Check: Track title, artist, album populate correctly"
+echo "   Check: Progress bar shows elapsed/total time"
+echo "   Check: 'Unknown Track' / 'Unknown Artist' shown when metadata missing"
+echo "   Check: LIVE indicator shown for streams (duration <= 0)"
+
+echo ""
+echo "--- Phase 3: Integration ---"
+echo "4. Start MPV playback (or any MPRIS player)"
+echo "   mpv --no-video --loop=inf some-audio-file.mp3 &"
+echo ""
+echo "   Check: Controller appears after UI reveal (move mouse)"
+echo "   Check: Controller hidden when UI auto-hides (15s)"
+echo "   Check: Controller disappears when playback stops"
+
+echo ""
+echo "5. Test transport controls"
+echo "   playerctl play-pause"
+echo "   playerctl next"
+echo "   playerctl previous"
+echo ""
+echo "   Check: Play/pause button icon updates (▶ / ⏸)"
+echo "   Check: Next/previous only enabled when supported"
+
+echo ""
+echo "6. Switch between players"
+echo "   Stop current player, start another (e.g. Firefox, Spotify)"
+echo ""
+echo "   Check: Controller switches to new player cleanly"
+echo "   Check: Metadata updates for new track"
+
+echo ""
+echo "--- Phase 4: Output Volume Mode ---"
+echo "7. Switch volume mode to output"
+echo "   Edit AudioService.qml: property string volumeMode: \"output\""
+echo ""
+echo "   Check: Volume slider controls system output volume"
+echo "   Check: Volume percentage reflects Pipewire sink volume"
+echo "   Check: Revert to \"player\" mode for normal operation"
+
+echo ""
+echo "8. Sticky-player debounce"
+echo "   Pause playback briefly (< 3s), then resume"
+echo ""
+echo "   Check: Controller does not disappear during brief pause"
+echo "   Check: Controller shows correct state after resume"
+
+echo ""
+echo "--- Edge Cases ---"
+echo "9. No metadata available"
+echo "   Check: Fallback strings shown, controls still visible"
+
+echo ""
+echo "10. Live stream / unknown length"
+echo "   Check: LIVE indicator shown, no bogus 0:00 / 0:00"
+
+echo ""
+echo "11. Narrow screen"
+echo "   Check: Controller does not overlap password field or power buttons"
+echo "   Check: Width bounded by Theme.audio.maxWidth"
+
+echo ""
+echo "12. Multiple players active"
+echo "   Check: Priority order respected (mpv > mpd > others)"
+echo "   Check: No rapid switching between players"
+
+echo ""
+echo "=== Done ==="
