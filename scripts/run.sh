@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-export QUICKSHELL_AUTO_LOCK=0
+export QUICKSHELL_LOCKSCREEN_AUTO_LOCK=0
 export QUICKSHELL_MODE="$MODE"
 
 echo "╔══════════════════════════════════════════════════╗"

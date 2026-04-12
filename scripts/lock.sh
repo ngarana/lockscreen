@@ -20,11 +20,11 @@ CONFIG_PATH="$(dirname "$SCRIPT_DIR")"
 # Check if Qypr is already running via IPC
 if qs ipc -p "$CONFIG_PATH" show >/dev/null 2>&1; then
     echo "Qypr is running. Sending lock command via IPC..."
-    exec qs ipc -p "$CONFIG_PATH" call lockscreen lock
+    exec qs ipc -p "$CONFIG_PATH" call qypr lock
 fi
 
 # Start new instance with auto-lock enabled
-export QUICKSHELL_AUTO_LOCK=1
+export QUICKSHELL_LOCKSCREEN_AUTO_LOCK=1
 export QUICKSHELL_MODE="lock"
 
 echo "Starting Qypr lock screen..."
