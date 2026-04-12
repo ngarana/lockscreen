@@ -53,12 +53,12 @@ QtObject {
     // Display & Screen Icons
     // ========================================================================
 
-    readonly property string screenMirroring: "󰍺"   // nf-md-mirror
-    readonly property string display: "󰍹"            // nf-md-monitor
-    readonly property string displayExternal: "󰍹"    // nf-md-monitor
-    readonly property string nightLight: "󰖔"         // nf-md-nightlight
-    readonly property string focus: "󰋲"              // nf-md-target
-    readonly property string creativeCloud: "󰖐"      // nf-md-cloud
+    readonly property string screenMirroring: ""   // nf-fa-clone (screen mirroring)
+    readonly property string display: ""            // nf-fa-desktop
+    readonly property string displayExternal: ""    // nf-fa-desktop
+    readonly property string nightLight: ""         // nf-fa-moon-o
+    readonly property string focus: ""              // nf-fa-dot-circle-o
+    readonly property string creativeCloud: ""      // nf-fa-cloud
 
     // ========================================================================
     // User & Profile Icons

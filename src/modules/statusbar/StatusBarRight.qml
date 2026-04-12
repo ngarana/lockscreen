@@ -68,34 +68,40 @@ RowLayout {
     RowLayout {
         spacing: 12
         Layout.alignment: Qt.AlignVCenter
-        
-    Text {
-        text: Theme.ThemeEngine.icons.screenMirroring
-        font.pixelSize: 14
-        font.family: Theme.fonts.iconFontFamily
-        color: "#8E54E9"
-    }
 
-    Text {
-        text: Theme.ThemeEngine.icons.display
-        font.pixelSize: 14
-        font.family: Theme.fonts.iconFontFamily
-        color: Theme.ThemeEngine.colors.textPrimary
-    }
+        // Screen Mirroring Icon
+        Text {
+            text: ""  // Font Awesome: clone/screen-mirroring
+            font.pixelSize: 14
+            font.family: "Font Awesome 7 Free"
+            font.weight: Font.Bold
+            color: "#8E54E9"
+        }
 
-    Text {
-        text: Theme.ThemeEngine.icons.focus
-        font.pixelSize: 14
-        font.family: Theme.fonts.iconFontFamily
-        color: Theme.ThemeEngine.colors.textPrimary
-    }
+        // Display Icon
+        Text {
+            text: ""  // Font Awesome: desktop
+            font.pixelSize: 14
+            font.family: "Font Awesome 7 Free"
+            font.weight: Font.Bold
+            color: Theme.ThemeEngine.colors.textPrimary
+        }
 
-    Text {
-        text: Theme.ThemeEngine.icons.grid
-        font.pixelSize: 14
-        font.family: Theme.fonts.iconFontFamily
-        color: Theme.ThemeEngine.colors.textPrimary
-    }
+        // Focus Mode Icon
+        Text {
+            text: Theme.ThemeEngine.icons.focus
+            font.pixelSize: 14
+            font.family: Theme.fonts.iconFontFamily
+            color: Theme.ThemeEngine.colors.textPrimary
+        }
+
+        // Grid View Icon
+        Text {
+            text: Theme.ThemeEngine.icons.grid
+            font.pixelSize: 14
+            font.family: Theme.fonts.iconFontFamily
+            color: Theme.ThemeEngine.colors.textPrimary
+        }
     }
 
     // ========================================================================
