@@ -39,7 +39,7 @@ Rectangle {
     // ========================================================================
 
     color: "transparent"
-    radius: Theme.Theme.radius.small
+    radius: Theme.ThemeEngine.radius.small
 
     property bool hovered: mouseArea.containsMouse
     property bool pressed: false
@@ -56,7 +56,7 @@ Rectangle {
         anchors.centerIn: parent
         text: root.itemIcon
         font.pixelSize: Math.min(root.width, root.height) - 4
-        color: root.hovered ? Theme.Theme.colors.textPrimary : Theme.Theme.colors.textSecondary
+        color: root.hovered ? Theme.ThemeEngine.colors.textPrimary : Theme.ThemeEngine.colors.textSecondary
 
         // Attention pulse animation
         SequentialAnimation on opacity {
@@ -92,9 +92,9 @@ Rectangle {
 
         width: tooltipText.implicitWidth + 12
         height: tooltipText.implicitHeight + 8
-        radius: Theme.Theme.radius.small
+        radius: Theme.ThemeEngine.radius.small
 
-        color: Theme.Theme.colors.surface0
+        color: Theme.ThemeEngine.colors.surface0
         opacity: 0.95
 
         // Border
@@ -104,7 +104,7 @@ Rectangle {
             radius: parent.radius
             color: "transparent"
             border.width: 1
-            border.color: Theme.Theme.colors.glassBorder
+            border.color: Theme.ThemeEngine.colors.glassBorder
         }
 
         Text {
@@ -112,7 +112,7 @@ Rectangle {
             anchors.centerIn: parent
             text: root.itemTooltip
             font.pixelSize: 11
-            color: Theme.Theme.colors.textPrimary
+            color: Theme.ThemeEngine.colors.textPrimary
         }
     }
 

@@ -52,6 +52,9 @@ QtObject {
     // Visual effects (blur, shadow, glassmorphism)
     readonly property var effects: Effects {}
 
+    // Icon glyphs (Unicode symbols)
+    readonly property var icons: IconTokens {}
+
     // Animation durations and easing
     readonly property var animation: AnimationTokens {}
 

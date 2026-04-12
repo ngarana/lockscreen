@@ -100,45 +100,6 @@ QtObject {
     }
 
     // ========================================================================
-    // Icon Mapping (Unicode/Emoji fallback)
-    // ========================================================================
-
-    property var icons: QtObject {
-        // System icons
-        readonly property string volumeHigh: "🔊"
-        readonly property string volumeMedium: "🔉"
-        readonly property string volumeLow: "🔈"
-        readonly property string volumeMuted: "🔇"
-        readonly property string brightness: "🔆"
-        readonly property string battery: "🔋"
-        readonly property string batteryCharging: "🔌"
-        readonly property string batteryLow: "🪫"
-
-        // Network icons
-        readonly property string wifi: "📶"
-        readonly property string wifiOff: "📵"
-        readonly property string ethernet: "🌐"
-        readonly property string bluetooth: "🔵"
-        readonly property string bluetoothOff: "⚫"
-        readonly property string airplane: "✈️"
-
-        // Application icons
-        readonly property string applications: "🔲"
-        readonly property string settings: "⚙️"
-        readonly property string notifications: "🔔"
-        readonly property string calendar: "📅"
-        readonly property string weather: "🌤️"
-        readonly property string media: "🎵"
-
-        // Status icons
-        readonly property string check: "✓"
-        readonly property string close: "✕"
-        readonly property string warning: "⚠️"
-        readonly property string error: "❌"
-        readonly property string info: "ℹ️"
-    }
-
-    // ========================================================================
     // Audio Controller
     // ========================================================================
 

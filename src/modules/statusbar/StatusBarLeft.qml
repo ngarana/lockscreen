@@ -27,7 +27,7 @@ RowLayout {
     Rectangle {
         id: launcherButton
         color: "transparent"
-        radius: Theme.Theme.radius.small
+        radius: Theme.ThemeEngine.radius.small
 
         property bool hovered: launcherMouse.containsMouse
         property bool pressed: false
@@ -37,9 +37,9 @@ RowLayout {
 
         Text {
             anchors.centerIn: parent
-            text: Theme.Theme.icons.applications
+            text: Theme.ThemeEngine.icons.applications
             font.pixelSize: 18
-            color: launcherButton.hovered ? Theme.Theme.colors.textPrimary : Theme.Theme.colors.textSecondary
+            color: launcherButton.hovered ? Theme.ThemeEngine.colors.textPrimary : Theme.ThemeEngine.colors.textSecondary
         }
 
         MouseArea {
@@ -61,7 +61,7 @@ RowLayout {
     Divider {
         Layout.preferredWidth: 1
         Layout.preferredHeight: 18
-        color: Theme.Theme.colors.glassBorder
+        color: Theme.ThemeEngine.colors.glassBorder
     }
 
     // ========================================================================
@@ -92,8 +92,8 @@ RowLayout {
             id: windowTitle
             anchors.fill: parent
             text: root.activeWindowTitle
-            fontSize: Theme.Theme.typography.sizeSm
-            color: Theme.Theme.colors.textSecondary
+            fontSize: Theme.ThemeEngine.typography.sizeSm
+            color: Theme.ThemeEngine.colors.textSecondary
             truncate: true
             horizontalAlignment: Text.AlignLeft
         }
@@ -120,7 +120,7 @@ RowLayout {
     // ========================================================================
 
     component Divider: Rectangle {
-        color: Theme.Theme.colors.surface1
+        color: Theme.ThemeEngine.colors.surface1
         radius: 1
     }
 

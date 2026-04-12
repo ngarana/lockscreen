@@ -60,7 +60,7 @@ RowLayout {
         visible: trayContainer.visible
         Layout.preferredWidth: 1
         Layout.preferredHeight: 18
-        color: Theme.Theme.colors.glassBorder
+        color: Theme.ThemeEngine.colors.glassBorder
     }
 
     // ========================================================================
@@ -106,7 +106,7 @@ RowLayout {
             anchors.centerIn: parent
             text: root._volumeIcon
             font.pixelSize: 16
-            color: Theme.Theme.colors.textPrimary
+            color: Theme.ThemeEngine.colors.textPrimary
 
             MouseArea {
                 anchors.fill: parent
@@ -127,7 +127,7 @@ RowLayout {
     Divider {
         Layout.preferredWidth: 1
         Layout.preferredHeight: 18
-        color: Theme.Theme.colors.glassBorder
+        color: Theme.ThemeEngine.colors.glassBorder
     }
 
     // ========================================================================
@@ -145,9 +145,9 @@ RowLayout {
 
         Text {
             anchors.centerIn: parent
-            text: Theme.Theme.icons.settings
+            text: Theme.ThemeEngine.icons.settings
             font.pixelSize: 16
-            color: controlCenterButton.hovered ? Theme.Theme.colors.textPrimary : Theme.Theme.colors.textSecondary
+            color: controlCenterButton.hovered ? Theme.ThemeEngine.colors.textPrimary : Theme.ThemeEngine.colors.textSecondary
         }
 
         MouseArea {
@@ -176,9 +176,9 @@ RowLayout {
 
         Text {
             anchors.centerIn: parent
-            text: Theme.Theme.icons.notifications
+            text: Theme.ThemeEngine.icons.notifications
             font.pixelSize: 16
-            color: notificationCenterButton.hovered ? Theme.Theme.colors.textPrimary : Theme.Theme.colors.textSecondary
+            color: notificationCenterButton.hovered ? Theme.ThemeEngine.colors.textPrimary : Theme.ThemeEngine.colors.textSecondary
         }
 
         // Badge for unread notifications
@@ -192,14 +192,14 @@ RowLayout {
             width: 12
             height: 12
             radius: 6
-            color: Theme.Theme.colors.error
+            color: Theme.ThemeEngine.colors.error
 
             Text {
                 anchors.centerIn: parent
                 text: Services.NotificationService.unreadCount > 99 ? "99+" : Services.NotificationService.unreadCount
                 font.pixelSize: 7
                 font.weight: Font.Bold
-                color: Theme.Theme.colors.background
+                color: Theme.ThemeEngine.colors.background
             }
         }
 
@@ -222,13 +222,13 @@ RowLayout {
     readonly property string _volumeIcon: {
         // TODO: Update when AudioService has mute support
         if (Services.AudioService.volume === 0) {
-            return Theme.Theme.icons.volumeMuted
+            return Theme.ThemeEngine.icons.volumeMuted
         } else if (Services.AudioService.volume < 0.33) {
-            return Theme.Theme.icons.volumeLow
+            return Theme.ThemeEngine.icons.volumeLow
         } else if (Services.AudioService.volume < 0.66) {
-            return Theme.Theme.icons.volumeMedium
+            return Theme.ThemeEngine.icons.volumeMedium
         } else {
-            return Theme.Theme.icons.volumeHigh
+            return Theme.ThemeEngine.icons.volumeHigh
         }
     }
 
@@ -237,7 +237,7 @@ RowLayout {
     // ========================================================================
 
     component Divider: Rectangle {
-        color: Theme.Theme.colors.surface1
+        color: Theme.ThemeEngine.colors.surface1
         radius: 1
     }
 

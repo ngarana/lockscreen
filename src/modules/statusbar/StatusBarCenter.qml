@@ -31,7 +31,7 @@ Rectangle {
     property bool format24Hour: true
 
     // Font size
-    property int fontSize: Theme.Theme.typography.sizeSm
+    property int fontSize: Theme.ThemeEngine.typography.sizeSm
 
     // Calendar popup visibility
     property bool calendarVisible: false
@@ -57,8 +57,8 @@ Rectangle {
         }
         text: root._timeText
         fontSize: root.fontSize
-        fontWeight: Theme.Theme.typography.weightMedium
-        color: Theme.Theme.colors.textPrimary
+        fontWeight: Theme.ThemeEngine.typography.weightMedium
+        color: Theme.ThemeEngine.colors.textPrimary
     }
 
     // ========================================================================
@@ -74,8 +74,8 @@ Rectangle {
             horizontalCenter: parent.horizontalCenter
         }
         text: root._dateText
-        fontSize: Theme.Theme.typography.sizeXs
-        color: Theme.Theme.colors.textSecondary
+        fontSize: Theme.ThemeEngine.typography.sizeXs
+        color: Theme.ThemeEngine.colors.textSecondary
     }
 
     // ========================================================================
@@ -96,13 +96,13 @@ Rectangle {
     Rectangle {
         id: hoverEffect
         anchors.fill: parent
-        radius: Theme.Theme.radius.small
-        color: Theme.Theme.colors.surface1
+        radius: Theme.ThemeEngine.radius.small
+        color: Theme.ThemeEngine.colors.surface1
         opacity: mouseArea.containsMouse ? 0.3 : 0
 
         Behavior on opacity {
             NumberAnimation {
-                duration: Theme.Theme.animation.fast
+                duration: Theme.ThemeEngine.animation.fast
             }
         }
     }

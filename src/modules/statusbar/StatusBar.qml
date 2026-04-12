@@ -69,9 +69,9 @@ Rectangle {
         anchors.topMargin: root.isMacOSStyle ? 6 : 0
         anchors.bottomMargin: root.isMacOSStyle ? 6 : 0
 
-        radius: root.isMacOSStyle ? Theme.Theme.radius.large : 0
+        radius: root.isMacOSStyle ? Theme.ThemeEngine.radius.large : 0
 
-        color: Theme.Theme.colors.surface0
+        color: Theme.ThemeEngine.colors.surface0
         opacity: 0.85
 
         // Glassmorphic border
@@ -81,7 +81,7 @@ Rectangle {
             radius: parent.radius
             color: "transparent"
             border.width: 1
-            border.color: Theme.Theme.colors.glassBorder
+            border.color: Theme.ThemeEngine.colors.glassBorder
             opacity: 0.5
         }
     }

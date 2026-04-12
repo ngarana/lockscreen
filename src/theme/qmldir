@@ -6,3 +6,4 @@ Typography 1.0 Typography.qml
 Spacing 1.0 Spacing.qml
 Effects 1.0 Effects.qml
 AnimationTokens 1.0 AnimationTokens.qml
+IconTokens 1.0 IconTokens.qml
