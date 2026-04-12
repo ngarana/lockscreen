@@ -1,6 +1,11 @@
 module Components
 
-# Composite components (organisms)
+# ========================================================================
+# Phase 3: Composite Components (Organisms)
+# Complex components combining atoms, molecules, and services
+# ========================================================================
+
+# Existing components (lockscreen-focused)
 ActionButton 1.0 ActionButton.qml
 AudioController 1.0 AudioController.qml
 AudioMetadata 1.0 AudioMetadata.qml
@@ -9,3 +14,10 @@ Clock 1.0 Clock.qml
 PasswordField 1.0 PasswordField.qml
 StatusMessage 1.0 StatusMessage.qml
 VideoBackground 1.0 VideoBackground.qml
+
+# New composite components (Phase 3)
+GlassPanel 1.0 GlassPanel.qml
+Calendar 1.0 Calendar.qml
+WeatherWidget 1.0 WeatherWidget.qml
+SystemMonitor 1.0 SystemMonitor.qml
+QuickSettings 1.0 QuickSettings.qml

@@ -1,16 +1,29 @@
 module Atoms
 
-# Atomic UI components (primitives) - TO BE IMPLEMENTED
-# Button 1.0 Button.qml
-# IconButton 1.0 IconButton.qml
-# TextButton 1.0 TextButton.qml
-# Icon 1.0 Icon.qml
-# Label 1.0 Label.qml
-# Input 1.0 Input.qml
-# Slider 1.0 Slider.qml
-# ProgressBar 1.0 ProgressBar.qml
-# Card 1.0 Card.qml
-# Badge 1.0 Badge.qml
-# Tooltip 1.0 Tooltip.qml
-# Divider 1.0 Divider.qml
-# Spinner 1.0 Spinner.qml
+# ========================================================================
+# Phase 2: Atomic Component Library
+# Primitive UI components (atoms) following atomic design principles
+# ========================================================================
+
+# Buttons
+Button 1.0 Button.qml
+IconButton 1.0 IconButton.qml
+TextButton 1.0 TextButton.qml
+
+# Content
+Icon 1.0 Icon.qml
+Label 1.0 Label.qml
+
+# Form controls
+Input 1.0 Input.qml
+Slider 1.0 Slider.qml
+ProgressBar 1.0 ProgressBar.qml
+
+# Layout/Container
+Card 1.0 Card.qml
+Divider 1.0 Divider.qml
+
+# Feedback
+Badge 1.0 Badge.qml
+Tooltip 1.0 Tooltip.qml
+Spinner 1.0 Spinner.qml
