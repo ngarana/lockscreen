@@ -7,7 +7,7 @@
 //   import "../theme" as Theme
 //
 //   Text {
-//       text: Theme.Theme.icons.applications
+//       text: Theme.ThemeEngine.icons.applications
 //       font.pixelSize: 16
 //   }
 

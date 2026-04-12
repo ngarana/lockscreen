@@ -45,60 +45,60 @@ Rectangle {
 
     // Size configuration
     readonly property var _sizes: ({
-        small: { height: 28, padding: 12, iconSize: 14, fontSize: Theme.Theme.typography.sizeSm },
-        medium: { height: 36, padding: 16, iconSize: 16, fontSize: Theme.Theme.typography.sizeMd },
-        large: { height: 44, padding: 24, iconSize: 18, fontSize: Theme.Theme.typography.sizeLg }
+        small: { height: 28, padding: 12, iconSize: 14, fontSize: Theme.ThemeEngine.typography.sizeSm },
+        medium: { height: 36, padding: 16, iconSize: 16, fontSize: Theme.ThemeEngine.typography.sizeMd },
+        large: { height: 44, padding: 24, iconSize: 18, fontSize: Theme.ThemeEngine.typography.sizeLg }
     })
 
     readonly property var _currentSize: _sizes[size] || _sizes.medium
 
     // Colors
-    readonly property color _accentColor: destructive ? Theme.Theme.colors.error : Theme.Theme.colors.primary
+    readonly property color _accentColor: destructive ? Theme.ThemeEngine.colors.error : Theme.ThemeEngine.colors.primary
 
     readonly property color _bgColor: {
         if (variant === "primary") {
-            if (!enabled) return Theme.Theme.colors.surface0
+            if (!enabled) return Theme.ThemeEngine.colors.surface0
             if (_isPressed) return Qt.darker(_accentColor, 1.2)
             if (_isHovered) return Qt.lighter(_accentColor, 1.1)
             return _accentColor
         }
         if (variant === "secondary") {
-            if (!enabled) return Theme.Theme.colors.surface0
+            if (!enabled) return Theme.ThemeEngine.colors.surface0
             if (_isPressed) return Qt.darker(_accentColor, 1.2)
             if (_isHovered) return Qt.lighter(_accentColor, 1.1)
             return _accentColor
         }
         // tertiary - transparent
         if (!enabled) return "transparent"
-        if (_isPressed) return Theme.Theme.colors.glassActive
-        if (_isHovered) return Theme.Theme.colors.glassHover
+        if (_isPressed) return Theme.ThemeEngine.colors.glassActive
+        if (_isHovered) return Theme.ThemeEngine.colors.glassHover
         return "transparent"
     }
 
     readonly property color _textColor: {
         if (variant === "primary" || variant === "secondary") {
-            if (!enabled) return Theme.Theme.colors.textMuted
-            return Theme.Theme.colors.crust
+            if (!enabled) return Theme.ThemeEngine.colors.textMuted
+            return Theme.ThemeEngine.colors.crust
         }
         // tertiary
-        if (!enabled) return Theme.Theme.colors.textMuted
+        if (!enabled) return Theme.ThemeEngine.colors.textMuted
         if (_isPressed) return _accentColor
         if (_isHovered) return Qt.lighter(_accentColor, 1.2)
-        return Theme.Theme.colors.text
+        return Theme.ThemeEngine.colors.text
     }
 
     // Layout
     implicitWidth: Math.max(_currentSize.height, contentRow.implicitWidth + _currentSize.padding * 2)
     implicitHeight: _currentSize.height
-    radius: variant === "tertiary" ? Theme.Theme.radius.small : Theme.Theme.radius.medium
+    radius: variant === "tertiary" ? Theme.ThemeEngine.radius.small : Theme.ThemeEngine.radius.medium
 
     // Visual state
     color: _bgColor
     border.width: variant === "tertiary" && _isHovered ? 1 : 0
-    border.color: variant === "tertiary" ? Theme.Theme.colors.glassBorder : "transparent"
+    border.color: variant === "tertiary" ? Theme.ThemeEngine.colors.glassBorder : "transparent"
 
     Behavior on color {
-        ColorAnimation { duration: Theme.Theme.animation.fast }
+        ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
     }
 
     // Secondary variant uses outline style
@@ -109,14 +109,14 @@ Rectangle {
         color: "transparent"
         border.width: 2
         border.color: {
-            if (!enabled) return Theme.Theme.colors.surface1
+            if (!enabled) return Theme.ThemeEngine.colors.surface1
             if (_isPressed) return Qt.darker(_accentColor, 1.2)
             if (_isHovered) return _accentColor
-            return Theme.Theme.colors.surface2
+            return Theme.ThemeEngine.colors.surface2
         }
 
         Behavior on border.color {
-            ColorAnimation { duration: Theme.Theme.animation.fast }
+            ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
         }
     }
 
@@ -137,7 +137,7 @@ Rectangle {
         Label {
             text: root.text
             fontSize: root._currentSize.fontSize
-            fontWeight: Theme.Theme.typography.weightMedium
+            fontWeight: Theme.ThemeEngine.typography.weightMedium
             color: root._textColor
         }
     }
@@ -168,7 +168,7 @@ Rectangle {
 
     Behavior on scale {
         NumberAnimation {
-            duration: Theme.Theme.animation.fast
+            duration: Theme.ThemeEngine.animation.fast
             easing.type: Easing.OutQuad
         }
     }

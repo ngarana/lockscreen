@@ -33,17 +33,17 @@ Rectangle {
 
     // Internal
     readonly property var _variants: ({
-        info: Theme.Theme.colors.info,
-        success: Theme.Theme.colors.success,
-        warning: Theme.Theme.colors.warning,
-        error: Theme.Theme.colors.error
+        info: Theme.ThemeEngine.colors.info,
+        success: Theme.ThemeEngine.colors.success,
+        warning: Theme.ThemeEngine.colors.warning,
+        error: Theme.ThemeEngine.colors.error
     })
 
     readonly property color _bgColor: _variants[variant] || _variants.info
 
     readonly property var _sizes: ({
-        small: { height: 16, fontSize: Theme.Theme.typography.sizeXs, padding: 4 },
-        medium: { height: 20, fontSize: Theme.Theme.typography.sizeSm, padding: 6 }
+        small: { height: 16, fontSize: Theme.ThemeEngine.typography.sizeXs, padding: 4 },
+        medium: { height: 20, fontSize: Theme.ThemeEngine.typography.sizeSm, padding: 6 }
     })
 
     readonly property var _currentSize: _sizes[size] || _sizes.medium
@@ -73,8 +73,8 @@ Rectangle {
         anchors.centerIn: parent
         text: root._displayText
         fontSize: root._currentSize.fontSize
-        fontWeight: Theme.Theme.typography.weightBold
-        color: Theme.Theme.colors.crust
+        fontWeight: Theme.ThemeEngine.typography.weightBold
+        color: Theme.ThemeEngine.colors.crust
         visible: !root.dot
     }
 

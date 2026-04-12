@@ -49,7 +49,7 @@ Atoms.Card {
 
     // Visual state
     border.width: _isFocused ? 2 : 1
-    border.color: _isFocused ? Theme.Theme.colors.primary : Theme.Theme.colors.glassBorder
+    border.color: _isFocused ? Theme.ThemeEngine.colors.primary : Theme.ThemeEngine.colors.glassBorder
 
     // Thumbnail placeholder
     Rectangle {
@@ -61,15 +61,15 @@ Atoms.Card {
             margins: 4
         }
         height: root.showTitle ? 72 : 88
-        radius: Theme.Theme.radius.small
-        color: Theme.Theme.colors.surface0
+        radius: Theme.ThemeEngine.radius.small
+        color: Theme.ThemeEngine.colors.surface0
 
         // Window class icon or initial
         Atoms.Label {
             anchors.centerIn: parent
             text: root._class.charAt(0).toUpperCase()
-            fontSize: Theme.Theme.typography.size3xl
-            color: Theme.Theme.colors.textMuted
+            fontSize: Theme.ThemeEngine.typography.size3xl
+            color: Theme.ThemeEngine.colors.textMuted
             visible: root._class !== ""
         }
 
@@ -79,7 +79,7 @@ Atoms.Card {
             radius: parent.radius
             color: "transparent"
             border.width: 2
-            border.color: Theme.Theme.colors.primary
+            border.color: Theme.ThemeEngine.colors.primary
             visible: root._isFocused
         }
     }
@@ -101,8 +101,8 @@ Atoms.Card {
         Atoms.Label {
             anchors.fill: parent
             text: root._title || root._class
-            fontSize: Theme.Theme.typography.sizeXs
-            color: Theme.Theme.colors.textSecondary
+            fontSize: Theme.ThemeEngine.typography.sizeXs
+            color: Theme.ThemeEngine.colors.textSecondary
             truncate: true
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter

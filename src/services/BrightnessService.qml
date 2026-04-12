@@ -47,8 +47,8 @@ QtObject {
     // Current brightness method: "brightnessctl", "xrandr", "ddcutil", "none"
     property string controlMethod: "none"
 
-    // Primary screen brightness (0-100)
-    property int brightness: 100
+// Primary screen brightness (0-100)
+property int primaryBrightness: 100
 
     // Whether currently adjusting brightness
     property bool isAdjusting: false
@@ -63,11 +63,14 @@ QtObject {
     // Signals
     // ========================================================================
 
-    // Emitted when brightness changes for any display
-    signal brightnessChanged(string display, int value)
+// Emitted when brightness changes for any display
+signal brightnessChanged(string display, int value)
 
-    // Emitted when a specific display's brightness changes
-    signal displayBrightnessChanged(string display, int value)
+// Emitted when primary brightness changes (auto-generated from property)
+// signal primaryBrightnessChanged(int value) - implicit
+
+// Emitted when a specific display's brightness changes
+signal displayBrightnessChanged(string display, int value)
 
     // Emitted when brightness control becomes available/unavailable
     signal availabilityChanged(bool available)
@@ -177,10 +180,10 @@ QtObject {
         displays = newDisplays
         displayCount = newDisplays.length
 
-        // Update primary brightness (use first display)
-        if (newDisplays.length > 0) {
-            brightness = newDisplays[0].percentage
-        }
+// Update primary brightness (use first display)
+if (newDisplays.length > 0) {
+    primaryBrightness = newDisplays[0].percentage
+}
     }
 
     // Enumerate displays using xrandr
@@ -217,9 +220,9 @@ QtObject {
             }
         }
 
-        displays = newDisplays
-        displayCount = newDisplays.length
-        brightness = 100
+displays = newDisplays
+displayCount = newDisplays.length
+primaryBrightness = 100
     }
 
     // Get brightness for a specific display
@@ -268,10 +271,10 @@ QtObject {
             displayBrightnessChanged(displayName, percentage)
             brightnessChanged(displayName, percentage)
 
-            // Update primary brightness if this is the first display
-            if (displays.length > 0 && displays[0].name === displayName) {
-                brightness = percentage
-            }
+// Update primary brightness if this is the first display
+if (displays.length > 0 && displays[0].name === displayName) {
+    primaryBrightness = percentage
+}
         }
     }
 
@@ -282,11 +285,11 @@ QtObject {
         }
     }
 
-    // Adjust brightness by delta
-    function adjustBrightness(delta) {
-        const newBrightness = brightness + delta
-        setAllBrightness(newBrightness)
-    }
+// Adjust brightness by delta
+function adjustBrightness(delta) {
+    const newBrightness = primaryBrightness + delta
+    setAllBrightness(newBrightness)
+}
 
     // Increase brightness by step
     function increase() {
@@ -298,17 +301,17 @@ QtObject {
         adjustBrightness(-stepSize)
     }
 
-    // Get icon name based on current brightness
-    function getIconName() {
-        if (!isAvailable) {
-            return "display-brightness-off"
-        }
-
-        if (brightness >= 80) return "display-brightness-high"
-        if (brightness >= 50) return "display-brightness-medium"
-        if (brightness >= 20) return "display-brightness-low"
+// Get icon name based on current brightness
+function getIconName() {
+    if (!isAvailable) {
         return "display-brightness-off"
     }
+
+    if (primaryBrightness >= 80) return "display-brightness-high"
+    if (primaryBrightness >= 50) return "display-brightness-medium"
+    if (primaryBrightness >= 20) return "display-brightness-low"
+    return "display-brightness-off"
+}
 
     // Refresh brightness values
     function refresh() {

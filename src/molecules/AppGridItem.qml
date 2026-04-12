@@ -51,7 +51,7 @@ Atoms.Card {
 
     Behavior on scale {
         NumberAnimation {
-            duration: Theme.Theme.animation.fast
+            duration: Theme.ThemeEngine.animation.fast
             easing.type: Easing.OutQuad
         }
     }
@@ -66,14 +66,14 @@ Atoms.Card {
             anchors.horizontalCenter: parent.horizontalCenter
             width: 48
             height: 48
-            radius: Theme.Theme.radius.medium
-            color: Theme.Theme.colors.glass
+            radius: Theme.ThemeEngine.radius.medium
+            color: Theme.ThemeEngine.colors.glass
 
             Atoms.Icon {
                 anchors.centerIn: parent
                 source: root.appIcon || "application"
                 size: 28
-                color: Theme.Theme.colors.textPrimary
+                color: Theme.ThemeEngine.colors.textPrimary
             }
         }
 
@@ -82,8 +82,8 @@ Atoms.Card {
             anchors.horizontalCenter: parent.horizontalCenter
             width: parent.width - 8
             text: root.appName
-            fontSize: Theme.Theme.typography.sizeSm
-            color: Theme.Theme.colors.textPrimary
+            fontSize: Theme.ThemeEngine.typography.sizeSm
+            color: Theme.ThemeEngine.colors.textPrimary
             horizontalAlignment: Text.AlignHCenter
             truncate: true
         }

@@ -35,3 +35,6 @@ singleton Theme 1.0 Theme.qml
 
 # Video configuration
 singleton VideoConfig 1.0 VideoConfig.qml
+
+# Status Bar Controller (from statusbar module)
+singleton BarController 1.0 ../modules/statusbar/BarController.qml

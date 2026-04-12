@@ -22,8 +22,8 @@ QtObject {
     // Configuration
     // ========================================================================
 
-    // Bar visibility
-    property bool visible: true
+    // Bar visibility (renamed to avoid signal conflict with QtObject)
+    property bool isVisible: true
 
     // Bar height in pixels
     property int barHeight: 36
@@ -67,13 +67,13 @@ QtObject {
     // ========================================================================
 
     // Emitted when visibility changes
-    signal visibilityChanged(bool visible)
+    signal barVisibilityChanged(bool visible)
 
     // Emitted when height changes
-    signal heightChanged(int height)
+    signal heightUpdated(int height)
 
     // Emitted when layout mode changes
-    signal layoutModeChanged(string mode)
+    signal layoutModeUpdated(string mode)
 
     // Emitted when a module toggle changes
     signal moduleVisibilityChanged(string module, bool visible)
@@ -84,16 +84,16 @@ QtObject {
 
     // Toggle bar visibility
     function toggleVisibility() {
-        root.visible = !root.visible
-        visibilityChanged(root.visible)
-        Core.Logger.debug("Bar visibility: " + (root.visible ? "shown" : "hidden"), "BarController")
+        root.isVisible = !root.isVisible
+        barVisibilityChanged(root.isVisible)
+        Core.Logger.debug("Bar visibility: " + (root.isVisible ? "shown" : "hidden"), "BarController")
     }
 
     // Set bar height
     function setHeight(height) {
         if (height >= 24 && height <= 64) {
             root.barHeight = height
-            heightChanged(height)
+            heightUpdated(height)
         } else {
             Core.Logger.warning("Invalid bar height: " + height, "BarController")
         }
@@ -109,7 +109,7 @@ QtObject {
     function setLayoutMode(mode) {
         if (mode === "macos" || mode === "windows") {
             root.layoutMode = mode
-            layoutModeChanged(mode)
+            layoutModeUpdated(mode)
             Core.Logger.debug("Layout mode: " + mode, "BarController")
         } else {
             Core.Logger.warning("Invalid layout mode: " + mode, "BarController")
@@ -150,17 +150,17 @@ QtObject {
 
     // Show the bar (override auto-hide)
     function show() {
-        if (!root.visible) {
-            root.visible = true
-            visibilityChanged(true)
+        if (!root.isVisible) {
+            root.isVisible = true
+            barVisibilityChanged(true)
         }
     }
 
     // Hide the bar (override auto-hide)
     function hide() {
-        if (root.visible) {
-            root.visible = false
-            visibilityChanged(false)
+        if (root.isVisible) {
+            root.isVisible = false
+            barVisibilityChanged(false)
         }
     }
 

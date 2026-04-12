@@ -55,9 +55,6 @@ QtObject {
     // Signals
     // ========================================================================
 
-    // Emitted when tray items change
-    signal trayItemsChanged()
-
     // Emitted when a tray item is activated
     signal trayItemActivated(string itemId)
 

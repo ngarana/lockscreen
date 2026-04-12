@@ -32,7 +32,7 @@ Item {
     property Item target: null
     property string direction: "left"
     property int distance: 0
-    property int duration: Theme.Theme.animation.medium
+    property int duration: Theme.ThemeEngine.animation.medium
     property int easing: Easing.OutQuad
     property bool slideIn: true
     property bool slideOut: false

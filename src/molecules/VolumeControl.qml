@@ -67,7 +67,7 @@ RowLayout {
         visible: root.showIcon && !root.showMuteButton
         source: root._getVolumeIcon()
         size: 20
-        color: Theme.Theme.colors.textSecondary
+        color: Theme.ThemeEngine.colors.textSecondary
     }
 
     // Volume slider
@@ -103,8 +103,8 @@ RowLayout {
         id: valueLabel
         visible: false // Set to true to show percentage
         text: Math.round(root.value * 100) + "%"
-        fontSize: Theme.Theme.typography.sizeSm
-        color: Theme.Theme.colors.textSecondary
+        fontSize: Theme.ThemeEngine.typography.sizeSm
+        color: Theme.ThemeEngine.colors.textSecondary
     }
 
     // Update when service changes

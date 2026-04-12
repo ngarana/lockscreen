@@ -157,9 +157,9 @@ Rectangle {
 
         root._timeText = timeStr
 
-        // Format date (short format for status bar)
-        const options = { month: 'short', day: 'numeric', year: 'numeric' }
-        root._dateText = now.toLocaleDateString(Qt.locale(), options)
+        // Format date manually to avoid locale issues
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        root._dateText = months[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear()
     }
 
     function _pad(num) {

@@ -31,7 +31,7 @@ Item {
     property bool showDate: true
     property bool format24Hour: true
     property bool showSeconds: false
-    property int fontSize: Theme.Theme.typography.size2xl
+    property int fontSize: Theme.ThemeEngine.typography.size2xl
 
     signal clicked()
 
@@ -63,8 +63,8 @@ Item {
         }
         text: root._timeText
         fontSize: root.fontSize
-        fontWeight: Theme.Theme.typography.weightLight
-        color: Theme.Theme.colors.textPrimary
+        fontWeight: Theme.ThemeEngine.typography.weightLight
+        color: Theme.ThemeEngine.colors.textPrimary
     }
 
     // Date display
@@ -77,8 +77,8 @@ Item {
             horizontalCenter: parent.horizontalCenter
         }
         text: root._dateText
-        fontSize: Theme.Theme.typography.sizeSm
-        color: Theme.Theme.colors.textSecondary
+        fontSize: Theme.ThemeEngine.typography.sizeSm
+        color: Theme.ThemeEngine.colors.textSecondary
     }
 
     // Click area

@@ -22,7 +22,7 @@ import "../atoms" as Atoms
 import "../services" as Services
 import "../theme" as Theme
 
-RowLayout {
+Item {
     id: root
 
     // Public API
@@ -39,69 +39,76 @@ RowLayout {
     readonly property bool _isLow: _percentage <= 30 && !_isCharging
 
     // Layout
-    spacing: 6
+    implicitWidth: rowLayout.implicitWidth
+    implicitHeight: rowLayout.implicitHeight
 
-    // Battery icon
-    Item {
-        id: batteryIconContainer
-        visible: root.showIcon
-        width: 22
-        height: 12
+    RowLayout {
+        id: rowLayout
+        anchors.fill: parent
+        spacing: 6
 
-        // Battery outline
-        Rectangle {
-            anchors.fill: parent
-            radius: 2
-            color: "transparent"
-            border.width: 1.5
-            border.color: root._getBatteryColor()
-        }
+        // Battery icon
+        Item {
+            id: batteryIconContainer
+            visible: root.showIcon
+            width: 22
+            height: 12
 
-        // Battery terminal
-        Rectangle {
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            width: 2
-            height: 6
-            radius: 1
-            color: root._getBatteryColor()
-        }
-
-        // Fill level
-        Rectangle {
-            anchors {
-                left: parent.left
-                top: parent.top
-                bottom: parent.bottom
-                margins: 2
+            // Battery outline
+            Rectangle {
+                anchors.fill: parent
+                radius: 2
+                color: "transparent"
+                border.width: 1.5
+                border.color: root._getBatteryColor()
             }
-            width: (parent.width - 6) * (root._percentage / 100)
-            radius: 1
-            color: root._getBatteryColor()
 
-            Behavior on width {
-                NumberAnimation { duration: Theme.Theme.animation.medium }
+            // Battery terminal
+            Rectangle {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: 2
+                height: 6
+                radius: 1
+                color: root._getBatteryColor()
+            }
+
+            // Fill level
+            Rectangle {
+                anchors {
+                    left: parent.left
+                    top: parent.top
+                    bottom: parent.bottom
+                    margins: 2
+                }
+                width: (parent.width - 6) * (root._percentage / 100)
+                radius: 1
+                color: root._getBatteryColor()
+
+                Behavior on width {
+                    NumberAnimation { duration: Theme.ThemeEngine.animation.medium }
+                }
+            }
+
+            // Charging indicator
+            Text {
+                anchors.centerIn: parent
+                text: Theme.ThemeEngine.icons.batteryCharging
+                font.pixelSize: 8
+                color: Theme.ThemeEngine.colors.crust
+                visible: root._isCharging
             }
         }
 
-        // Charging indicator
-        Atoms.Icon {
-            anchors.centerIn: parent
-            source: "lightning-bolt"
-            size: 8
-            color: Theme.Theme.colors.crust
-            visible: root._isCharging
+        // Percentage label
+        Atoms.Label {
+            id: percentageLabel
+            visible: root.showPercentage
+            text: root._percentage + "%"
+            fontSize: Theme.ThemeEngine.typography.sizeSm
+            color: root._getBatteryColor()
+            fontWeight: root._isCritical ? Theme.ThemeEngine.typography.weightBold : Theme.ThemeEngine.typography.weightNormal
         }
-    }
-
-    // Percentage label
-    Atoms.Label {
-        id: percentageLabel
-        visible: root.showPercentage
-        text: root._percentage + "%"
-        fontSize: Theme.Theme.typography.sizeSm
-        color: root._getBatteryColor()
-        fontWeight: root._isCritical ? Theme.Theme.typography.weightBold : Theme.Theme.typography.weightNormal
     }
 
     // Click area
@@ -113,9 +120,9 @@ RowLayout {
 
     // Get battery color based on state
     function _getBatteryColor() {
-        if (root._isCharging) return Theme.Theme.colors.success
-        if (root._isCritical) return Theme.Theme.colors.error
-        if (root._isLow) return Theme.Theme.colors.warning
-        return Theme.Theme.colors.textSecondary
+        if (root._isCharging) return Theme.ThemeEngine.colors.success
+        if (root._isCritical) return Theme.ThemeEngine.colors.error
+        if (root._isLow) return Theme.ThemeEngine.colors.warning
+        return Theme.ThemeEngine.colors.textSecondary
     }
 }

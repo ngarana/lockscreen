@@ -22,7 +22,7 @@ Item {
 
     // Public API
     property int size: 24
-    property color color: Theme.Theme.colors.primary
+    property color color: Theme.ThemeEngine.colors.primary
     property int thickness: size / 8
     property int speed: 1000
 

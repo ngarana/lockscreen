@@ -46,14 +46,14 @@ Rectangle {
     // Layout
     implicitWidth: 200
     implicitHeight: contentRow.implicitHeight + 16
-    radius: Theme.Theme.radius.medium
+    radius: Theme.ThemeEngine.radius.medium
 
     // Visual state
-    color: root.selected ? Theme.Theme.colors.glassActive :
-           root._isHovered ? Theme.Theme.colors.glassHover : "transparent"
+    color: root.selected ? Theme.ThemeEngine.colors.glassActive :
+           root._isHovered ? Theme.ThemeEngine.colors.glassHover : "transparent"
 
     Behavior on color {
-        ColorAnimation { duration: Theme.Theme.animation.fast }
+        ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
     }
 
     // Content row
@@ -69,7 +69,7 @@ Rectangle {
             visible: root.icon !== ""
             source: root.icon
             size: 20
-            color: root.selected ? Theme.Theme.colors.primary : Theme.Theme.colors.textSecondary
+            color: root.selected ? Theme.ThemeEngine.colors.primary : Theme.ThemeEngine.colors.textSecondary
         }
 
         // Text content
@@ -80,8 +80,8 @@ Rectangle {
             Atoms.Label {
                 Layout.fillWidth: true
                 text: root.title
-                fontSize: Theme.Theme.typography.sizeMd
-                color: root.selected ? Theme.Theme.colors.primary : Theme.Theme.colors.textPrimary
+                fontSize: Theme.ThemeEngine.typography.sizeMd
+                color: root.selected ? Theme.ThemeEngine.colors.primary : Theme.ThemeEngine.colors.textPrimary
                 truncate: true
             }
 
@@ -89,8 +89,8 @@ Rectangle {
                 Layout.fillWidth: true
                 visible: root.subtitle !== ""
                 text: root.subtitle
-                fontSize: Theme.Theme.typography.sizeSm
-                color: Theme.Theme.colors.textSecondary
+                fontSize: Theme.ThemeEngine.typography.sizeSm
+                color: Theme.ThemeEngine.colors.textSecondary
                 truncate: true
             }
         }
@@ -100,7 +100,7 @@ Rectangle {
             visible: root.showArrow
             source: "chevron-right"
             size: 16
-            color: Theme.Theme.colors.textMuted
+            color: Theme.ThemeEngine.colors.textMuted
         }
     }
 

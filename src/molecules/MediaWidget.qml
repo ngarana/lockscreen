@@ -72,15 +72,15 @@ Atoms.Card {
             Rectangle {
                 Layout.preferredWidth: root.compact ? 48 : 64
                 Layout.preferredHeight: root.compact ? 48 : 64
-                radius: Theme.Theme.radius.small
-                color: Theme.Theme.colors.surface0
+                radius: Theme.ThemeEngine.radius.small
+                color: Theme.ThemeEngine.colors.surface0
 
                 // Music note icon
                 Atoms.Icon {
                     anchors.centerIn: parent
                     source: "audio"
                     size: root.compact ? 24 : 32
-                    color: Theme.Theme.colors.textMuted
+                    color: Theme.ThemeEngine.colors.textMuted
                 }
             }
 
@@ -92,25 +92,25 @@ Atoms.Card {
                 Atoms.Label {
                     Layout.fillWidth: true
                     text: root._title || "Unknown Title"
-                    fontSize: Theme.Theme.typography.sizeMd
-                    fontWeight: Theme.Theme.typography.weightMedium
-                    color: Theme.Theme.colors.textPrimary
+                    fontSize: Theme.ThemeEngine.typography.sizeMd
+                    fontWeight: Theme.ThemeEngine.typography.weightMedium
+                    color: Theme.ThemeEngine.colors.textPrimary
                     truncate: true
                 }
 
                 Atoms.Label {
                     Layout.fillWidth: true
                     text: root._artist || "Unknown Artist"
-                    fontSize: Theme.Theme.typography.sizeSm
-                    color: Theme.Theme.colors.textSecondary
+                    fontSize: Theme.ThemeEngine.typography.sizeSm
+                    color: Theme.ThemeEngine.colors.textSecondary
                     truncate: true
                 }
 
                 Atoms.Label {
                     visible: !root.compact && root._album !== ""
                     text: root._album
-                    fontSize: Theme.Theme.typography.sizeXs
-                    color: Theme.Theme.colors.textMuted
+                    fontSize: Theme.ThemeEngine.typography.sizeXs
+                    color: Theme.ThemeEngine.colors.textMuted
                     truncate: true
                 }
             }
@@ -173,8 +173,8 @@ Atoms.Card {
             // Source indicator
             Atoms.Label {
                 text: root._source
-                fontSize: Theme.Theme.typography.sizeXs
-                color: Theme.Theme.colors.textMuted
+                fontSize: Theme.ThemeEngine.typography.sizeXs
+                color: Theme.ThemeEngine.colors.textMuted
             }
         }
     }

@@ -30,7 +30,7 @@ Item {
     id: root
 
     property Item target: null
-    property int duration: Theme.Theme.animation.medium
+    property int duration: Theme.ThemeEngine.animation.medium
     property bool fadeIn: true
     property bool fadeOut: false
     property real fromOpacity: fadeIn ? 0 : 1

@@ -35,7 +35,7 @@ Item {
     property Item target: null
     property real scaleFrom: 0.8
     property real scaleTo: 1.0
-    property int duration: Theme.Theme.animation.fast
+    property int duration: Theme.ThemeEngine.animation.fast
     property int easing: Easing.OutBack
     property real originX: 0.5
     property real originY: 0.5

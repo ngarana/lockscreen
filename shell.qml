@@ -183,17 +183,16 @@ ShellRoot {
 
     Variants {
         model: root.statusbarEnabled ? Quickshell.screens : []
-        delegate: PanelWindow {
-            screen: modelData
 
-            // Exclude from session lock layer
-            layer: QuickshellLayer.top
+        PanelWindow {
+            required property var modelData
+            screen: modelData
 
             // Anchor to top edge
             anchors {
-                top: parent.top
-                left: parent.left
-                right: parent.right
+                top: true
+                left: true
+                right: true
             }
 
             // Status bar component

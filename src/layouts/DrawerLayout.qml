@@ -36,7 +36,7 @@ Item {
     property int drawerHeight: 400
     property bool backdropEnabled: true
     property real backdropOpacity: 0.5
-    property int animationDuration: Theme.Theme.animation.medium
+    property int animationDuration: Theme.ThemeEngine.animation.medium
 
     signal opened()
     signal closed()
@@ -48,7 +48,7 @@ Item {
     Rectangle {
         id: backdrop
         anchors.fill: parent
-        color: Theme.Theme.colors.crust
+        color: Theme.ThemeEngine.colors.crust
         opacity: root.visible && root.backdropEnabled ? root.backdropOpacity : 0
         visible: opacity > 0
 
@@ -71,7 +71,7 @@ Item {
     // Drawer panel
     Rectangle {
         id: drawerPanel
-        color: Theme.Theme.colors.surface0
+        color: Theme.ThemeEngine.colors.surface0
 
         readonly property bool isHorizontal: root.position === "left" || root.position === "right"
         readonly property bool isFromStart: root.position === "left" || root.position === "top"
@@ -123,13 +123,13 @@ Item {
             }
             width: root.position === "left" || root.position === "right" ? 1 : parent.width
             height: root.position === "top" || root.position === "bottom" ? 1 : parent.height
-            color: Theme.Theme.colors.surface1
+            color: Theme.ThemeEngine.colors.surface1
         }
 
         // Content container
         Item {
             anchors.fill: parent
-            anchors.margins: Theme.Theme.spacing.md
+            anchors.margins: Theme.ThemeEngine.spacing.md
             clip: true
 
             default property alias children: drawerPanel.contentItem.children

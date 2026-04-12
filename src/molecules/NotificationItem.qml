@@ -52,7 +52,7 @@ Atoms.Card {
 
     // Visual state
     border.width: _urgent ? 2 : 1
-    border.color: _urgent ? Theme.Theme.colors.error : Theme.Theme.colors.glassBorder
+    border.color: _urgent ? Theme.ThemeEngine.colors.error : Theme.ThemeEngine.colors.glassBorder
 
     // Content column
     ColumnLayout {
@@ -69,22 +69,22 @@ Atoms.Card {
             Atoms.Icon {
                 source: root._icon || "notification"
                 size: root.compact ? 16 : 20
-                color: Theme.Theme.colors.textSecondary
+                color: Theme.ThemeEngine.colors.textSecondary
             }
 
             // App name
             Atoms.Label {
                 Layout.fillWidth: true
                 text: root._appName
-                fontSize: Theme.Theme.typography.sizeXs
-                color: Theme.Theme.colors.textMuted
+                fontSize: Theme.ThemeEngine.typography.sizeXs
+                color: Theme.ThemeEngine.colors.textMuted
             }
 
             // Timestamp
             Atoms.Label {
                 text: root._formatTime(root._timestamp)
-                fontSize: Theme.Theme.typography.sizeXs
-                color: Theme.Theme.colors.textMuted
+                fontSize: Theme.ThemeEngine.typography.sizeXs
+                color: Theme.ThemeEngine.colors.textMuted
             }
 
             // Dismiss button
@@ -104,9 +104,9 @@ Atoms.Card {
             Layout.fillWidth: true
             visible: root._title !== ""
             text: root._title
-            fontSize: Theme.Theme.typography.sizeMd
-            fontWeight: Theme.Theme.typography.weightSemiBold
-            color: Theme.Theme.colors.textPrimary
+            fontSize: Theme.ThemeEngine.typography.sizeMd
+            fontWeight: Theme.ThemeEngine.typography.weightSemiBold
+            color: Theme.ThemeEngine.colors.textPrimary
             wrap: true
             maxLines: 2
         }
@@ -116,8 +116,8 @@ Atoms.Card {
             Layout.fillWidth: true
             visible: root._body !== ""
             text: root._body
-            fontSize: Theme.Theme.typography.sizeSm
-            color: Theme.Theme.colors.textSecondary
+            fontSize: Theme.ThemeEngine.typography.sizeSm
+            color: Theme.ThemeEngine.colors.textSecondary
             wrap: true
             maxLines: root.compact ? 3 : 5
         }

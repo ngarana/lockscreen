@@ -31,10 +31,10 @@ Item {
 
     property bool visible: false
     property bool modal: true
-    property color backdropColor: Theme.Theme.colors.crust
+    property color backdropColor: Theme.ThemeEngine.colors.crust
     property real backdropOpacity: 0.5
     property bool closeOnBackdrop: true
-    property int animationDuration: Theme.Theme.animation.medium
+    property int animationDuration: Theme.ThemeEngine.animation.medium
 
     signal opened()
     signal closed()

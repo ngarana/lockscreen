@@ -58,7 +58,7 @@ Atoms.Card {
                 Layout.preferredWidth: 48
                 Layout.preferredHeight: 48
                 radius: 24
-                color: Theme.Theme.colors.surface0
+                color: Theme.ThemeEngine.colors.surface0
 
                 // Avatar image or initials
                 Image {
@@ -72,8 +72,8 @@ Atoms.Card {
                     anchors.centerIn: parent
                     visible: root._avatarPath === ""
                     text: root._userName.charAt(0).toUpperCase()
-                    fontSize: Theme.Theme.typography.sizeXl
-                    color: Theme.Theme.colors.textSecondary
+                    fontSize: Theme.ThemeEngine.typography.sizeXl
+                    color: Theme.ThemeEngine.colors.textSecondary
                 }
             }
 
@@ -81,9 +81,9 @@ Atoms.Card {
             Atoms.Label {
                 Layout.fillWidth: true
                 text: root._userName
-                fontSize: Theme.Theme.typography.sizeMd
-                fontWeight: Theme.Theme.typography.weightSemiBold
-                color: Theme.Theme.colors.textPrimary
+                fontSize: Theme.ThemeEngine.typography.sizeMd
+                fontWeight: Theme.ThemeEngine.typography.weightSemiBold
+                color: Theme.ThemeEngine.colors.textPrimary
                 truncate: true
             }
         }
@@ -101,8 +101,8 @@ Atoms.Card {
             Rectangle {
                 Layout.fillWidth: true
                 height: 36
-                radius: Theme.Theme.radius.small
-                color: settingsMouse.containsMouse ? Theme.Theme.colors.glassHover : "transparent"
+                radius: Theme.ThemeEngine.radius.small
+                color: settingsMouse.containsMouse ? Theme.ThemeEngine.colors.glassHover : "transparent"
 
                 RowLayout {
                     anchors.fill: parent
@@ -112,13 +112,13 @@ Atoms.Card {
                     Atoms.Icon {
                         source: "settings"
                         size: 18
-                        color: Theme.Theme.colors.textSecondary
+                        color: Theme.ThemeEngine.colors.textSecondary
                     }
 
                     Atoms.Label {
                         text: "Settings"
-                        fontSize: Theme.Theme.typography.sizeMd
-                        color: Theme.Theme.colors.textPrimary
+                        fontSize: Theme.ThemeEngine.typography.sizeMd
+                        color: Theme.ThemeEngine.colors.textPrimary
                     }
                 }
 
@@ -135,8 +135,8 @@ Atoms.Card {
             Rectangle {
                 Layout.fillWidth: true
                 height: 36
-                radius: Theme.Theme.radius.small
-                color: lockMouse.containsMouse ? Theme.Theme.colors.glassHover : "transparent"
+                radius: Theme.ThemeEngine.radius.small
+                color: lockMouse.containsMouse ? Theme.ThemeEngine.colors.glassHover : "transparent"
 
                 RowLayout {
                     anchors.fill: parent
@@ -146,13 +146,13 @@ Atoms.Card {
                     Atoms.Icon {
                         source: "lock"
                         size: 18
-                        color: Theme.Theme.colors.textSecondary
+                        color: Theme.ThemeEngine.colors.textSecondary
                     }
 
                     Atoms.Label {
                         text: "Lock"
-                        fontSize: Theme.Theme.typography.sizeMd
-                        color: Theme.Theme.colors.textPrimary
+                        fontSize: Theme.ThemeEngine.typography.sizeMd
+                        color: Theme.ThemeEngine.colors.textPrimary
                     }
                 }
 
@@ -172,8 +172,8 @@ Atoms.Card {
             Rectangle {
                 Layout.fillWidth: true
                 height: 36
-                radius: Theme.Theme.radius.small
-                color: logoutMouse.containsMouse ? Theme.Theme.colors.glassHover : "transparent"
+                radius: Theme.ThemeEngine.radius.small
+                color: logoutMouse.containsMouse ? Theme.ThemeEngine.colors.glassHover : "transparent"
 
                 RowLayout {
                     anchors.fill: parent
@@ -183,13 +183,13 @@ Atoms.Card {
                     Atoms.Icon {
                         source: "logout"
                         size: 18
-                        color: Theme.Theme.colors.textSecondary
+                        color: Theme.ThemeEngine.colors.textSecondary
                     }
 
                     Atoms.Label {
                         text: "Log Out"
-                        fontSize: Theme.Theme.typography.sizeMd
-                        color: Theme.Theme.colors.textPrimary
+                        fontSize: Theme.ThemeEngine.typography.sizeMd
+                        color: Theme.ThemeEngine.colors.textPrimary
                     }
                 }
 

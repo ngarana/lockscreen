@@ -106,6 +106,45 @@ QtObject {
         onTriggered: root._refreshState()
     }
 
+    // Process for version check
+    property var _versionProcess: Process {
+        onExited: function(code, status) {
+            root._onVersionCheck(code, stdout)
+        }
+    }
+
+    // Process for workspaces
+    property var _workspacesProcess: Process {
+        command: ["hyprctl", "-j", "workspaces"]
+        onExited: function(code, status) {
+            if (code === 0 && stdout) root._parseWorkspaces(stdout)
+        }
+    }
+
+    // Process for windows/clients
+    property var _clientsProcess: Process {
+        command: ["hyprctl", "-j", "clients"]
+        onExited: function(code, status) {
+            if (code === 0 && stdout) root._parseWindows(stdout)
+        }
+    }
+
+    // Process for monitors
+    property var _monitorsProcess: Process {
+        command: ["hyprctl", "-j", "monitors"]
+        onExited: function(code, status) {
+            if (code === 0 && stdout) root._parseMonitors(stdout)
+        }
+    }
+
+    // Process for active workspace
+    property var _activeWorkspaceProcess: Process {
+        command: ["hyprctl", "-j", "activeworkspace"]
+        onExited: function(code, status) {
+            if (code === 0 && stdout) root._parseActiveWorkspace(stdout)
+        }
+    }
+
     // ========================================================================
     // Public Methods
     // ========================================================================
@@ -232,7 +271,8 @@ QtObject {
     // ========================================================================
 
     function _getSocketPath() {
-        const hyprlandDir = Quickshell.env("XDG_RUNTIME_DIR", "/tmp") + "/hypr"
+        const runtimeDir = Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
+        const hyprlandDir = runtimeDir + "/hypr"
         const sig = Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")
 
         if (!sig) {
@@ -249,14 +289,12 @@ QtObject {
             return
         }
 
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["hyprctl", "version"]; running: true; onExited: function(c) { root._onVersionCheck(c, stdout) } }',
-            root
-        )
+        _versionProcess.command = ["hyprctl", "version"]
+        _versionProcess.running = true
     }
 
     function _onVersionCheck(exitCode, output) {
-        if (exitCode === 0) {
+        if (exitCode === 0 && output) {
             isConnected = true
             const lines = output.split("\n")
             if (lines.length > 0) {
@@ -283,10 +321,7 @@ QtObject {
     }
 
     function _fetchWorkspaces() {
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["hyprctl", "-j", "workspaces"]; running: true; onExited: function(c) { if (c === 0) root._parseWorkspaces(stdout) } }',
-            root
-        )
+        _workspacesProcess.running = true
     }
 
     function _parseWorkspaces(output) {
@@ -301,13 +336,14 @@ QtObject {
     }
 
     function _fetchWindows() {
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["hyprctl", "-j", "clients"]; running: true; onExited: function(c) { if (c === 0) root._parseWindows(stdout) } }',
-            root
-        )
+        _clientsProcess.running = true
     }
 
     function _parseWindows(output) {
+        if (!output) {
+            Core.Logger.error("Failed to parse windows: null output", "HyprlandService")
+            return
+        }
         try {
             const data = JSON.parse(output)
 
@@ -355,13 +391,14 @@ QtObject {
     }
 
     function _fetchMonitors() {
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["hyprctl", "-j", "monitors"]; running: true; onExited: function(c) { if (c === 0) root._parseMonitors(stdout) } }',
-            root
-        )
+        _monitorsProcess.running = true
     }
 
     function _parseMonitors(output) {
+        if (!output) {
+            Core.Logger.error("Failed to parse monitors: null output", "HyprlandService")
+            return
+        }
         try {
             const data = JSON.parse(output)
             const oldCount = monitorCount
@@ -377,13 +414,14 @@ QtObject {
     }
 
     function _fetchActiveWorkspace() {
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["hyprctl", "-j", "activeworkspace"]; running: true; onExited: function(c) { if (c === 0) root._parseActiveWorkspace(stdout) } }',
-            root
-        )
+        _activeWorkspaceProcess.running = true
     }
 
     function _parseActiveWorkspace(output) {
+        if (!output) {
+            Core.Logger.error("Failed to parse active workspace: null output", "HyprlandService")
+            return
+        }
         try {
             const data = JSON.parse(output)
             const oldId = activeWorkspaceId

@@ -44,20 +44,20 @@ Rectangle {
     // Layout
     implicitWidth: size
     implicitHeight: size
-    radius: circular ? size / 2 : Theme.Theme.radius.small
+    radius: circular ? size / 2 : Theme.ThemeEngine.radius.small
 
     // Visual state
     color: {
         if (!enabled) return "transparent"
-        if (_isPressed) return Theme.Theme.colors.glassActive
-        if (_isHovered) return Theme.Theme.colors.glassHover
+        if (_isPressed) return Theme.ThemeEngine.colors.glassActive
+        if (_isHovered) return Theme.ThemeEngine.colors.glassHover
         return "transparent"
     }
 
     border.width: 0
 
     Behavior on color {
-        ColorAnimation { duration: Theme.Theme.animation.fast }
+        ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
     }
 
     // Icon
@@ -67,10 +67,10 @@ Rectangle {
         source: root.icon
         size: root.iconSize
         color: {
-            if (!enabled) return Theme.Theme.colors.textMuted
-            if (_isPressed) return Theme.Theme.colors.primary
-            if (_isHovered) return Theme.Theme.colors.textPrimary
-            return Theme.Theme.colors.textSecondary
+            if (!enabled) return Theme.ThemeEngine.colors.textMuted
+            if (_isPressed) return Theme.ThemeEngine.colors.primary
+            if (_isHovered) return Theme.ThemeEngine.colors.textPrimary
+            return Theme.ThemeEngine.colors.textSecondary
         }
     }
 
@@ -109,7 +109,7 @@ Rectangle {
 
     Behavior on scale {
         NumberAnimation {
-            duration: Theme.Theme.animation.fast
+            duration: Theme.ThemeEngine.animation.fast
             easing.type: Easing.OutQuad
         }
     }

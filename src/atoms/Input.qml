@@ -55,9 +55,9 @@ Rectangle {
 
     // Size configuration
     readonly property var _sizes: ({
-        small: { height: 32, padding: 12, iconSize: 14, fontSize: Theme.Theme.typography.sizeSm },
-        medium: { height: 40, padding: 16, iconSize: 16, fontSize: Theme.Theme.typography.sizeMd },
-        large: { height: 48, padding: 20, iconSize: 18, fontSize: Theme.Theme.typography.sizeLg }
+        small: { height: 32, padding: 12, iconSize: 14, fontSize: Theme.ThemeEngine.typography.sizeSm },
+        medium: { height: 40, padding: 16, iconSize: 16, fontSize: Theme.ThemeEngine.typography.sizeMd },
+        large: { height: 48, padding: 20, iconSize: 18, fontSize: Theme.ThemeEngine.typography.sizeLg }
     })
 
     readonly property var _currentSize: _sizes[size] || _sizes.medium
@@ -65,29 +65,29 @@ Rectangle {
     // Layout
     implicitWidth: 200
     implicitHeight: _currentSize.height
-    radius: Theme.Theme.radius.medium
+    radius: Theme.ThemeEngine.radius.medium
 
     // Visual state
     color: {
         if (_hasError) return Qt.rgba(0.95, 0.3, 0.3, 0.1)
-        if (_isFocused) return Theme.Theme.colors.glassActive
-        if (_isHovered) return Theme.Theme.colors.glassHover
-        return Theme.Theme.colors.glass
+        if (_isFocused) return Theme.ThemeEngine.colors.glassActive
+        if (_isHovered) return Theme.ThemeEngine.colors.glassHover
+        return Theme.ThemeEngine.colors.glass
     }
 
     border.width: 1
     border.color: {
-        if (_hasError) return Theme.Theme.colors.error
-        if (_isFocused) return Theme.Theme.colors.primary
-        return Theme.Theme.colors.glassBorder
+        if (_hasError) return Theme.ThemeEngine.colors.error
+        if (_isFocused) return Theme.ThemeEngine.colors.primary
+        return Theme.ThemeEngine.colors.glassBorder
     }
 
     Behavior on color {
-        ColorAnimation { duration: Theme.Theme.animation.fast }
+        ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
     }
 
     Behavior on border.color {
-        ColorAnimation { duration: Theme.Theme.animation.fast }
+        ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
     }
 
     // Row layout for icon + input + clear button
@@ -105,7 +105,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             source: root.leftIcon
             size: root._currentSize.iconSize
-            color: root._isFocused ? Theme.Theme.colors.primary : Theme.Theme.colors.textSecondary
+            color: root._isFocused ? Theme.ThemeEngine.colors.primary : Theme.ThemeEngine.colors.textSecondary
         }
 
         // Text input
@@ -119,10 +119,10 @@ Rectangle {
             verticalAlignment: Text.AlignVCenter
 
             font.pixelSize: root._currentSize.fontSize
-            font.family: Theme.Theme.typography.fontFamily
-            color: Theme.Theme.colors.textPrimary
-            selectionColor: Theme.Theme.colors.primary
-            selectedTextColor: Theme.Theme.colors.crust
+            font.family: Theme.ThemeEngine.typography.fontFamily
+            color: Theme.ThemeEngine.colors.textPrimary
+            selectionColor: Theme.ThemeEngine.colors.primary
+            selectedTextColor: Theme.ThemeEngine.colors.crust
 
             echoMode: root.password ? TextInput.Password : TextInput.Normal
             passwordCharacter: "•"
@@ -138,7 +138,7 @@ Rectangle {
             // Cursor
             cursorDelegate: Rectangle {
                 width: 2
-                color: Theme.Theme.colors.primary
+                color: Theme.ThemeEngine.colors.primary
                 visible: textInput.cursorVisible
             }
         }
@@ -150,7 +150,7 @@ Rectangle {
             x: textInput.x
             width: textInput.width
             text: root.placeholder
-            color: Theme.Theme.colors.textMuted
+            color: Theme.ThemeEngine.colors.textMuted
             fontSize: root._currentSize.fontSize
             visible: textInput.text === "" && !root._isFocused
         }
@@ -162,7 +162,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             source: root.rightIcon
             size: root._currentSize.iconSize
-            color: Theme.Theme.colors.textSecondary
+            color: Theme.ThemeEngine.colors.textSecondary
         }
 
         // Clear button

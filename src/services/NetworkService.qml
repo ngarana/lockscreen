@@ -73,11 +73,11 @@ QtObject {
     // Emitted when network status changes (connection/disconnection)
     signal networkStatusChanged()
 
-    // Emitted when signal strength changes
-    signal signalStrengthChanged(int strength)
+    // Emitted when signal strength changes (parameter carries new value)
+    signal strengthUpdated(int strength)
 
     // Emitted when available networks change
-    signal availableNetworksChanged()
+    signal networksUpdated()
 
     // ========================================================================
     // Private Properties
@@ -171,6 +171,10 @@ QtObject {
     }
 
     function _parseStatus(output) {
+        if (!output) {
+            Core.Logger.warning("NetworkService: null output from nmcli", "NetworkService")
+            return
+        }
         const lines = output.split("\n")
         let wasConnected = root.isConnected
         let wasSsid = root.ssid
@@ -243,7 +247,7 @@ QtObject {
                 const strength = parseInt(parts[1]) || 0
                 if (strength !== root.signalStrength) {
                     root.signalStrength = strength
-                    signalStrengthChanged(strength)
+                    strengthUpdated(strength)
 
                     // Determine signal level
                     if (strength >= 80) {
@@ -291,7 +295,7 @@ QtObject {
         networks.sort(function(a, b) { return b.signal - a.signal })
 
         root.availableNetworks = networks
-        availableNetworksChanged()
+        networksUpdated()
     }
 
     function _checkInternet() {

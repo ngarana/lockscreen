@@ -181,13 +181,13 @@ Rectangle {
 
     Connections {
         target: Services.BarController
-        function onVisibilityChanged(visible) {
+        function onBarVisibilityChanged(visible) {
             root.visible = visible
         }
-        function onHeightChanged(height) {
+        function onHeightUpdated(height) {
             root.barHeight = height
         }
-        function onLayoutModeChanged(mode) {
+        function onLayoutModeUpdated(mode) {
             root.layoutMode = mode
         }
     }
@@ -197,6 +197,6 @@ Rectangle {
     // ========================================================================
 
     Component.onCompleted: {
-        root.visible = Services.BarController.visible
+        root.visible = Services.BarController.isVisible
     }
 }

@@ -27,8 +27,8 @@ Rectangle {
     property real value: 0.0
     property bool indeterminate: false
     property int barHeight: 4
-    property color fillColor: Theme.Theme.colors.primary
-    property color backgroundColor: Theme.Theme.colors.surface1
+    property color fillColor: Theme.ThemeEngine.colors.primary
+    property color backgroundColor: Theme.ThemeEngine.colors.surface1
     property int barRadius: 2
 
     // Internal
@@ -57,7 +57,7 @@ Rectangle {
         Behavior on width {
             enabled: !root.indeterminate
             NumberAnimation {
-                duration: Theme.Theme.animation.medium
+                duration: Theme.ThemeEngine.animation.medium
                 easing.type: Easing.OutQuad
             }
         }

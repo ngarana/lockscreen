@@ -109,6 +109,17 @@ QtObject {
     property var _batteryPath: ""
     property var _batteryPaths: []
 
+    // Component for creating Process objects dynamically
+    property var processComponent: Component {
+        Process {
+            property string batteryPath: ""
+            property int batteryIndex: -1
+            onExited: function(code, status) {
+                if (code === 0) root._parseBatteryInfo(stdout, batteryPath, batteryIndex)
+            }
+        }
+    }
+
     // ========================================================================
     // Public Methods
     // ========================================================================
@@ -182,13 +193,17 @@ QtObject {
 
     function _findBatteryPaths() {
         const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["sh", "-c", "ls /sys/class/power_supply/ | grep -E \"^BAT\""]; running: true; onExited: function(c) { if (c === 0) root._parseBatteryPaths(stdout) } }',
+            'import Quickshell.Io; Process { command: ["ls", "/sys/class/power_supply/"]; running: true; onExited: function(c, s) { if (c === 0) root._parseBatteryPaths(stdout) } }',
             root
         )
     }
 
     function _parseBatteryPaths(output) {
-        const paths = output.split("\n").filter(function(p) { return p.trim().length > 0 })
+        if (!output) {
+            root.hasBattery = false
+            return
+        }
+        const paths = output.split("\n").filter(function(p) { return p.trim().length > 0 && p.startsWith("BAT") })
         _batteryPaths = paths.map(function(p) { return "/sys/class/power_supply/" + p })
 
         root.hasBattery = _batteryPaths.length > 0
@@ -212,10 +227,12 @@ QtObject {
     }
 
     function _readBatteryInfo(path, index) {
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["cat", "' + path + '/uevent"]; running: true; onExited: function(c) { if (c === 0) root._parseBatteryInfo(stdout, "' + path + '", ' + index + ') } }',
-            root
-        )
+        const proc = processComponent.createObject(root, {
+            command: ["cat", path + "/uevent"],
+            batteryPath: path,
+            batteryIndex: index
+        })
+        proc.running = true
     }
 
     function _parseBatteryInfo(output, path, index) {

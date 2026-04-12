@@ -85,8 +85,8 @@ ColumnLayout {
 
             Atoms.Label {
                 text: "Recent Searches"
-                fontSize: Theme.Theme.typography.sizeXs
-                color: Theme.Theme.colors.textMuted
+                fontSize: Theme.ThemeEngine.typography.sizeXs
+                color: Theme.ThemeEngine.colors.textMuted
             }
 
             Repeater {
@@ -95,8 +95,8 @@ ColumnLayout {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 28
-                    radius: Theme.Theme.radius.small
-                    color: mouseArea.containsMouse ? Theme.Theme.colors.glassHover : "transparent"
+                    radius: Theme.ThemeEngine.radius.small
+                    color: mouseArea.containsMouse ? Theme.ThemeEngine.colors.glassHover : "transparent"
 
                     RowLayout {
                         anchors.fill: parent
@@ -107,14 +107,14 @@ ColumnLayout {
                         Atoms.Icon {
                             source: "history"
                             size: 14
-                            color: Theme.Theme.colors.textMuted
+                            color: Theme.ThemeEngine.colors.textMuted
                         }
 
                         Atoms.Label {
                             Layout.fillWidth: true
                             text: modelData
-                            fontSize: Theme.Theme.typography.sizeSm
-                            color: Theme.Theme.colors.textSecondary
+                            fontSize: Theme.ThemeEngine.typography.sizeSm
+                            color: Theme.ThemeEngine.colors.textSecondary
                             truncate: true
                         }
                     }

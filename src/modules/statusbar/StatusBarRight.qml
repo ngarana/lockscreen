@@ -83,7 +83,7 @@ RowLayout {
     Molecules.NetworkIndicator {
         id: networkIndicator
         visible: Services.BarController.showNetworkIndicator
-        showDetails: false
+        showLabel: false
 
         Layout.preferredWidth: 20
         Layout.preferredHeight: 20
@@ -248,9 +248,6 @@ RowLayout {
     Connections {
         target: Services.AudioService
         function onVolumeChanged() {
-            // Force update of volume icon
-        }
-        function onMuteChanged() {
             // Force update of volume icon
         }
     }

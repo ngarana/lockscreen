@@ -35,10 +35,10 @@ Rectangle {
     // Layout
     implicitWidth: textLabel.implicitWidth + 16
     implicitHeight: textLabel.implicitHeight + 10
-    radius: Theme.Theme.radius.small
-    color: Theme.Theme.colors.surface0
+    radius: Theme.ThemeEngine.radius.small
+    color: Theme.ThemeEngine.colors.surface0
     border.width: 1
-    border.color: Theme.Theme.colors.glassBorder
+    border.color: Theme.ThemeEngine.colors.glassBorder
 
     opacity: 0
     scale: 0.9
@@ -49,8 +49,8 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: -2
         radius: parent.radius + 2
-        color: Theme.Theme.colors.shadowMd.color
-        opacity: Theme.Theme.colors.shadowMd.opacity
+        color: Theme.ThemeEngine.colors.shadowMd.color
+        opacity: Theme.ThemeEngine.colors.shadowMd.opacity
         z: -1
     }
 
@@ -59,8 +59,8 @@ Rectangle {
         id: textLabel
         anchors.centerIn: parent
         text: root.text
-        fontSize: Theme.Theme.typography.sizeSm
-        color: Theme.Theme.colors.textPrimary
+        fontSize: Theme.ThemeEngine.typography.sizeSm
+        color: Theme.ThemeEngine.colors.textPrimary
     }
 
     // Positioning
@@ -119,7 +119,7 @@ Rectangle {
             to: "visible"
             NumberAnimation {
                 properties: "opacity,scale"
-                duration: Theme.Theme.animation.fast
+                duration: Theme.ThemeEngine.animation.fast
                 easing.type: Easing.OutQuad
             }
         },
@@ -128,7 +128,7 @@ Rectangle {
             to: ""
             NumberAnimation {
                 properties: "opacity,scale"
-                duration: Theme.Theme.animation.fast
+                duration: Theme.ThemeEngine.animation.fast
                 easing.type: Easing.InQuad
             }
         }

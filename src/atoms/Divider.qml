@@ -27,7 +27,7 @@ Item {
     // Public API
     property int orientation: Qt.Horizontal
     property int thickness: 1
-    property color lineColor: Theme.Theme.colors.surface1
+    property color lineColor: Theme.ThemeEngine.colors.surface1
     property string label: ""
     property string labelPosition: "center" // left, center, right
     property int spacing: 8
@@ -55,8 +55,8 @@ Item {
             id: labelItem
             visible: root.label !== ""
             text: root.label
-            fontSize: Theme.Theme.typography.sizeSm
-            color: Theme.Theme.colors.textSecondary
+            fontSize: Theme.ThemeEngine.typography.sizeSm
+            color: Theme.ThemeEngine.colors.textSecondary
         }
 
         Rectangle {

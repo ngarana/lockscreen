@@ -40,7 +40,7 @@ Item {
     property real damping: 0.15
     property real mass: 1.0
     property real epsilon: 0.01
-    property int duration: Theme.Theme.animation.slow
+    property int duration: Theme.ThemeEngine.animation.slow
 
     signal started()
     signal finished()

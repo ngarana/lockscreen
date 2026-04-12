@@ -42,7 +42,7 @@ RowLayout {
         visible: root.showIcon
         source: root._getBrightnessIcon()
         size: 20
-        color: Theme.Theme.colors.textSecondary
+        color: Theme.ThemeEngine.colors.textSecondary
     }
 
     // Brightness slider

@@ -36,14 +36,14 @@ Text {
 
     // Variant configuration
     readonly property var _variants: ({
-        h1: { size: Theme.Theme.typography.h1.size, weight: Theme.Theme.typography.h1.weight },
-        h2: { size: Theme.Theme.typography.h2.size, weight: Theme.Theme.typography.h2.weight },
-        h3: { size: Theme.Theme.typography.h3.size, weight: Theme.Theme.typography.h3.weight },
-        h4: { size: Theme.Theme.typography.h4.size, weight: Theme.Theme.typography.h4.weight },
-        body: { size: Theme.Theme.typography.bodyLg.size, weight: Theme.Theme.typography.bodyLg.weight },
-        caption: { size: Theme.Theme.typography.caption.size, weight: Theme.Theme.typography.caption.weight },
-        button: { size: Theme.Theme.typography.button.size, weight: Theme.Theme.typography.button.weight },
-        clock: { size: Theme.Theme.typography.clock.size, weight: Theme.Theme.typography.clock.weight }
+        h1: { size: Theme.ThemeEngine.typography.h1.size, weight: Theme.ThemeEngine.typography.h1.weight },
+        h2: { size: Theme.ThemeEngine.typography.h2.size, weight: Theme.ThemeEngine.typography.h2.weight },
+        h3: { size: Theme.ThemeEngine.typography.h3.size, weight: Theme.ThemeEngine.typography.h3.weight },
+        h4: { size: Theme.ThemeEngine.typography.h4.size, weight: Theme.ThemeEngine.typography.h4.weight },
+        body: { size: Theme.ThemeEngine.typography.bodyLg.size, weight: Theme.ThemeEngine.typography.bodyLg.weight },
+        caption: { size: Theme.ThemeEngine.typography.caption.size, weight: Theme.ThemeEngine.typography.caption.weight },
+        button: { size: Theme.ThemeEngine.typography.button.size, weight: Theme.ThemeEngine.typography.button.weight },
+        clock: { size: Theme.ThemeEngine.typography.clock.size, weight: Theme.ThemeEngine.typography.clock.weight }
     })
 
     readonly property var _currentVariant: _variants[variant] || _variants.body
@@ -51,10 +51,10 @@ Text {
     // Typography
     font.pixelSize: fontSize > 0 ? fontSize : _currentVariant.size
     font.weight: fontWeight >= 0 ? fontWeight : _currentVariant.weight
-    font.family: Theme.Theme.typography.fontFamily
+    font.family: Theme.ThemeEngine.typography.fontFamily
 
     // Color
-    color: Theme.Theme.colors.textPrimary
+    color: Theme.ThemeEngine.colors.textPrimary
 
     // Layout
     elide: truncate ? Text.ElideRight : Text.ElideNone
@@ -62,11 +62,11 @@ Text {
     maximumLineCount: maxLines > 0 ? maxLines : 999999
     lineHeightMode: Text.FixedHeight
     lineHeight: {
-        if (variant === "h1") return Theme.Theme.typography.h1.lineHeight * font.pixelSize
-        if (variant === "h2") return Theme.Theme.typography.h2.lineHeight * font.pixelSize
-        if (variant === "h3") return Theme.Theme.typography.h3.lineHeight * font.pixelSize
-        if (variant === "h4") return Theme.Theme.typography.h4.lineHeight * font.pixelSize
-        if (variant === "body") return Theme.Theme.typography.bodyLg.lineHeight * font.pixelSize
+        if (variant === "h1") return Theme.ThemeEngine.typography.h1.lineHeight * font.pixelSize
+        if (variant === "h2") return Theme.ThemeEngine.typography.h2.lineHeight * font.pixelSize
+        if (variant === "h3") return Theme.ThemeEngine.typography.h3.lineHeight * font.pixelSize
+        if (variant === "h4") return Theme.ThemeEngine.typography.h4.lineHeight * font.pixelSize
+        if (variant === "body") return Theme.ThemeEngine.typography.bodyLg.lineHeight * font.pixelSize
         return font.pixelSize * 1.5
     }
 

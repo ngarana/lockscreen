@@ -18,6 +18,7 @@
 //   - smooth: bool - Use smooth scaling (default: true)
 
 import QtQuick
+import Qt5Compat.GraphicalEffects
 import "../theme" as Theme
 
 Image {
@@ -25,8 +26,7 @@ Image {
 
     // Public API
     property int size: 24
-    property color color: Theme.Theme.colors.text
-    property int rotation: 0
+    property color color: Theme.ThemeEngine.colors.text
 
     // Internal
     property bool _isSvg: source.toString().toLowerCase().endsWith('.svg')
@@ -41,14 +41,13 @@ Image {
     fillMode: Image.PreserveAspectFit
     smooth: true
     mipmap: true
-    rotation: root.rotation
 
     // Color overlay for monochrome icons
     ColorOverlay {
         anchors.fill: parent
         source: parent
         color: root.color
-        visible: root._isSvg || root.color !== Theme.Theme.colors.text
+        visible: root._isSvg || root.color !== Theme.ThemeEngine.colors.text
     }
 
     // Handle loading errors

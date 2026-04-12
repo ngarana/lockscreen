@@ -52,19 +52,19 @@ RowLayout {
             height: 6
             radius: 3
 
-            color: root._isActive ? Theme.Theme.colors.primary :
-                  _hasWindows ? Theme.Theme.colors.textSecondary :
-                  Theme.Theme.colors.surface1
+            color: root._isActive ? Theme.ThemeEngine.colors.primary :
+                  _hasWindows ? Theme.ThemeEngine.colors.textSecondary :
+                  Theme.ThemeEngine.colors.surface1
 
             Behavior on width {
                 NumberAnimation {
-                    duration: Theme.Theme.animation.fast
+                    duration: Theme.ThemeEngine.animation.fast
                     easing.type: Easing.OutQuad
                 }
             }
 
             Behavior on color {
-                ColorAnimation { duration: Theme.Theme.animation.fast }
+                ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
             }
 
             // Click to switch workspace

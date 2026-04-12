@@ -47,9 +47,9 @@ Rectangle {
 
     // Size configuration
     readonly property var _sizes: ({
-        small: { height: 28, padding: 12, iconSize: 14, fontSize: Theme.Theme.typography.sizeSm },
-        medium: { height: 36, padding: 16, iconSize: 16, fontSize: Theme.Theme.typography.sizeMd },
-        large: { height: 44, padding: 24, iconSize: 20, fontSize: Theme.Theme.typography.sizeLg }
+        small: { height: 28, padding: 12, iconSize: 14, fontSize: Theme.ThemeEngine.typography.sizeSm },
+        medium: { height: 36, padding: 16, iconSize: 16, fontSize: Theme.ThemeEngine.typography.sizeMd },
+        large: { height: 44, padding: 24, iconSize: 20, fontSize: Theme.ThemeEngine.typography.sizeLg }
     })
 
     readonly property var _currentSize: _sizes[size] || _sizes.medium
@@ -57,23 +57,23 @@ Rectangle {
     // Colors based on variant and state
     readonly property color _bgColor: {
         if (variant === "filled") {
-            if (!enabled) return Theme.Theme.colors.surface0
-            if (_isPressed) return Theme.Theme.colors.blue.darker(1.2)
-            if (_isHovered) return Theme.Theme.colors.blue.lighter(1.1)
-            return Theme.Theme.colors.blue
+            if (!enabled) return Theme.ThemeEngine.colors.surface0
+            if (_isPressed) return Theme.ThemeEngine.colors.blue.darker(1.2)
+            if (_isHovered) return Theme.ThemeEngine.colors.blue.lighter(1.1)
+            return Theme.ThemeEngine.colors.blue
         }
         return "transparent"
     }
 
     readonly property color _borderColor: {
         if (variant === "outlined") {
-            if (!enabled) return Theme.Theme.colors.surface1
-            if (_isPressed) return Theme.Theme.colors.blue.darker(1.2)
-            if (_isHovered) return Theme.Theme.colors.blue
-            return Theme.Theme.colors.surface2
+            if (!enabled) return Theme.ThemeEngine.colors.surface1
+            if (_isPressed) return Theme.ThemeEngine.colors.blue.darker(1.2)
+            if (_isHovered) return Theme.ThemeEngine.colors.blue
+            return Theme.ThemeEngine.colors.surface2
         }
         if (variant === "ghost") {
-            if (_isHovered && enabled) return Theme.Theme.colors.glassBorder
+            if (_isHovered && enabled) return Theme.ThemeEngine.colors.glassBorder
             return "transparent"
         }
         return "transparent"
@@ -81,19 +81,19 @@ Rectangle {
 
     readonly property color _textColor: {
         if (variant === "filled") {
-            if (!enabled) return Theme.Theme.colors.textMuted
-            return Theme.Theme.colors.crust
+            if (!enabled) return Theme.ThemeEngine.colors.textMuted
+            return Theme.ThemeEngine.colors.crust
         }
-        if (!enabled) return Theme.Theme.colors.textMuted
-        if (_isPressed) return Theme.Theme.colors.blue.darker(1.2)
-        if (_isHovered) return Theme.Theme.colors.blue
-        return Theme.Theme.colors.text
+        if (!enabled) return Theme.ThemeEngine.colors.textMuted
+        if (_isPressed) return Theme.ThemeEngine.colors.blue.darker(1.2)
+        if (_isHovered) return Theme.ThemeEngine.colors.blue
+        return Theme.ThemeEngine.colors.text
     }
 
     // Layout
     implicitWidth: Math.max(_currentSize.height, contentRow.implicitWidth + _currentSize.padding * 2)
     implicitHeight: _currentSize.height
-    radius: Theme.Theme.radius.medium
+    radius: Theme.ThemeEngine.radius.medium
 
     // Visual state
     color: _bgColor
@@ -101,11 +101,11 @@ Rectangle {
     border.color: _borderColor
 
     Behavior on color {
-        ColorAnimation { duration: Theme.Theme.animation.fast }
+        ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
     }
 
     Behavior on border.color {
-        ColorAnimation { duration: Theme.Theme.animation.fast }
+        ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
     }
 
     // Shadow for filled variant
@@ -113,12 +113,12 @@ Rectangle {
         id: shadow
         anchors.fill: parent
         radius: parent.radius
-        color: variant === "filled" && enabled && !_isPressed ? Theme.Theme.colors.primaryGlow : "transparent"
+        color: variant === "filled" && enabled && !_isPressed ? Theme.ThemeEngine.colors.primaryGlow : "transparent"
         z: -1
         anchors.margins: -2
 
         Behavior on color {
-            ColorAnimation { duration: Theme.Theme.animation.fast }
+            ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
         }
     }
 
@@ -148,7 +148,7 @@ Rectangle {
             visible: root.text !== ""
             text: root.text
             fontSize: root._currentSize.fontSize
-            fontWeight: Theme.Theme.typography.weightMedium
+            fontWeight: Theme.ThemeEngine.typography.weightMedium
             color: root._textColor
         }
     }
@@ -185,7 +185,7 @@ Rectangle {
 
     Behavior on scale {
         NumberAnimation {
-            duration: Theme.Theme.animation.fast
+            duration: Theme.ThemeEngine.animation.fast
             easing.type: Easing.OutQuad
         }
     }

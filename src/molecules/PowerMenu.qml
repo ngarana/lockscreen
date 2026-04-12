@@ -55,17 +55,17 @@ ColumnLayout {
             // Power options
             Repeater {
                 model: [
-                    { id: "suspend", label: "Suspend", icon: "moon", color: Theme.Theme.colors.textSecondary },
-                    { id: "logout", label: "Log Out", icon: "logout", color: Theme.Theme.colors.textSecondary },
-                    { id: "reboot", label: "Restart", icon: "refresh", color: Theme.Theme.colors.warning },
-                    { id: "shutdown", label: "Shut Down", icon: "power", color: Theme.Theme.colors.error }
+                    { id: "suspend", label: "Suspend", icon: "moon", color: Theme.ThemeEngine.colors.textSecondary },
+                    { id: "logout", label: "Log Out", icon: "logout", color: Theme.ThemeEngine.colors.textSecondary },
+                    { id: "reboot", label: "Restart", icon: "refresh", color: Theme.ThemeEngine.colors.warning },
+                    { id: "shutdown", label: "Shut Down", icon: "power", color: Theme.ThemeEngine.colors.error }
                 ]
 
                 Rectangle {
                     Layout.fillWidth: true
                     height: 40
-                    radius: Theme.Theme.radius.small
-                    color: mouseArea.containsMouse ? Theme.Theme.colors.glassHover : "transparent"
+                    radius: Theme.ThemeEngine.radius.small
+                    color: mouseArea.containsMouse ? Theme.ThemeEngine.colors.glassHover : "transparent"
 
                     RowLayout {
                         anchors.fill: parent
@@ -83,7 +83,7 @@ ColumnLayout {
                         Atoms.Label {
                             Layout.fillWidth: true
                             text: modelData.label
-                            fontSize: Theme.Theme.typography.sizeMd
+                            fontSize: Theme.ThemeEngine.typography.sizeMd
                             color: modelData.color
                         }
                     }
@@ -114,7 +114,7 @@ ColumnLayout {
         padding: 16
         glassmorphic: true
         elevated: true
-        border.color: Theme.Theme.colors.error
+        border.color: Theme.ThemeEngine.colors.error
 
         ColumnLayout {
             anchors.fill: parent
@@ -125,8 +125,8 @@ ColumnLayout {
                 text: root._confirmAction === "shutdown" ?
                       "Are you sure you want to shut down?" :
                       "Are you sure you want to restart?"
-                fontSize: Theme.Theme.typography.sizeMd
-                color: Theme.Theme.colors.textPrimary
+                fontSize: Theme.ThemeEngine.typography.sizeMd
+                color: Theme.ThemeEngine.colors.textPrimary
                 wrap: true
             }
 

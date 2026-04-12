@@ -21,7 +21,7 @@ import "../atoms" as Atoms
 import "../services" as Services
 import "../theme" as Theme
 
-RowLayout {
+Item {
     id: root
 
     // Public API
@@ -37,50 +37,57 @@ RowLayout {
     readonly property string _connectionType: Services.NetworkService.connectionType
 
     // Layout
-    spacing: 6
+    implicitWidth: rowLayout.implicitWidth
+    implicitHeight: rowLayout.implicitHeight
 
-    // Network icon
-    Atoms.Icon {
-        id: networkIcon
-        source: Services.NetworkService.getIconName()
-        size: 20
-        color: root._isConnected ? Theme.Theme.colors.textPrimary : Theme.Theme.colors.textMuted
-    }
+    RowLayout {
+        id: rowLayout
+        anchors.fill: parent
+        spacing: 6
 
-    // Signal strength indicator (WiFi only)
-    Rectangle {
-        id: signalIndicator
-        visible: root._isConnected && root._connectionType === "wifi"
-        width: 16
-        height: 12
-        color: "transparent"
+        // Network icon (using Unicode glyph)
+        Text {
+            id: networkIcon
+            text: root._getIconGlyph()
+            font.pixelSize: 20
+            color: root._isConnected ? Theme.ThemeEngine.colors.textPrimary : Theme.ThemeEngine.colors.textMuted
+        }
 
-        // Draw signal bars
-        Row {
-            anchors.bottom: parent.bottom
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 2
+        // Signal strength indicator (WiFi only)
+        Rectangle {
+            id: signalIndicator
+            visible: root._isConnected && root._connectionType === "wifi"
+            width: 16
+            height: 12
+            color: "transparent"
 
-            Repeater {
-                model: 4
-                Rectangle {
-                    width: 3
-                    height: 3 + (index * 3)
-                    radius: 1
-                    color: index < root._getSignalBars() ?
-                           Theme.Theme.colors.textPrimary : Theme.Theme.colors.surface1
+            // Draw signal bars
+            Row {
+                anchors.bottom: parent.bottom
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 2
+
+                Repeater {
+                    model: 4
+                    Rectangle {
+                        width: 3
+                        height: 3 + (index * 3)
+                        radius: 1
+                        color: index < root._getSignalBars() ?
+                               Theme.ThemeEngine.colors.textPrimary : Theme.ThemeEngine.colors.surface1
+                    }
                 }
             }
         }
-    }
 
-    // Network name label
-    Atoms.Label {
-        id: ssidLabel
-        visible: root.showLabel && root._isConnected
-        text: root._ssid
-        fontSize: Theme.Theme.typography.sizeSm
-        color: Theme.Theme.colors.textSecondary
+        // Network name label
+        Atoms.Label {
+            id: ssidLabel
+            visible: root.showLabel && root._isConnected
+            text: root._ssid
+            fontSize: Theme.ThemeEngine.typography.sizeSm
+            color: Theme.ThemeEngine.colors.textSecondary
+        }
     }
 
     // Click area
@@ -97,7 +104,7 @@ RowLayout {
     Connections {
         target: Services.NetworkService
         function onNetworkStatusChanged() {
-            networkIcon.source = Services.NetworkService.getIconName()
+            networkIcon.text = root._getIconGlyph()
         }
     }
 
@@ -108,5 +115,16 @@ RowLayout {
         if (root._signalStrength >= 40) return 2
         if (root._signalStrength > 0) return 1
         return 0
+    }
+
+    // Helper to get Unicode icon glyph
+    function _getIconGlyph() {
+        if (!root._isConnected) {
+            return Theme.ThemeEngine.icons.wifiOff
+        }
+        if (root._connectionType === "ethernet") {
+            return Theme.ThemeEngine.icons.ethernet
+        }
+        return Theme.ThemeEngine.icons.wifi
     }
 }

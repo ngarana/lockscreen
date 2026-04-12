@@ -81,10 +81,10 @@ QtObject {
     signal deviceDisconnected(var device)
 
     // Emitted when paired devices list changes
-    signal pairedDevicesChanged()
+    signal pairedDevicesUpdated()
 
     // Emitted when available devices list changes
-    signal availableDevicesChanged()
+    signal availableDevicesUpdated()
 
     // ========================================================================
     // Private Properties

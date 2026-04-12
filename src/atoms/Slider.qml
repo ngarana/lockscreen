@@ -72,7 +72,7 @@ Rectangle {
             width: orientation === Qt.Horizontal ? parent.width : 4
             height: orientation === Qt.Horizontal ? 4 : parent.height
             radius: 2
-            color: Theme.Theme.colors.surface1
+            color: Theme.ThemeEngine.colors.surface1
         }
 
         // Filled track
@@ -85,7 +85,7 @@ Rectangle {
             width: orientation === Qt.Horizontal ? handle.x + handle.width / 2 : trackBg.width
             height: orientation === Qt.Horizontal ? trackBg.height : handle.y + handle.height / 2
             radius: 2
-            color: Theme.Theme.colors.primary
+            color: Theme.ThemeEngine.colors.primary
         }
 
         // Handle
@@ -96,12 +96,12 @@ Rectangle {
             width: 16
             height: 16
             radius: 8
-            color: root._isPressed ? Theme.Theme.colors.primary.darker(1.2) : Theme.Theme.colors.primary
+            color: root._isPressed ? Theme.ThemeEngine.colors.primary.darker(1.2) : Theme.ThemeEngine.colors.primary
             border.width: 2
-            border.color: root._isHovered || root._isPressed ? Theme.Theme.colors.textPrimary : "transparent"
+            border.color: root._isHovered || root._isPressed ? Theme.ThemeEngine.colors.textPrimary : "transparent"
 
             Behavior on color {
-                ColorAnimation { duration: Theme.Theme.animation.fast }
+                ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
             }
 
             // Glow effect
@@ -110,7 +110,7 @@ Rectangle {
                 width: parent.width + 8
                 height: parent.height + 8
                 radius: width / 2
-                color: Theme.Theme.colors.primaryGlow
+                color: Theme.ThemeEngine.colors.primaryGlow
                 z: -1
                 visible: root._isHovered || root._isPressed
             }
@@ -176,8 +176,8 @@ Rectangle {
             verticalCenter: parent.verticalCenter
         }
         text: root.valueFormat.arg(Math.round(root.value))
-        fontSize: Theme.Theme.typography.sizeSm
-        color: Theme.Theme.colors.textSecondary
+        fontSize: Theme.ThemeEngine.typography.sizeSm
+        color: Theme.ThemeEngine.colors.textSecondary
         width: 30
         horizontalAlignment: Text.AlignRight
     }
