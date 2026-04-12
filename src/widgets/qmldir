@@ -1,1 +1,3 @@
+module Widgets
+
 LockScreen 1.0 LockScreen.qml

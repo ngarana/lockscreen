@@ -106,7 +106,7 @@ test_structure() {
     test_file_exists "$SCRIPT_DIR/src/theme/Typography.qml" "Typography.qml exists"
     test_file_exists "$SCRIPT_DIR/src/theme/Spacing.qml" "Spacing.qml exists"
     test_file_exists "$SCRIPT_DIR/src/theme/Effects.qml" "Effects.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/theme/Animation.qml" "Animation.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/theme/AnimationTokens.qml" "AnimationTokens.qml exists"
 }
 
 test_modules() {

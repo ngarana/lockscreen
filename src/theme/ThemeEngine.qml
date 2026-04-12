@@ -53,7 +53,7 @@ QtObject {
     readonly property var effects: Effects {}
 
     // Animation durations and easing
-    readonly property var animation: Animation {}
+    readonly property var animation: AnimationTokens {}
 
     // ========================================================================
     // Legacy Aliases (for backward compatibility during migration)
