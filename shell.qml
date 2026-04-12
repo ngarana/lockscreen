@@ -6,12 +6,13 @@
 // Architecture Overview:
 //   shell.qml (Entry Point)
 //     ├── Scope (State Persistence)
-//     │   └── IpcHandler (External Control Interface)
+//     │   ├── IpcHandler (External Control Interface)
+//     │   └── Logger configuration
 //     ├── WlSessionLock (Wayland Session Lock)
 //     │   └── Variants (Per-screen lock surfaces)
 //     │       └── LockScreen (Lockscreen module)
 //     └── Variants (Per-screen panels)
-//         └── StatusBar (Status bar module)
+//         └── StatusBar (Status bar module - future)
 //
 // Features:
 // - Secure session locking via ext_session_lock_v1 protocol
@@ -20,6 +21,7 @@
 // - Multi-monitor support (auto-creates surfaces per screen)
 // - Module enable/disable via QUICKSHELL_MODE env var
 // - State persistence across hot-reloads via Scope
+// - Structured logging with Logger singleton
 //
 // Usage:
 //   # Development mode (no auto-lock)
@@ -35,6 +37,7 @@
 // Environment Variables:
 //   QUICKSHELL_LOCKSCREEN_AUTO_LOCK=1 - Enable auto-lock on startup
 //   QUICKSHELL_MODE=full|bar|lock     - Select which modules to enable
+//   QUICKSHELL_DEBUG=1                 - Enable debug logging
 
 import Quickshell
 import Quickshell.Wayland
@@ -42,9 +45,11 @@ import Quickshell.Io
 import QtQuick
 
 // Module imports (using relative paths for LSP support)
+// Lockscreen module - provides LockScreen and LockController singleton
 import "src/modules/lockscreen"
+// Services - provides PowerManager and legacy Theme singleton
 import "src/services"
-import "src/theme"
+// Core utilities - provides Logger singleton
 import "src/core"
 
 ShellRoot {
@@ -55,6 +60,7 @@ ShellRoot {
     // ========================================================================
 
     // Auto-lock environment variable
+    // Set QUICKSHELL_LOCKSCREEN_AUTO_LOCK=1 to lock immediately on startup
     readonly property bool autoLock: Quickshell.env("QUICKSHELL_AUTO_LOCK", "0") === "1"
 
     // Module selection environment variable
@@ -62,6 +68,9 @@ ShellRoot {
     // "bar" = status bar only
     // "lock" = lockscreen only
     readonly property string mode: Quickshell.env("QUICKSHELL_MODE", "full")
+
+    // Debug mode
+    readonly property bool debugMode: Quickshell.env("QUICKSHELL_DEBUG", "0") === "1"
 
     // Module enable flags
     readonly property bool lockscreenEnabled: root.mode === "full" || root.mode === "lock"
@@ -117,28 +126,17 @@ ShellRoot {
                 }
                 return LockController.isSecure ? "locked" : "locking"
             }
-
-            // ----------------------------------------------------------------
-            // Show/hide modules (future)
-            // ----------------------------------------------------------------
-            function showModule(module: string): void {
-                // TODO: Implement module visibility control
-                Logger.info("showModule: " + module, "shell.qml")
-            }
-
-            function hideModule(module: string): void {
-                // TODO: Implement module visibility control
-                Logger.info("hideModule: " + module, "shell.qml")
-            }
         }
 
-        // Timer for periodic tasks (future)
-        // Timer {
-        //     interval: 60000
-        //     repeat: true
-        //     running: true
-        //     onTriggered: { /* cleanup, status updates, etc. */ }
-        // }
+        // Configure logger based on debug mode
+        // This runs once on startup and survives hot-reloads
+        Component.onCompleted: {
+            if (root.debugMode) {
+                Logger.developmentMode()
+            } else {
+                Logger.productionMode()
+            }
+        }
     }
 
     // ========================================================================
@@ -154,9 +152,11 @@ ShellRoot {
         id: sessionLock
 
         // Initial lock state based on auto-lock setting
+        // Can be toggled via IPC or LockController
         locked: root.autoLock
 
         // Lock surfaces across all screens using Variants
+        // One WlSessionLockSurface is created per connected display
         Variants {
             model: root.lockscreenEnabled ? Quickshell.screens : []
             delegate: WlSessionLockSurface {
@@ -180,13 +180,13 @@ ShellRoot {
     // ========================================================================
     // Status bar displayed on each screen using PanelWindow.
     // Uses Variants to spawn on all available screens.
-
+    //
     // TODO: Uncomment when StatusBar module is implemented (Phase 4)
+
     // Variants {
     //     model: root.statusbarEnabled ? Quickshell.screens : []
     //     delegate: PanelWindow {
     //         screen: modelData
-    //         // StatusBar configuration
     //         // StatusBar {
     //         //     anchors.fill: parent
     //         // }
@@ -206,6 +206,7 @@ ShellRoot {
         Logger.info("Qypr shell initialized", "shell.qml")
         Logger.info("Mode: " + root.mode, "shell.qml")
         Logger.info("Auto-lock: " + root.autoLock, "shell.qml")
+        Logger.info("Debug: " + root.debugMode, "shell.qml")
         Logger.info("Screens: " + Quickshell.screens.length, "shell.qml")
     }
 }
