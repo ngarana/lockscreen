@@ -18,7 +18,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_PATH="$SCRIPT_DIR"
+CONFIG_PATH="$(dirname "$SCRIPT_DIR")"
 
 # Parse arguments
 MODE="${QUICKSHELL_MODE:-full}"

@@ -15,7 +15,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_PATH="$SCRIPT_DIR"
+CONFIG_PATH="$(dirname "$SCRIPT_DIR")"
 
 # Check if Qypr is already running via IPC
 if qs ipc -p "$CONFIG_PATH" show >/dev/null 2>&1; then
