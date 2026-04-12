@@ -1,5 +1,14 @@
 module Services
+
+# Authentication and session management
 singleton LockController 1.0 LockController.qml
 singleton PowerManager 1.0 PowerManager.qml
+
+# Theme (legacy alias - use Theme module instead)
 singleton Theme 1.0 Theme.qml
-singleton VideoConfig 1.0 VideoConfig.qml
+
+# Audio (legacy - use Audio module instead)
+# AudioService 1.0 AudioService.qml
+
+# Video configuration (legacy - use LockscreenModule instead)
+# VideoConfig 1.0 VideoConfig.qml

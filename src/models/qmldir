@@ -1,0 +1,9 @@
+module Models
+
+# Data models - TO BE IMPLEMENTED
+# ApplicationModel 1.0 ApplicationModel.qml
+# NotificationModel 1.0 NotificationModel.qml
+# WorkspaceModel 1.0 WorkspaceModel.qml
+# WindowModel 1.0 WindowModel.qml
+# CalendarModel 1.0 CalendarModel.qml
+# MediaModel 1.0 MediaModel.qml

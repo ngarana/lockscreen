@@ -1,21 +1,25 @@
-// shell.qml - Quickshell Lockscreen Entry Point
+// shell.qml - Qypr Desktop Shell Entry Point
 //
-// Main configuration file for the lockscreen application.
-// Sets up the session lock, UI surface, and IPC interface.
+// Main configuration file for the Qypr modular desktop shell system.
+// Uses Quickshell framework with ShellRoot as the root element.
 //
 // Architecture Overview:
 //   shell.qml (Entry Point)
+//     ├── Scope (State Persistence)
+//     │   └── IpcHandler (External Control Interface)
 //     ├── WlSessionLock (Wayland Session Lock)
-//     │   └── WlSessionLockSurface (Per-screen UI)
-//     │       └── LockScreen (Main UI)
-//     ├── IpcHandler (External Control)
-//     └── LockController (Auth Manager)
+//     │   └── Variants (Per-screen lock surfaces)
+//     │       └── LockScreen (Lockscreen module)
+//     └── Variants (Per-screen panels)
+//         └── StatusBar (Status bar module)
 //
 // Features:
 // - Secure session locking via ext_session_lock_v1 protocol
 // - Auto-lock support via QUICKSHELL_LOCKSCREEN_AUTO_LOCK env var
 // - IPC interface for external control
-// - Multi-monitor support (auto-creates surface per screen)
+// - Multi-monitor support (auto-creates surfaces per screen)
+// - Module enable/disable via QUICKSHELL_MODE env var
+// - State persistence across hot-reloads via Scope
 //
 // Usage:
 //   # Development mode (no auto-lock)
@@ -25,18 +29,23 @@
 //   QUICKSHELL_LOCKSCREEN_AUTO_LOCK=1 quickshell -p shell.qml
 //
 //   # IPC control
-//   quickshell -c lockscreen --ipc lock
-//   quickshell -c lockscreen --ipc status
+//   qs ipc -p . call lockscreen lock
+//   qs ipc -p . call lockscreen status
 //
 // Environment Variables:
 //   QUICKSHELL_LOCKSCREEN_AUTO_LOCK=1 - Enable auto-lock on startup
+//   QUICKSHELL_MODE=full|bar|lock     - Select which modules to enable
 
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
 import QtQuick
+
+// Module imports (using relative paths for LSP support)
+import "src/modules/lockscreen"
 import "src/services"
-import "src/widgets"
+import "src/theme"
+import "src/core"
 
 ShellRoot {
     id: root
@@ -45,9 +54,92 @@ ShellRoot {
     // Configuration
     // ========================================================================
 
-    // Check for auto-lock environment variable
-    // Set QUICKSHELL_LOCKSCREEN_AUTO_LOCK=1 to lock immediately on startup
-    readonly property bool autoLock: Quickshell.env("QUICKSHELL_LOCKSCREEN_AUTO_LOCK") === "1"
+    // Auto-lock environment variable
+    readonly property bool autoLock: Quickshell.env("QUICKSHELL_AUTO_LOCK", "0") === "1"
+
+    // Module selection environment variable
+    // "full" = all modules (default)
+    // "bar" = status bar only
+    // "lock" = lockscreen only
+    readonly property string mode: Quickshell.env("QUICKSHELL_MODE", "full")
+
+    // Module enable flags
+    readonly property bool lockscreenEnabled: root.mode === "full" || root.mode === "lock"
+    readonly property bool statusbarEnabled: root.mode === "full" || root.mode === "bar"
+
+    // ========================================================================
+    // State Persistence (survives hot-reloads)
+    // ========================================================================
+    // Scope prevents these objects from being destroyed and recreated on UI reloads.
+    // Do NOT put visual components inside a Scope.
+
+    Scope {
+        // IPC Handler for external control
+        IpcHandler {
+            target: "qypr"
+
+            // ----------------------------------------------------------------
+            // Lock the session
+            // Usage: qs ipc -p . call lockscreen lock
+            // ----------------------------------------------------------------
+            function lock(): void {
+                LockController.lock()
+            }
+
+            // ----------------------------------------------------------------
+            // Unlock the session
+            // Usage: qs ipc -p . call lockscreen unlock
+            // ----------------------------------------------------------------
+            function unlock(): void {
+                LockController.unlock()
+            }
+
+            // ----------------------------------------------------------------
+            // Toggle lock state
+            // Usage: qs ipc -p . call lockscreen toggle
+            // ----------------------------------------------------------------
+            function toggle(): void {
+                if (LockController.isLocked) {
+                    LockController.unlock()
+                } else {
+                    LockController.lock()
+                }
+            }
+
+            // ----------------------------------------------------------------
+            // Get lock status
+            // Usage: qs ipc -p . call lockscreen status
+            // Returns: "locked", "locking", or "unlocked"
+            // ----------------------------------------------------------------
+            function status(): string {
+                if (!LockController.isLocked) {
+                    return "unlocked"
+                }
+                return LockController.isSecure ? "locked" : "locking"
+            }
+
+            // ----------------------------------------------------------------
+            // Show/hide modules (future)
+            // ----------------------------------------------------------------
+            function showModule(module: string): void {
+                // TODO: Implement module visibility control
+                Logger.info("showModule: " + module, "shell.qml")
+            }
+
+            function hideModule(module: string): void {
+                // TODO: Implement module visibility control
+                Logger.info("hideModule: " + module, "shell.qml")
+            }
+        }
+
+        // Timer for periodic tasks (future)
+        // Timer {
+        //     interval: 60000
+        //     repeat: true
+        //     running: true
+        //     onTriggered: { /* cleanup, status updates, etc. */ }
+        // }
+    }
 
     // ========================================================================
     // Session Lock (Wayland ext_session_lock_v1)
@@ -62,85 +154,44 @@ ShellRoot {
         id: sessionLock
 
         // Initial lock state based on auto-lock setting
-        // Can be toggled via IPC or LockController
         locked: root.autoLock
 
-        // ====================================================================
-        // Lock Surface (Per-Screen UI)
-        // ====================================================================
-        // One WlSessionLockSurface is created per connected display.
-        // Each surface displays the LockScreen widget.
+        // Lock surfaces across all screens using Variants
+        Variants {
+            model: root.lockscreenEnabled ? Quickshell.screens : []
+            delegate: WlSessionLockSurface {
+                // modelData is the screen from Quickshell.screens
+                screen: modelData
 
-        WlSessionLockSurface {
-            id: lockSurface
+                LockScreen {
+                    anchors.fill: parent
 
-            // Main lockscreen UI
-            LockScreen {
-                anchors.fill: parent
-
-                // Handle unlock request from LockScreen
-                onUnlockRequested: {
-                    sessionLock.locked = false
+                    // Handle unlock request from LockScreen
+                    onUnlockRequested: {
+                        sessionLock.locked = false
+                    }
                 }
             }
         }
     }
 
     // ========================================================================
-    // IPC Handler (External Control Interface)
+    // Status Bar (Per-Screen)
     // ========================================================================
-    // Allows controlling the lockscreen from command line or scripts.
-    //
-    // Usage:
-    //   quickshell -c lockscreen --ipc lock
-    //   quickshell -c lockscreen --ipc status
+    // Status bar displayed on each screen using PanelWindow.
+    // Uses Variants to spawn on all available screens.
 
-    IpcHandler {
-        // Unique identifier for this lockscreen instance
-        target: "lockscreen"
-
-        // ----------------------------------------------------------------
-        // Lock the session
-        // Usage: quickshell -c lockscreen --ipc lock
-        // ----------------------------------------------------------------
-        function lock(): void {
-            LockController.lock()
-        }
-
-        // ----------------------------------------------------------------
-        // Unlock the session
-        // Usage: quickshell -c lockscreen --ipc unlock
-        // ----------------------------------------------------------------
-        function unlock(): void {
-            LockController.unlock()
-        }
-
-        // ----------------------------------------------------------------
-        // Toggle lock state
-        // Usage: quickshell -c lockscreen --ipc toggle
-        // ----------------------------------------------------------------
-        function toggle(): void {
-            if (LockController.isLocked) {
-                LockController.unlock()
-            } else {
-                LockController.lock()
-            }
-        }
-
-        // ----------------------------------------------------------------
-        // Get lock status
-        // Usage: quickshell -c lockscreen --ipc status
-        // Returns: "locked", "locking", or "unlocked"
-        // ----------------------------------------------------------------
-        function status(): string {
-            if (!LockController.isLocked) {
-                return "unlocked"
-            }
-
-            // "locking" means compositor hasn't confirmed all screens covered
-            return LockController.isSecure ? "locked" : "locking"
-        }
-    }
+    // TODO: Uncomment when StatusBar module is implemented (Phase 4)
+    // Variants {
+    //     model: root.statusbarEnabled ? Quickshell.screens : []
+    //     delegate: PanelWindow {
+    //         screen: modelData
+    //         // StatusBar configuration
+    //         // StatusBar {
+    //         //     anchors.fill: parent
+    //         // }
+    //     }
+    // }
 
     // ========================================================================
     // Initialization
@@ -150,5 +201,11 @@ ShellRoot {
         // Give LockController a reference to the session lock
         // This allows it to control lock/unlock state
         LockController.setLockInstance(sessionLock)
+
+        // Log startup information
+        Logger.info("Qypr shell initialized", "shell.qml")
+        Logger.info("Mode: " + root.mode, "shell.qml")
+        Logger.info("Auto-lock: " + root.autoLock, "shell.qml")
+        Logger.info("Screens: " + Quickshell.screens.length, "shell.qml")
     }
 }

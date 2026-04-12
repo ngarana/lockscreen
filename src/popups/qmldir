@@ -1,0 +1,9 @@
+module Popups
+
+# Popup components - TO BE IMPLEMENTED
+# BasePopup 1.0 BasePopup.qml
+# ConfirmDialog 1.0 ConfirmDialog.qml
+# InputDialog 1.0 InputDialog.qml
+# VolumeOSD 1.0 VolumeOSD.qml
+# BrightnessOSD 1.0 BrightnessOSD.qml
+# ScreenshotPreview 1.0 ScreenshotPreview.qml

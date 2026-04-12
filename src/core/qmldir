@@ -1,0 +1,6 @@
+module Core
+
+singleton Utils 1.0 Utils.qml
+singleton Logger 1.0 Logger.qml
+Constants 1.0 Constants.qml
+Errors 1.0 Errors.qml

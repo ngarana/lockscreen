@@ -1,3 +1,6 @@
+module Components
+
+# Composite components (organisms)
 ActionButton 1.0 ActionButton.qml
 AudioController 1.0 AudioController.qml
 AudioMetadata 1.0 AudioMetadata.qml

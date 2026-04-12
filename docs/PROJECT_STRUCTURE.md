@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document defines the architecture and project structure for transforming Qypr from a lockscreen-only application to a comprehensive desktop shell system supporting multiple components: **lockscreen**, **status-bar**, **launcher**, **notifications**, and **control-center**.
+This document defines the architecture and project structure for Qypr, a comprehensive desktop shell system supporting multiple components: **lockscreen**, **status-bar**, **launcher**, **notifications**, and **control-center**.
 
 The architecture follows Qt6/QML best practices, Quickshell framework conventions, and software design patterns focused on modularity, extensibility, and reusability.
 

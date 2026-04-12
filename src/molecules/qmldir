@@ -1,0 +1,17 @@
+module Molecules
+
+# Molecular components (atom combinations) - TO BE IMPLEMENTED
+# Clock 1.0 Clock.qml
+# VolumeControl 1.0 VolumeControl.qml
+# BrightnessControl 1.0 BrightnessControl.qml
+# NetworkIndicator 1.0 NetworkIndicator.qml
+# BatteryIndicator 1.0 BatteryIndicator.qml
+# WorkspaceIndicator 1.0 WorkspaceIndicator.qml
+# WindowPreview 1.0 WindowPreview.qml
+# NotificationItem 1.0 NotificationItem.qml
+# MediaWidget 1.0 MediaWidget.qml
+# SearchInput 1.0 SearchInput.qml
+# ListItem 1.0 ListItem.qml
+# AppGridItem 1.0 AppGridItem.qml
+# PowerMenu 1.0 PowerMenu.qml
+# UserMenu 1.0 UserMenu.qml

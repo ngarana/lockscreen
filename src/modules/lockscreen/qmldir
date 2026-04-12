@@ -1,0 +1,7 @@
+module LockscreenModule
+
+LockScreen 1.0 LockScreen.qml
+VideoBackground 1.0 VideoBackground.qml
+VideoConfig 1.0 VideoConfig.qml
+
+singleton LockController 1.0 LockController.qml
