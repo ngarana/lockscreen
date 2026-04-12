@@ -46,23 +46,39 @@ Rectangle {
     implicitHeight: root.barHeight
 
     // ========================================================================
-    // Background - flat transparent bar (macOS style)
+    // Background - macOS-style frosted glass (like PasswordField)
     // ========================================================================
 
     Rectangle {
         id: background
         anchors.fill: parent
-        color: Theme.ThemeEngine.colors.surface0
-        opacity: 0.65
+        color: Theme.ThemeEngine.colors.glass
+        radius: 0
+        border.width: 0
 
-        // Subtle bottom border
+        // Subtle bottom border line
         Rectangle {
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
             height: 1
             color: Theme.ThemeEngine.colors.glassBorder
-            opacity: 0.3
+            opacity: 0.4
+        }
+
+        // Top highlight gradient (frosted glass reflection)
+        Rectangle {
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: parent.height * 0.4
+            gradient: Gradient {
+                orientation: Gradient.Vertical
+                GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.06) }
+                GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.0) }
+            }
+            radius: 0
+            z: 1
         }
     }
 
