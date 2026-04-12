@@ -46,15 +46,19 @@ Rectangle {
     implicitHeight: root.barHeight
 
     // ========================================================================
-    // Background - macOS-style frosted glass (like PasswordField)
+    // Background - macOS-style menu bar (semi-transparent dark surface)
     // ========================================================================
 
     Rectangle {
         id: background
         anchors.fill: parent
-        color: Theme.ThemeEngine.colors.glass
+        color: Qt.rgba(
+            Theme.ThemeEngine.colors.surface.r,
+            Theme.ThemeEngine.colors.surface.g,
+            Theme.ThemeEngine.colors.surface.b,
+            0.85
+        )
         radius: 0
-        border.width: 0
 
         // Subtle bottom border line
         Rectangle {
@@ -62,8 +66,12 @@ Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right
             height: 1
-            color: Theme.ThemeEngine.colors.glassBorder
-            opacity: 0.4
+            color: Qt.rgba(
+                Theme.ThemeEngine.colors.glassBorder.r,
+                Theme.ThemeEngine.colors.glassBorder.g,
+                Theme.ThemeEngine.colors.glassBorder.b,
+                0.15
+            )
         }
 
         // Top highlight gradient (frosted glass reflection)
@@ -71,11 +79,12 @@ Rectangle {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: parent.height * 0.4
+            height: parent.height * 0.5
             gradient: Gradient {
                 orientation: Gradient.Vertical
-                GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.06) }
-                GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.0) }
+                GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.08) }
+                GradientStop { position: 0.5; color: Qt.rgba(1, 1, 1, 0.03) }
+                GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.0) }
             }
             radius: 0
             z: 1
