@@ -1,15 +1,13 @@
 module StatusBarModule
 
-# Main components - TO BE IMPLEMENTED
-# StatusBar 1.0 StatusBar.qml
-# StatusBarLeft 1.0 StatusBarLeft.qml
-# StatusBarCenter 1.0 StatusBarCenter.qml
-# StatusBarRight 1.0 StatusBarRight.qml
-# Taskbar 1.0 Taskbar.qml
+# Main components
+StatusBar 1.0 StatusBar.qml
+StatusBarLeft 1.0 StatusBarLeft.qml
+StatusBarCenter 1.0 StatusBarCenter.qml
+StatusBarRight 1.0 StatusBarRight.qml
 
-# Singleton controller - TO BE IMPLEMENTED
-# singleton BarController 1.0 BarController.qml
+# Tray item component
+TrayItem 1.0 TrayItem.qml
 
-# Internal components
-# internal BarLayout BarLayout.qml
-# internal WidgetContainer WidgetContainer.qml
+# Singleton controller
+singleton BarController 1.0 BarController.qml

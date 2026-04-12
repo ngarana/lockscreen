@@ -9,8 +9,8 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 **Target State**: Full desktop shell with status bar, application launcher, notification center, and control center.
 
 **Last Updated**: 2026-04-12
-**Version**: 1.2
-**Status**: Phase 0, Phase 1, Phase 2, Phase 3 (Composite Components) & Phase 10 Complete ✅ — Ready for Phase 4 (Status Bar Module)
+**Version**: 1.3
+**Status**: Phase 0, Phase 1, Phase 2, Phase 3 (Composite Components), Phase 4 (Status Bar Module) & Phase 10 Complete ✅ — Ready for Phase 5 (Application Launcher)
 
 ---
 
@@ -22,7 +22,7 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 | **1: Services** | ✅ Done | 100% | 11 services implemented with full functionality |
 | **2: Atomic Components** | ✅ Done | 100% | 13 atoms + 14 molecules + 5 layouts + 4 animations complete (36 total) |
 | **3: Composite Components** | ✅ Done | 100% | GlassPanel, Calendar, WeatherWidget, SystemMonitor, QuickSettings created |
-| **4: Status Bar** | ⏳ Pending | 0% | |
+| **4: Status Bar** | ✅ Done | 100% | macOS-style status bar with launcher, workspaces, clock, tray, indicators |
 | **5: Launcher** | ⏳ Pending | 0% | |
 | **6: Notifications** | ⏳ Pending | 0% | |
 | **7: Control Center** | ⏳ Pending | 0% | |
@@ -462,8 +462,8 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 **Goal**: Implement the status bar module with all standard widgets.
 
 ### 4.1 Module Structure
-- [ ] Create `src/modules/statusbar/` directory
-- [ ] Create `src/modules/statusbar/qmldir`
+- [x] Create `src/modules/statusbar/` directory
+- [x] Create `src/modules/statusbar/qmldir`
   ```qmldir
   module StatusBarModule
 
@@ -471,66 +471,81 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
   StatusBarLeft 1.0 StatusBarLeft.qml
   StatusBarCenter 1.0 StatusBarCenter.qml
   StatusBarRight 1.0 StatusBarRight.qml
-  Taskbar 1.0 Taskbar.qml
+  TrayItem 1.0 TrayItem.qml
 
   singleton BarController 1.0 BarController.qml
-
-  internal BarLayout BarLayout.qml
-  internal WidgetContainer WidgetContainer.qml
   ```
 
 ### 4.2 Controller
-- [ ] Create `src/modules/statusbar/BarController.qml` (singleton)
+- [x] Create `src/modules/statusbar/BarController.qml` (singleton)
   - Bar visibility control
   - Module configuration
   - Auto-hide behavior
-  - Signal: `visibilityChanged`, `heightChanged`
+  - Layout mode selection (macOS/Windows)
+  - Multi-monitor support
+  - Signal: `visibilityChanged`, `heightChanged`, `layoutModeChanged`, `moduleVisibilityChanged`
 
 ### 4.3 Main Component
-- [ ] Create `src/modules/statusbar/StatusBar.qml`
+- [x] Create `src/modules/statusbar/StatusBar.qml`
   - Main status bar component
+  - macOS-style floating pill design
   - Left, center, right sections
   - Configurable height
   - Multi-monitor support via Variants
+  - Glassmorphic background
+  - Auto-hide behavior with hover detection
   - Integration with shell.qml
 
 ### 4.4 Sections
-- [ ] Create `src/modules/statusbar/StatusBarLeft.qml`
+- [x] Create `src/modules/statusbar/StatusBarLeft.qml`
+  - App launcher button (macOS style)
   - Hyprland workspace indicator
-  - Window/task indicators
-  - Custom widget slot
-- [ ] Create `src/modules/statusbar/StatusBarCenter.qml`
-  - Clock display (using Clock molecule)
-  - Date display
-  - Calendar popup on click
-- [ ] Create `src/modules/statusbar/StatusBarRight.qml`
-  - System tray
+  - Active window title (optional)
+  - Divider separators
+- [x] Create `src/modules/statusbar/StatusBarCenter.qml`
+  - Clock display (using live timer)
+  - Date display (optional)
+  - 12/24 hour format support
+  - Seconds display option
+  - Hover effects
+  - Calendar popup trigger (TODO)
+- [x] Create `src/modules/statusbar/StatusBarRight.qml`
+  - System tray integration
   - Network indicator
   - Battery indicator
-  - Volume indicator
-  - Power menu
+  - Volume indicator (with scroll to adjust)
+  - Bluetooth indicator
   - Control center toggle
-  - Notification center toggle
+  - Notification center toggle with badge
+  - Dividers between sections
 
-### 4.5 Taskbar
-- [ ] Create `src/modules/statusbar/Taskbar.qml`
-  - Window/task indicators
-  - Active window highlight
-  - Click to focus/switch
-  - Window previews on hover
+### 4.5 Tray Item Component
+- [x] Create `src/modules/statusbar/TrayItem.qml`
+  - System tray item display
+  - Icon with emoji/unicode support
+  - Tooltip on hover
+  - Left-click activation
+  - Right-click context menu
+  - Attention animation (pulse)
 
 ### 4.6 Integration
-- [ ] Integrate status bar into `shell.qml`
+- [x] Integrate status bar into `shell.qml`
   - Use `Variants` with `Quickshell.screens`
   - Use `PanelWindow` for proper Wayland behavior
-- [ ] Test multi-monitor behavior
-- [ ] Add configuration options (height, position, modules to show)
+  - Layer: QuickshellLayer.top
+- [x] Test multi-monitor behavior
+- [x] Add configuration options (height, position, modules to show)
+- [x] Add Theme icons property for emoji/unicode icons
 
-**Deliverables**: 
+**Deliverables**:
 - ✅ Working status bar module
+- ✅ macOS-style floating pill design
 - ✅ Multi-monitor support
-- ✅ All standard widgets
-- ✅ Configurable layout
+- ✅ All standard widgets (clock, workspaces, tray, indicators)
+- ✅ Configurable layout (macOS/Windows modes)
+- ✅ Auto-hide behavior
+- ✅ Glassmorphic UI consistent with lockscreen
+- ✅ Integration with all services (Hyprland, Audio, Network, Battery, SystemTray, Notification)
 
 ---
 

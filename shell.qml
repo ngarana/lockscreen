@@ -42,11 +42,14 @@
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
+import Quickshell.Hyprland
 import QtQuick
 
 // Module imports (using relative paths for LSP support)
 // Lockscreen module - provides LockScreen and LockController singleton
 import "src/modules/lockscreen"
+// Status bar module - provides StatusBar and BarController singleton
+import "src/modules/statusbar"
 // Services - provides PowerManager and legacy Theme singleton
 import "src/services"
 // Core utilities - provides Logger singleton
@@ -177,18 +180,28 @@ ShellRoot {
     // ========================================================================
     // Status bar displayed on each screen using PanelWindow.
     // Uses Variants to spawn on all available screens.
-    //
-    // TODO: Uncomment when StatusBar module is implemented (Phase 4)
 
-    // Variants {
-    //     model: root.statusbarEnabled ? Quickshell.screens : []
-    //     delegate: PanelWindow {
-    //         screen: modelData
-    //         // StatusBar {
-    //         //     anchors.fill: parent
-    //         // }
-    //     }
-    // }
+    Variants {
+        model: root.statusbarEnabled ? Quickshell.screens : []
+        delegate: PanelWindow {
+            screen: modelData
+
+            // Exclude from session lock layer
+            layer: QuickshellLayer.top
+
+            // Anchor to top edge
+            anchors {
+                top: parent.top
+                left: parent.left
+                right: parent.right
+            }
+
+            // Status bar component
+            StatusBar {
+                anchors.fill: parent
+            }
+        }
+    }
 
     // ========================================================================
     // Initialization
