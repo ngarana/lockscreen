@@ -165,11 +165,65 @@ test_components() {
     echo "--- Atomic Components ---"
     test_dir_exists "$SCRIPT_DIR/src/atoms" "Atoms directory exists"
     test_file_exists "$SCRIPT_DIR/src/atoms/qmldir" "Atoms qmldir exists"
+
+    echo ""
+    echo "--- Phase 2: Button Atoms ---"
+    test_file_exists "$SCRIPT_DIR/src/atoms/Button.qml" "Button.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/atoms/IconButton.qml" "IconButton.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/atoms/TextButton.qml" "TextButton.qml exists"
+
+    echo ""
+    echo "--- Phase 2: Content Atoms ---"
+    test_file_exists "$SCRIPT_DIR/src/atoms/Icon.qml" "Icon.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/atoms/Label.qml" "Label.qml exists"
+
+    echo ""
+    echo "--- Phase 2: Form Atoms ---"
+    test_file_exists "$SCRIPT_DIR/src/atoms/Input.qml" "Input.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/atoms/Slider.qml" "Slider.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/atoms/ProgressBar.qml" "ProgressBar.qml exists"
+
+    echo ""
+    echo "--- Phase 2: Layout Atoms ---"
+    test_file_exists "$SCRIPT_DIR/src/atoms/Card.qml" "Card.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/atoms/Divider.qml" "Divider.qml exists"
+
+    echo ""
+    echo "--- Phase 2: Feedback Atoms ---"
+    test_file_exists "$SCRIPT_DIR/src/atoms/Badge.qml" "Badge.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/atoms/Tooltip.qml" "Tooltip.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/atoms/Spinner.qml" "Spinner.qml exists"
     
     echo ""
     echo "--- Molecular Components ---"
     test_dir_exists "$SCRIPT_DIR/src/molecules" "Molecules directory exists"
     test_file_exists "$SCRIPT_DIR/src/molecules/qmldir" "Molecules qmldir exists"
+
+    echo ""
+    echo "--- Phase 2.2: System Indicators ---"
+    test_file_exists "$SCRIPT_DIR/src/molecules/Clock.qml" "Clock.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/molecules/VolumeControl.qml" "VolumeControl.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/molecules/BrightnessControl.qml" "BrightnessControl.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/molecules/NetworkIndicator.qml" "NetworkIndicator.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/molecules/BatteryIndicator.qml" "BatteryIndicator.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/molecules/WorkspaceIndicator.qml" "WorkspaceIndicator.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/molecules/WindowPreview.qml" "WindowPreview.qml exists"
+
+    echo ""
+    echo "--- Phase 2.2: Content Display ---"
+    test_file_exists "$SCRIPT_DIR/src/molecules/NotificationItem.qml" "NotificationItem.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/molecules/MediaWidget.qml" "MediaWidget.qml exists"
+
+    echo ""
+    echo "--- Phase 2.2: Input/List Components ---"
+    test_file_exists "$SCRIPT_DIR/src/molecules/SearchInput.qml" "SearchInput.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/molecules/ListItem.qml" "ListItem.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/molecules/AppGridItem.qml" "AppGridItem.qml exists"
+
+    echo ""
+    echo "--- Phase 2.2: Menu Components ---"
+    test_file_exists "$SCRIPT_DIR/src/molecules/PowerMenu.qml" "PowerMenu.qml exists"
+    test_file_exists "$SCRIPT_DIR/src/molecules/UserMenu.qml" "UserMenu.qml exists"
 }
 
 test_services() {
@@ -178,9 +232,40 @@ test_services() {
     
     test_dir_exists "$SCRIPT_DIR/src/services" "Services directory exists"
     test_file_exists "$SCRIPT_DIR/src/services/qmldir" "Services qmldir exists"
+    
+    echo ""
+    echo "--- Phase 1: Core Services ---"
     test_file_exists "$SCRIPT_DIR/src/services/LockController.qml" "LockController service exists"
     test_file_exists "$SCRIPT_DIR/src/services/PowerManager.qml" "PowerManager service exists"
     test_file_exists "$SCRIPT_DIR/src/services/Theme.qml" "Theme service exists (legacy)"
+    test_file_exists "$SCRIPT_DIR/src/services/VideoConfig.qml" "VideoConfig service exists"
+    
+    echo ""
+    echo "--- Phase 1: Configuration Service ---"
+    test_file_exists "$SCRIPT_DIR/src/services/ConfigService.qml" "ConfigService singleton exists"
+    
+    echo ""
+    echo "--- Phase 1: Audio & Media Services ---"
+    test_file_exists "$SCRIPT_DIR/src/services/AudioService.qml" "AudioService singleton exists"
+    test_dir_exists "$SCRIPT_DIR/src/audio" "Audio module directory exists"
+    test_file_exists "$SCRIPT_DIR/src/audio/AudioService.qml" "Full AudioService implementation exists"
+    
+    echo ""
+    echo "--- Phase 1: Network & Connectivity ---"
+    test_file_exists "$SCRIPT_DIR/src/services/NetworkService.qml" "NetworkService singleton exists"
+    test_file_exists "$SCRIPT_DIR/src/services/BluetoothService.qml" "BluetoothService singleton exists"
+    
+    echo ""
+    echo "--- Phase 1: Power & Display ---"
+    test_file_exists "$SCRIPT_DIR/src/services/BatteryService.qml" "BatteryService singleton exists"
+    test_file_exists "$SCRIPT_DIR/src/services/BrightnessService.qml" "BrightnessService singleton exists"
+    
+    echo ""
+    echo "--- Phase 1: System Integration ---"
+    test_file_exists "$SCRIPT_DIR/src/services/HyprlandService.qml" "HyprlandService singleton exists"
+    test_file_exists "$SCRIPT_DIR/src/services/SystemTrayService.qml" "SystemTrayService singleton exists"
+    test_file_exists "$SCRIPT_DIR/src/services/NotificationService.qml" "NotificationService singleton exists"
+    test_file_exists "$SCRIPT_DIR/src/services/SessionService.qml" "SessionService singleton exists"
 }
 
 test_models() {

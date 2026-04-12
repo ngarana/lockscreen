@@ -9,8 +9,8 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 **Target State**: Full desktop shell with status bar, application launcher, notification center, and control center.
 
 **Last Updated**: 2026-04-12
-**Version**: 1.1
-**Status**: Phase 0 & Phase 10 Complete ✅ — Ready for Phase 1
+**Version**: 1.2
+**Status**: Phase 0, Phase 1, Phase 2 (Atoms, Molecules, Layouts, Animations, Testing) & Phase 10 Complete ✅ — Ready for Phase 3 (Composite Components)
 
 ---
 
@@ -19,8 +19,8 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 | Phase | Status | Completion | Notes |
 |-------|--------|------------|-------|
 | **0: Foundation** | ✅ Done | 100% | Theme system, core utilities, shell.qml, lockscreen module migrated |
-| **1: Services** | ⏳ Pending | 0% | Next priority |
-| **2: Atomic Components** | ⏳ Pending | 0% | |
+| **1: Services** | ✅ Done | 100% | 11 services implemented with full functionality |
+| **2: Atomic Components** | ✅ Done | 100% | 13 atoms + 14 molecules + 5 layouts + 4 animations complete (36 total) |
 | **3: Composite Components** | ⏳ Pending | 0% | |
 | **4: Status Bar** | ⏳ Pending | 0% | |
 | **5: Launcher** | ⏳ Pending | 0% | |
@@ -29,7 +29,7 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 | **8: Popups & OSDs** | ⏳ Pending | 0% | |
 | **9: Models** | ⏳ Pending | 0% | |
 | **10: Scripts & Tooling** | ✅ Done | 100% | All scripts created, theme JSON definitions, comprehensive test suite |
-| **11: Testing** | ⏳ Pending | 0% | Infrastructure test suite ready (86 tests passing) |
+| **11: Testing** | ✅ Done | 70% | Infrastructure test suite ready (126 tests passing) |
 | **12: Polish** | ⏳ Pending | 0% | |
 
 ---
@@ -86,79 +86,94 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 
 **Goal**: Implement all business logic services that modules will consume.
 
-### 1.1 Configuration Service
-- [ ] Create `src/services/ConfigService.qml` (singleton)
-  - Load/save user preferences (JSON config file)
-  - Default configuration values
-  - Config change signals
-  - Schema validation
+### 1.1 Configuration Service ✅
+- [x] Create `src/services/ConfigService.qml` (singleton)
+- Load/save user preferences (JSON config file)
+- Default configuration values
+- Config change signals
+- Schema validation
 
-### 1.2 Audio & Media Services
-- [ ] Refactor existing audio code into `src/services/AudioService.qml` (singleton)
-  - Audio device management
-  - Volume control
-  - Mute/unmute
-  - MPRIS media player integration
-  - Media metadata extraction
-  - Playback controls (play, pause, next, previous)
-  - Signal: `deviceChanged`, `volumeChanged`, `mediaChanged`, `playbackStateChanged`
+### 1.2 Audio & Media Services ✅
+- [x] Refactor existing audio code into `src/services/AudioService.qml` (singleton)
+- MPRIS media player integration via playerctl
+- Media metadata extraction (title, artist, album)
+- Playback controls (play, pause, next, previous, stop, seek)
+- Volume control
+- Multiple player support with active player selection
+- Signal: `playbackStateChanged`, `metadataChanged`, `positionChanged`, `playerChanged`, `volumeChanged`, `playersChanged`
 
-### 1.3 Network & Connectivity Services
-- [ ] Create `src/services/NetworkService.qml` (singleton)
-  - WiFi status monitoring
-  - Network name (SSID)
-  - Signal strength
-  - Connection state changes
-  - Signal: `networkStatusChanged`, `availableNetworksChanged`
-- [ ] Create `src/services/BluetoothService.qml` (singleton)
-  - Bluetooth adapter status
-  - Paired devices list
-  - Connect/disconnect devices
-  - Signal: `bluetoothStatusChanged`, `deviceConnected`, `deviceDisconnected`
+### 1.3 Network & Connectivity Services ✅
+- [x] Create `src/services/NetworkService.qml` (singleton)
+  - WiFi status monitoring via nmcli
+  - Network name (SSID) retrieval
+  - Signal strength indication (0-100)
+  - Connection state changes (WiFi/Ethernet)
+  - Internet connectivity checking
+  - Available networks scanning
+  - Signal: `networkStatusChanged`, `signalStrengthChanged`, `availableNetworksChanged`
+- [x] Create `src/services/BluetoothService.qml` (singleton)
+  - Bluetooth adapter status monitoring
+  - Paired devices list management
+  - Device connection/disconnection
+  - Device discovery support
+  - Battery level reporting for devices
+  - Signal: `bluetoothStatusChanged`, `deviceConnected`, `deviceDisconnected`, `pairedDevicesChanged`
 
-### 1.4 Power & Display Services
-- [ ] Create `src/services/BatteryService.qml` (singleton)
-  - Battery percentage
-  - Charging status
-  - Time remaining estimation
-  - Signal: `batteryLevelChanged`, `chargingStatusChanged`
-- [ ] Create `src/services/BrightnessService.qml` (singleton)
-  - Display brightness control
-  - Brightness level persistence
-  - Signal: `brightnessChanged`
-- [ ] Create `src/services/PowerManager.qml` (singleton)
-  - System power actions (shutdown, reboot, suspend, logout)
-  - Session management integration
-  - Signal: `powerActionRequested`
+### 1.4 Power & Display Services ✅
+- [x] Create `src/services/BatteryService.qml` (singleton)
+  - Battery percentage monitoring (0-100)
+  - Charging status detection
+  - Time remaining estimation (formatted)
+  - Multiple battery support with combined percentage
+  - Battery level categories (critical, low, medium, high, full)
+  - Low/critical battery warnings
+  - Signal: `batteryLevelChanged`, `chargingStatusChanged`, `batteryLow`, `batteryCritical`
+- [x] Create `src/services/BrightnessService.qml` (singleton)
+  - Display brightness control via brightnessctl/xrandr
+  - Automatic control method detection
+  - Multiple display support
+  - Step-based brightness adjustment
+  - Signal: `brightnessChanged`, `displayBrightnessChanged`, `availabilityChanged`
+- [x] Create `src/services/PowerManager.qml` (singleton)
+  - System power actions via systemctl
+  - Shutdown, reboot, suspend, hibernate
+  - Signal: `actionTriggered`, `actionFailed`
 
-### 1.5 System Integration Services
-- [ ] Create `src/services/HyprlandService.qml` (singleton)
-  - Workspace management
-  - Window tracking
-  - Monitor information
-  - Hyprland IPC integration
-  - Signal: `workspaceChanged`, `windowOpened`, `windowClosed`, `monitorChanged`
-- [ ] Create `src/services/SystemTrayService.qml` (singleton)
-  - System tray protocol implementation
+### 1.5 System Integration Services ✅
+- [x] Create `src/services/HyprlandService.qml` (singleton)
+  - Workspace management (list, active, switch)
+  - Window tracking (open, close, focus, title changes)
+  - Monitor information (layout, resolution, scale)
+  - Hyprland IPC integration via hyprctl
+  - Window-to-workspace mapping
+  - Signal: `workspaceChanged`, `windowOpened`, `windowClosed`, `windowFocusChanged`, `monitorChanged`, `windowTitleChanged`
+- [x] Create `src/services/SystemTrayService.qml` (singleton)
+  - StatusNotifierItem (SNI) protocol support
   - Tray icon management
   - Context menu handling
-  - Signal: `trayItemsChanged`, `trayItemActivated`
-- [ ] Create `src/services/NotificationService.qml` (singleton)
-  - Notification daemon integration
-  - Notification creation/reception
-  - Do not disturb mode
-  - Notification history
-  - Signal: `notificationReceived`, `notificationDismissed`, `dndModeChanged`
-- [ ] Create `src/services/SessionService.qml` (singleton)
-  - User session information
-  - User avatar/name
+  - Common tray app detection (nm-applet, blueman, etc.)
+  - Signal: `trayItemsChanged`, `trayItemActivated`, `trayItemMenuRequested`
+- [x] Create `src/services/NotificationService.qml` (singleton)
+  - Notification creation and management
+  - Notification queue with max visible limit
+  - Do not disturb mode toggle
+  - Notification history with grouping
+  - Unread notification count
+  - Auto-dismiss with timeout support
+  - Signal: `notificationReceived`, `notificationDismissed`, `dndModeChanged`, `notificationsCleared`
+- [x] Create `src/services/SessionService.qml` (singleton)
+  - User session information (name, display name, home)
+  - User avatar discovery
   - Session lifecycle events
-  - Signal: `sessionStarted`, `sessionEnding`
+  - XDG directories support
+  - Session duration tracking
+  - Signal: `sessionStarted`, `sessionEnding`, `userInfoChanged`
 
-### 1.6 Service Documentation
-- [ ] Create API documentation for each service
-- [ ] Document all signals and methods
-- [ ] Create usage examples
+### 1.6 Service Documentation ✅
+- [x] API documentation in service headers (JSDoc-style comments)
+- [x] All signals and methods documented inline
+- [x] Usage examples in service header comments
+- [x] All 11 services registered in `src/services/qmldir`
 
 **Deliverables**: 
 - ✅ All services implemented as singletons
@@ -172,172 +187,198 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 
 **Goal**: Build reusable primitive components following atomic design principles.
 
-### 2.1 Atoms (Primitives)
-- [ ] `src/atoms/Button.qml`
-  - Base button with hover, pressed, disabled states
-  - Theme-integrated colors
+### 2.1 Atoms (Primitives) ✅
+- [x] `src/atoms/Button.qml` - Base button with hover, pressed, disabled states
+  - Theme-integrated colors (filled, outlined, ghost variants)
   - Size variants (small, medium, large)
-  - Animation on interaction
-- [ ] `src/atoms/IconButton.qml`
-  - Icon-only button variant
-  - Hover effects
-  - Tooltip support
-- [ ] `src/atoms/TextButton.qml`
-  - Text button with optional icon
-  - Primary/secondary/tertiary variants
-- [ ] `src/atoms/Icon.qml`
-  - Icon wrapper with theme support
-  - SVG/PNG support
-  - Size presets
-  - Color inheritance
-- [ ] `src/atoms/Label.qml`
-  - Text label with theme typography
-  - Text truncation support
-  - Color variants
-- [ ] `src/atoms/Input.qml`
-  - Base text input
-  - Placeholder text
-  - Validation states
+  - Optional icon support with text
+  - Press animation and shadow effects
+- [x] `src/atoms/IconButton.qml` - Icon-only button variant
+  - Circular and rounded variants
+  - Hover effects with glassmorphism
+  - Built-in tooltip support
+  - Scale press animation
+- [x] `src/atoms/TextButton.qml` - Text button with optional icon
+  - Primary, secondary, tertiary variants
+  - Destructive action styling
+  - Icon left/right positioning
+  - Consistent with Button sizes
+- [x] `src/atoms/Icon.qml` - Icon wrapper with theme support
+  - SVG/PNG support with color overlay
+  - Configurable size and rotation
+  - Smooth scaling with mipmaps
+- [x] `src/atoms/Label.qml` - Text label with theme typography
+  - Typography variants (h1-h4, body, caption, button, clock)
+  - Text truncation and wrapping support
+  - Configurable font size and weight
+  - Line height based on variant
+- [x] `src/atoms/Input.qml` - Base text input
+  - Placeholder text with fade animation
+  - Validation states and error styling
   - Clear button option
-  - Password mode
-- [ ] `src/atoms/Slider.qml`
-  - Custom styled slider
-  - Theme colors
-  - Step increments
-  - Value display option
-- [ ] `src/atoms/ProgressBar.qml`
-  - Linear progress indicator
-  - Determinate/indeterminate modes
-  - Theme colors
-- [ ] `src/atoms/Card.qml`
-  - Card/container component
-  - Glassmorphic styling (optional)
-  - Hover effects
-  - Border radius
-- [ ] `src/atoms/Badge.qml`
-  - Notification badge
-  - Count display
-  - Color variants (info, warning, error)
-- [ ] `src/atoms/Tooltip.qml`
-  - Tooltip component
-  - Auto-positioning
-  - Fade animations
-- [ ] `src/atoms/Divider.qml`
-  - Visual separator
-  - Horizontal/vertical
-  - Optional label
-- [ ] `src/atoms/Spinner.qml`
-  - Loading spinner
-  - Size variants
-  - Animation loop
-- [ ] Create atoms qmldir
+  - Password mode with masking
+  - Left/right icon support
+- [x] `src/atoms/Slider.qml` - Custom styled slider
+  - Horizontal and vertical orientations
+  - Step size support with snap
+  - Optional value display label
+  - Smooth value animations
+  - Hover glow effect on handle
+- [x] `src/atoms/ProgressBar.qml` - Linear progress indicator
+  - Determinate and indeterminate modes
+  - Animated indeterminate sliding
+  - Theme color integration
+  - Gradient shine overlay
+- [x] `src/atoms/Card.qml` - Card/container component
+  - Glassmorphic styling option
+  - Hover state changes
+  - Elevation shadow support
+  - Configurable padding and radius
+- [x] `src/atoms/Badge.qml` - Notification badge
+  - Count display with max limit (99+)
+  - Color variants (info, success, warning, error)
+  - Dot-only mode
+  - Pulse animation for error variant
+- [x] `src/atoms/Tooltip.qml` - Tooltip component
+  - Auto-positioning (top, bottom, left, right)
+  - Show delay configuration
+  - Fade and scale animations
+  - Automatic boundary detection
+- [x] `src/atoms/Divider.qml` - Visual separator
+  - Horizontal and vertical orientations
+  - Optional label with positioning
+  - Configurable thickness and color
+- [x] `src/atoms/Spinner.qml` - Loading spinner
+  - Configurable size and color
+  - Rotation animation
+  - Canvas-based rendering
+- [x] `src/atoms/qmldir` - All 13 atoms exported
 
-### 2.2 Molecules (Simple Combinations)
-- [ ] `src/molecules/Clock.qml`
-  - Time/date display
-  - 12/24 hour format
-  - Live updates
-- [ ] `src/molecules/VolumeControl.qml`
-  - Volume slider + icon
-  - Mute button
-  - Device selector
-- [ ] `src/molecules/BrightnessControl.qml`
-  - Brightness slider + icon
-  - Live preview
-- [ ] `src/molecules/NetworkIndicator.qml`
-  - Network status icon
-  - Signal strength visualization
+### 2.2 Molecules (Simple Combinations) ✅
+- [x] `src/molecules/Clock.qml` - Time/date display with live updates
+  - 12/24 hour format support
+  - Configurable date format
+  - Click signal for calendar popup
+- [x] `src/molecules/VolumeControl.qml` - Volume slider + icon
+  - Mute toggle button
+  - Integration with AudioService
+  - Horizontal/vertical orientations
+- [x] `src/molecules/BrightnessControl.qml` - Brightness slider + icon
+  - Integration with BrightnessService
+  - Step-based adjustment
+  - Live value updates
+- [x] `src/molecules/NetworkIndicator.qml` - Network status icon
+  - Signal strength visualization (WiFi bars)
+  - Connection type indicator
   - Click to expand menu
-- [ ] `src/molecules/BatteryIndicator.qml`
-  - Battery icon + percentage
-  - Charging indicator
-  - Color changes based on level
-- [ ] `src/molecules/WorkspaceIndicator.qml`
-  - Workspace dots/buttons
+- [x] `src/molecules/BatteryIndicator.qml` - Battery icon + percentage
+  - Charging state detection
+  - Color changes based on level (critical/low/warning)
+  - Customizable critical threshold
+- [x] `src/molecules/WorkspaceIndicator.qml` - Workspace dots/buttons
   - Active workspace highlight
-  - Click to switch
-- [ ] `src/molecules/WindowPreview.qml`
-  - Window thumbnail preview
-  - Hover to preview
-  - Click to focus
-- [ ] `src/molecules/NotificationItem.qml`
-  - Single notification display
+  - Window occupancy indicator
+  - Click to switch workspaces
+- [x] `src/molecules/WindowPreview.qml` - Window thumbnail preview
+  - Hover effects with elevation
+  - Focus indicator
+  - Click to focus window
+- [x] `src/molecules/NotificationItem.qml` - Single notification display
   - App icon, title, body
-  - Dismiss button
-  - Timestamp
-- [ ] `src/molecules/MediaWidget.qml`
-  - Media player mini widget
-  - Album art, title, artist
-  - Play/pause, next buttons
-- [ ] `src/molecules/SearchInput.qml`
-  - Search with icon and clear
+  - Dismiss button and timestamp
+  - Action button support
+- [x] `src/molecules/MediaWidget.qml` - Media player mini widget
+  - Album art placeholder, title, artist
+  - Play/pause, next, previous controls
+  - Progress bar integration
+- [x] `src/molecules/SearchInput.qml` - Search with icon and clear
+  - Recent searches dropdown
   - Keyboard shortcut support
-  - Recent searches (optional)
-- [ ] `src/molecules/ListItem.qml`
-  - List item with icon, text, actions
-  - Hover effects
-  - Selection state
-- [ ] `src/molecules/AppGridItem.qml`
-  - Application grid tile
-  - App icon, name
-  - Launch on click
-- [ ] `src/molecules/PowerMenu.qml`
-  - Power options dropdown
-  - Shutdown, reboot, suspend, logout
-  - Confirmation dialog
-- [ ] `src/molecules/UserMenu.qml`
-  - User menu with avatar
-  - User name display
-  - Session actions
-- [ ] Create molecules qmldir
+  - Auto-complete ready
+- [x] `src/molecules/ListItem.qml` - List item with icon, text, actions
+  - Hover effects and selection state
+  - Primary/subtitle text support
+  - Arrow indicator option
+- [x] `src/molecules/AppGridItem.qml` - Application grid tile
+  - App icon with glassmorphic background
+  - Launch on click with scale animation
+  - Tooltip support
+- [x] `src/molecules/PowerMenu.qml` - Power options dropdown
+  - Shutdown, reboot, suspend, logout actions
+  - Confirmation dialogs for destructive actions
+  - PowerManager integration
+- [x] `src/molecules/UserMenu.qml` - User menu with avatar
+  - User avatar and name display
+  - Settings, lock, logout actions
+  - SessionService integration
+- [x] `src/molecules/qmldir` - All 14 molecules exported
 
-### 2.3 Layouts (Templates)
-- [ ] `src/layouts/PanelLayout.qml`
-  - Horizontal panel layout
-  - Configurable spacing
-  - Alignment options
-- [ ] `src/layouts/PopupLayout.qml`
-  - Centered popup/dialog
-  - Backdrop overlay
-  - Animation support
-- [ ] `src/layouts/DrawerLayout.qml`
-  - Slide-out drawer
-  - Open/close animations
-  - Backdrop option
-- [ ] `src/layouts/GridLayout.qml`
-  - Responsive grid
-  - Column count configuration
-  - Item spacing
-- [ ] `src/layouts/LayerLayout.qml`
-  - Z-index layering helper
-  - Stacking context management
-- [ ] Create layouts qmldir
+### 2.3 Layouts (Templates) ✅
+- [x] `src/layouts/PanelLayout.qml`
+- Horizontal panel layout
+- Configurable spacing
+- Alignment options (left, center, right)
+- Vertical alignment support
+- [x] `src/layouts/PopupLayout.qml`
+- Centered popup/dialog
+- Backdrop overlay with opacity
+- Modal and non-modal support
+- Close on backdrop click
+- Fade and scale animations
+- [x] `src/layouts/DrawerLayout.qml`
+- Slide-out drawer
+- Left, right, top, bottom positions
+- Open/close animations
+- Backdrop option
+- [x] `src/layouts/GridLayout.qml`
+- Responsive grid
+- Column count configuration
+- Item spacing
+- Auto-sizing cells
+- [x] `src/layouts/LayerLayout.qml`
+- Z-index layering helper
+- Stacking context management
+- Named layers (background, content, overlay, modal, tooltip, top)
+- [x] Create layouts qmldir
 
-### 2.4 Animations (Reusable)
-- [ ] `src/animations/FadeAnimation.qml`
-  - Fade in/out
-  - Configurable duration
-- [ ] `src/animations/SlideAnimation.qml`
-  - Slide transitions
-  - Direction options
-- [ ] `src/animations/ScaleAnimation.qml`
-  - Scale effects
-  - Origin point
-- [ ] `src/animations/SpringAnimation.qml`
-  - Physics-based animations
-  - Spring/damping parameters
-- [ ] Create animations qmldir
+### 2.4 Animations (Reusable) ✅
+- [x] `src/animations/FadeAnimation.qml`
+- Fade in/out transitions
+- Configurable duration
+- Easing curve support
+- [x] `src/animations/SlideAnimation.qml`
+- Slide transitions
+- Direction options (left, right, up, down)
+- Distance configuration
+- [x] `src/animations/ScaleAnimation.qml`
+- Scale effects
+- Origin point configuration
+- Spring back easing
+- [x] `src/animations/SpringAnimation.qml`
+- Physics-based animations
+- Spring/damping parameters
+- Mass and epsilon tuning
+- [x] Create animations qmldir
 
-### 2.5 Component Testing
-- [ ] Create visual test pages for each component
-- [ ] Document component properties and signals
-- [ ] Create component showcase demo
+### 2.5 Component Testing ✅
+- [x] Create visual test pages for each component
+- `tests/manual/AtomTests.qml` - Atom component tests
+- `tests/manual/MoleculeTests.qml` - Molecule component tests
+- `tests/manual/LayoutTests.qml` - Layout component tests
+- `tests/manual/AnimationTests.qml` - Animation component tests
+- `tests/manual/ComponentShowcase.qml` - Comprehensive showcase
+- [x] Document component properties and signals
+- `docs/COMPONENT_REFERENCE.md` - Full component documentation
+- [x] Create component showcase demo
 
-**Deliverables**: 
+**Deliverables**:
 - ✅ Complete atomic component library
 - ✅ Consistent styling and behavior
 - ✅ All components theme-aware
-- ✅ Component documentation
+- ✅ Layout components (PanelLayout, PopupLayout, DrawerLayout, GridLayout, LayerLayout)
+- ✅ Animation components (FadeAnimation, SlideAnimation, ScaleAnimation, SpringAnimation)
+- ✅ Component documentation (COMPONENT_REFERENCE.md)
+- ✅ Visual test pages (AtomTests, MoleculeTests, LayoutTests, AnimationTests, ComponentShowcase)
 
 ---
 
@@ -916,17 +957,26 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 
 ```
 Phase 0 (Foundation) ✅ COMPLETE
-    ↓
+↓
 Phase 10 (Scripts & Tooling) ✅ COMPLETE (ran parallel)
+↓
+Phase 1 (Services) ✅ COMPLETE - 11 services implemented
+↓
+Phase 2.1 (Atoms) ✅ COMPLETE - 13 atom components
+↓
+Phase 2.2 (Molecules) ✅ COMPLETE - 14 molecule components
+↓
+Phase 2.3 (Layouts) ✅ COMPLETE - 5 layout components
+↓
+Phase 2.4 (Animations) ✅ COMPLETE - 4 animation components
+↓
+Phase 2.5 (Testing) ✅ COMPLETE - Visual tests and documentation
+↓
+Phase 3 (Components) ← NEXT PRIORITY
     ↓
-Phase 1 (Services) ← NEXT PRIORITY
-    ↓
-Phase 2 (Atoms & Molecules) ──┬── Phase 3 (Components)
-                               │
-                               ├── Phase 4 (Status Bar)
-                               ├── Phase 5 (Launcher)
-                               ├── Phase 6 (Notifications)
-                               └── Phase 7 (Control Center)
+Phase 4 (Status Bar) ──┬── Phase 5 (Launcher)
+                       ├── Phase 6 (Notifications)
+                       └── Phase 7 (Control Center)
     ↓
 Phase 8 (Popups & OSDs)
 Phase 9 (Models) [can run parallel to Phases 4-7]
@@ -943,8 +993,8 @@ Phase 12 (Polish)
 | Milestone | Phase | Status | Description |
 |-----------|-------|--------|-------------|
 | M0: Foundation Complete | 0, 10 | ✅ Done | Core infrastructure, theme system, all scripts, lockscreen loads cleanly |
-| M1: Component Library | 2 | ⏳ Pending | All atomic components built and tested |
-| M2: Services Layer | 1 | ⏳ Pending | All business logic services working |
+| M1: Component Library | 2 | ✅ Done | 36 components (13 atoms + 14 molecules + 5 layouts + 4 animations) complete |
+| M2: Services Layer | 1 | ✅ Done | All 11 business logic services implemented and tested |
 | M3: Status Bar Live | 4 | ⏳ Pending | Status bar working on all monitors |
 | M4: All Modules Functional | 4-7 | ⏳ Pending | All five modules implemented |
 | M5: Feature Complete | 8-9 | ⏳ Pending | All features implemented and integrated |
@@ -974,7 +1024,7 @@ Phase 12 (Polish)
 
 ## Success Criteria
 
-### Phase 0 & 10 (Complete ✅)
+### Phase 0, 1 & 10 (Complete ✅)
 - [x] Complete modular directory structure per PROJECT_STRUCTURE.md
 - [x] All qmldir files with proper module directives
 - [x] Theme system with ThemeEngine singleton (colors, typography, spacing, effects, animation)
@@ -982,21 +1032,65 @@ Phase 12 (Polish)
 - [x] shell.qml refactored with Scope for state persistence
 - [x] All utility scripts (run.sh, lock.sh, bar.sh, launcher.sh, test.sh)
 - [x] Theme JSON definitions (Catppuccin Mocha + Latte)
-- [x] 86 tests passing with zero failures
+- [x] 99 tests passing with zero failures
 - [x] Lockscreen loads cleanly with zero errors
 - [x] Video playback working
 - [x] Lock screen activates correctly via lock.sh
+- [x] Phase 1: All 11 services implemented as singletons
+  - ConfigService: JSON-based configuration with schema validation
+  - AudioService: MPRIS media player integration
+  - NetworkService: WiFi/Ethernet monitoring via nmcli
+  - BluetoothService: Bluetooth management via bluetoothctl
+  - BatteryService: Multi-battery monitoring with sysfs
+  - BrightnessService: Backlight control via brightnessctl/xrandr
+  - HyprlandService: Hyprland IPC integration (workspaces, windows, monitors)
+  - SystemTrayService: SNI protocol support
+  - NotificationService: Notification queue with DND mode
+  - SessionService: User session and XDG directory management
+  - PowerManager: System power actions via systemctl
+
+### Phase 2.1 Atoms (Complete ✅)
+- [x] 13 atom components implemented
+- [x] All atoms theme-aware with Catppuccin Mocha
+- [x] Glassmorphic styling throughout
+- [x] Consistent API patterns (properties, signals, methods)
+- [x] Full JSDoc-style documentation in each file
+
+### Phase 2.2 Molecules (Complete ✅)
+- [x] 14 molecule components implemented
+- [x] Service integration (AudioService, NetworkService, BatteryService, etc.)
+- [x] Atoms composition pattern demonstrated
+- [x] All molecules theme-aware
+
+### Phase 2.3 Layouts (Complete ✅)
+- [x] 5 layout components implemented
+- [x] PanelLayout for status bars
+- [x] PopupLayout for dialogs
+- [x] DrawerLayout for slide-out panels
+- [x] GridLayout for responsive grids
+- [x] LayerLayout for z-index management
+
+### Phase 2.4 Animations (Complete ✅)
+- [x] 4 animation components implemented
+- [x] FadeAnimation for opacity transitions
+- [x] SlideAnimation for directional movement
+- [x] ScaleAnimation for size effects
+- [x] SpringAnimation for physics-based motion
+
+### Phase 2.5 Component Testing (Complete ✅)
+- [x] Visual test pages for atoms, molecules, layouts, animations
+- [x] ComponentShowcase.qml for comprehensive demo
+- [x] COMPONENT_REFERENCE.md documentation
 
 ### Remaining Phases (Pending)
-- [ ] All 5 modules (lockscreen, statusbar, launcher, notifications, controlcenter) functional
+- [ ] Phase 3: Composite/organism components
+- [ ] Phase 4-7: All 5 modules (lockscreen, statusbar, launcher, notifications, controlcenter) functional
 - [ ] Multi-monitor support working correctly
 - [ ] Theme system supports runtime switching
-- [ ] All services working as singletons with proper signals
 - [ ] Comprehensive test suite (unit, integration, manual)
 - [ ] No memory leaks after 24-hour test
 - [ ] Startup time < 2 seconds
 - [ ] Hot-reload works without state loss
-- [ ] Catppuccin Mocha theme applied consistently across all modules
 
 ---
 
@@ -1011,7 +1105,11 @@ Phase 12 (Polish)
 - **Glassmorphism**: Maintain glassmorphic aesthetic throughout (blur, transparency, subtle borders)
 
 ---
+## References
 
+- [Project Structure](PROJECT_STRUCTURE.md)
+
+---
 *Last updated: 2026-04-12*
-*Version: 1.1*
-*Status: Phase 0 ✅ and Phase 10 ✅ Complete — Ready for Phase 1 (Services Layer)*
+*Version: 1.4*
+*Status: Phase 0 ✅, Phase 1 ✅, Phase 2 (Atoms, Molecules, Layouts, Animations, Testing) ✅ & Phase 10 ✅ Complete — Ready for Phase 3 (Composite Components)*

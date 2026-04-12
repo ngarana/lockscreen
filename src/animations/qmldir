@@ -1,7 +1,6 @@
 module Animations
 
-# Reusable animation definitions - TO BE IMPLEMENTED
-# FadeAnimation 1.0 FadeAnimation.qml
-# SlideAnimation 1.0 SlideAnimation.qml
-# ScaleAnimation 1.0 ScaleAnimation.qml
-# SpringAnimation 1.0 SpringAnimation.qml
+FadeAnimation 1.0 FadeAnimation.qml
+SlideAnimation 1.0 SlideAnimation.qml
+ScaleAnimation 1.0 ScaleAnimation.qml
+SpringAnimation 1.0 SpringAnimation.qml
