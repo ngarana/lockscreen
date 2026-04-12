@@ -100,16 +100,6 @@ QtObject {
     // Utility Methods
     // ========================================================================
 
-    // Create a logger with pre-set context
-    function createLogger(context) {
-        return QtObject {
-            function debug(msg) { root.debug(msg, context) }
-            function info(msg) { root.info(msg, context) }
-            function warning(msg) { root.warning(msg, context) }
-            function error(msg) { root.error(msg, context) }
-        }
-    }
-
     // Enable only errors (for production)
     function productionMode() {
         root.enabled = true

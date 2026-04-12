@@ -49,7 +49,7 @@ QtObject {
         readonly property var easing: root.easeOut
     }
 
-    readonly property var reveal: QtObject {
+    readonly property var revealPreset: QtObject {
         readonly property int duration: root.reveal
         readonly property var easing: root.easeInOut
     }

@@ -10,5 +10,5 @@ singleton Theme 1.0 Theme.qml
 # Audio (legacy - use Audio module instead)
 # AudioService 1.0 AudioService.qml
 
-# Video configuration (legacy - use LockscreenModule instead)
-# VideoConfig 1.0 VideoConfig.qml
+# Video configuration
+singleton VideoConfig 1.0 VideoConfig.qml

@@ -61,16 +61,19 @@ ShellRoot {
 
     // Auto-lock environment variable
     // Set QUICKSHELL_LOCKSCREEN_AUTO_LOCK=1 to lock immediately on startup
-    readonly property bool autoLock: Quickshell.env("QUICKSHELL_AUTO_LOCK", "0") === "1"
+    readonly property bool autoLock: Quickshell.env("QUICKSHELL_LOCKSCREEN_AUTO_LOCK") === "1"
 
     // Module selection environment variable
     // "full" = all modules (default)
     // "bar" = status bar only
     // "lock" = lockscreen only
-    readonly property string mode: Quickshell.env("QUICKSHELL_MODE", "full")
+    readonly property string mode: {
+        const m = Quickshell.env("QUICKSHELL_MODE")
+        return m === "" ? "full" : m
+    }
 
     // Debug mode
-    readonly property bool debugMode: Quickshell.env("QUICKSHELL_DEBUG", "0") === "1"
+    readonly property bool debugMode: Quickshell.env("QUICKSHELL_DEBUG") === "1"
 
     // Module enable flags
     readonly property bool lockscreenEnabled: root.mode === "full" || root.mode === "lock"
@@ -155,21 +158,15 @@ ShellRoot {
         // Can be toggled via IPC or LockController
         locked: root.autoLock
 
-        // Lock surfaces across all screens using Variants
-        // One WlSessionLockSurface is created per connected display
-        Variants {
-            model: root.lockscreenEnabled ? Quickshell.screens : []
-            delegate: WlSessionLockSurface {
-                // modelData is the screen from Quickshell.screens
-                screen: modelData
+        // Lock surface - WlSessionLock automatically creates one per screen
+        // The compositor manages surface creation; this serves as the template
+        WlSessionLockSurface {
+            LockScreen {
+                anchors.fill: parent
 
-                LockScreen {
-                    anchors.fill: parent
-
-                    // Handle unlock request from LockScreen
-                    onUnlockRequested: {
-                        sessionLock.locked = false
-                    }
+                // Handle unlock request from LockScreen
+                onUnlockRequested: {
+                    sessionLock.locked = false
                 }
             }
         }

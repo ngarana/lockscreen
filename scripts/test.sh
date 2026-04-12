@@ -126,8 +126,6 @@ test_modules() {
     test_file_exists "$SCRIPT_DIR/src/modules/lockscreen/qmldir" "Lockscreen qmldir exists"
     test_file_exists "$SCRIPT_DIR/src/modules/lockscreen/LockScreen.qml" "LockScreen.qml exists"
     test_file_exists "$SCRIPT_DIR/src/modules/lockscreen/LockController.qml" "LockController.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/modules/lockscreen/VideoBackground.qml" "VideoBackground.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/modules/lockscreen/VideoConfig.qml" "VideoConfig.qml exists"
     
     echo ""
     echo "--- Status Bar Module ---"
