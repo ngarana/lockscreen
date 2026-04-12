@@ -56,7 +56,7 @@ Rectangle {
         id: trayIcon
         anchors.centerIn: parent
         icon: root.itemIcon
-        size: Math.min(root.width, root.height) - 4
+        size: 18
         color: root.hovered ? Theme.ThemeEngine.colors.textPrimary : Theme.ThemeEngine.colors.textSecondary
         opacity: root.needsAttention ? (0.5 + 0.5 * Math.sin(Date.now() / 200)) : 1.0
 

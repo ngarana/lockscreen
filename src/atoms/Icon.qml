@@ -30,6 +30,7 @@ Item {
     // ========================================================================
 
     property url icon: ""
+    // Enforce minimum size of 14px - system icon themes don't have sizes below this
     property int size: 24
     property color color: Theme.ThemeEngine.colors.textPrimary
 
@@ -80,14 +81,16 @@ Item {
 
     Image {
         id: image
-        anchors.fill: parent
+        anchors.centerIn: parent
         source: root._resolvedSource
-        sourceSize.width: Math.max(1, root.size)
-        sourceSize.height: Math.max(1, root.size)
+        // Correct square icon rendering with proper source size
+        sourceSize.width: root.size
+        sourceSize.height: root.size
         fillMode: Image.PreserveAspectFit
         smooth: true
         mipmap: true
         asynchronous: true
+        cache: true
 
         // Internal state to prevent loops
         property bool _triedSymbolic: false
@@ -132,8 +135,8 @@ Item {
                 }
                 
                 // 3. Final fallback
-                if (currentSource !== "image://icon/application-x-executable") {
-                    source = "image://icon/application-x-executable"
+                if (currentSource !== "image://icon/application-x-executable-symbolic") {
+                    source = "image://icon/application-x-executable-symbolic"
                 }
             }
         }
@@ -147,7 +150,7 @@ Item {
         anchors.fill: image
         source: image
         color: root.color
-        // Only apply overlay if it's an SVG (assumed monochrome) or explicit color requested
-        visible: (root._isSvg || root.color !== Theme.ThemeEngine.colors.textPrimary) && image.status === Image.Ready
+        // Apply color overlay for all monochrome icons to match theme
+        visible: image.status === Image.Ready
     }
 }

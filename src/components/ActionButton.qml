@@ -47,12 +47,8 @@ Rectangle {
         anchors.centerIn: parent
         text: root.icon
         font.pixelSize: 20
-        font.family: "Noto Sans"
+        font.family: Theme.fonts.iconFontFamily
         color: root.hovered ? Theme.colors.primary : Theme.colors.text
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.animation.fast }
-        }
     }
 
     // Tooltip on hover

@@ -8,6 +8,7 @@
 
 import QtQuick
 import QtQuick.Layouts
+import "." as StatusBarModule
 import "../../atoms" as Atoms
 import "../../molecules" as Molecules
 import "../../services" as Services
@@ -41,7 +42,7 @@ RowLayout {
             id: trayRepeater
             model: Services.SystemTrayService.trayItems
 
-            TrayItem {
+            StatusBarModule.TrayItem {
                 itemId: modelData.id
                 itemIcon: Services.SystemTrayService.getItemIcon(modelData.id)
                 itemTooltip: Services.SystemTrayService.getItemTooltip(modelData.id)
@@ -61,27 +62,6 @@ RowLayout {
     }
 
     // ========================================================================
-    // Brightness Indicator
-    // ========================================================================
-
-    Text {
-        visible: Services.BarController.showBrightnessIndicator
-        text: Theme.ThemeEngine.icons.brightness
-        font.pixelSize: 14
-        color: Theme.ThemeEngine.colors.textPrimary
-        Layout.alignment: Qt.AlignVCenter
-
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onWheel: function(wheel) {
-                const delta = wheel.angleDelta.y > 0 ? 0.05 : -0.05
-                Services.BrightnessService.setBrightness(Math.max(0, Math.min(1, Services.BrightnessService.brightness + delta)))
-            }
-        }
-    }
-
-    // ========================================================================
     // Supplementary macOS Icons
     // ========================================================================
 
@@ -89,29 +69,33 @@ RowLayout {
         spacing: 12
         Layout.alignment: Qt.AlignVCenter
         
-        Text {
-            text: Theme.ThemeEngine.icons.screenMirroring
-            font.pixelSize: 14
-            color: "#8E54E9"
-        }
+    Text {
+        text: Theme.ThemeEngine.icons.screenMirroring
+        font.pixelSize: 14
+        font.family: Theme.fonts.iconFontFamily
+        color: "#8E54E9"
+    }
 
-        Text {
-            text: Theme.ThemeEngine.icons.display
-            font.pixelSize: 14
-            color: Theme.ThemeEngine.colors.textPrimary
-        }
+    Text {
+        text: Theme.ThemeEngine.icons.display
+        font.pixelSize: 14
+        font.family: Theme.fonts.iconFontFamily
+        color: Theme.ThemeEngine.colors.textPrimary
+    }
 
-        Text {
-            text: Theme.ThemeEngine.icons.focus
-            font.pixelSize: 14
-            color: Theme.ThemeEngine.colors.textPrimary
-        }
+    Text {
+        text: Theme.ThemeEngine.icons.focus
+        font.pixelSize: 14
+        font.family: Theme.fonts.iconFontFamily
+        color: Theme.ThemeEngine.colors.textPrimary
+    }
 
-        Text {
-            text: Theme.ThemeEngine.icons.grid
-            font.pixelSize: 14
-            color: Theme.ThemeEngine.colors.textPrimary
-        }
+    Text {
+        text: Theme.ThemeEngine.icons.grid
+        font.pixelSize: 14
+        font.family: Theme.fonts.iconFontFamily
+        color: Theme.ThemeEngine.colors.textPrimary
+    }
     }
 
     // ========================================================================
@@ -122,6 +106,7 @@ RowLayout {
         visible: Services.BarController.showBrightnessIndicator
         text: Theme.ThemeEngine.icons.brightness
         font.pixelSize: 14
+        font.family: Theme.fonts.iconFontFamily
         color: Theme.ThemeEngine.colors.textPrimary
         Layout.alignment: Qt.AlignVCenter
 
@@ -143,6 +128,7 @@ RowLayout {
         visible: Services.BarController.showVolumeIndicator
         text: root._volumeIcon
         font.pixelSize: 14
+        font.family: Theme.fonts.iconFontFamily
         color: Theme.ThemeEngine.colors.textPrimary
         Layout.alignment: Qt.AlignVCenter
 
@@ -164,6 +150,7 @@ RowLayout {
         text: root._networkIcon
         visible: Services.BarController.showNetworkIndicator
         font.pixelSize: 14
+        font.family: Theme.fonts.iconFontFamily
         color: Theme.ThemeEngine.colors.textPrimary
         Layout.alignment: Qt.AlignVCenter
     }
@@ -188,6 +175,7 @@ RowLayout {
         Text {
             text: root._batteryIcon
             font.pixelSize: 14
+            font.family: Theme.fonts.iconFontFamily
             color: Theme.ThemeEngine.colors.textPrimary
             Layout.alignment: Qt.AlignVCenter
         }
@@ -206,6 +194,7 @@ RowLayout {
             anchors.centerIn: parent
             text: Theme.ThemeEngine.icons.notifications
             font.pixelSize: 14
+            font.family: Theme.fonts.iconFontFamily
             color: Theme.ThemeEngine.colors.textPrimary
         }
 
@@ -252,6 +241,7 @@ RowLayout {
             anchors.centerIn: parent
             text: Theme.ThemeEngine.icons.settings
             font.pixelSize: 14
+            font.family: Theme.fonts.iconFontFamily
             color: Theme.ThemeEngine.colors.textPrimary
         }
         
