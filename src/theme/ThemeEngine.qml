@@ -69,6 +69,7 @@ QtObject {
         readonly property int textSizeClock: root.typography.sizeClock
         readonly property int textSizeDate: root.typography.size2xl
         readonly property string fontFamily: root.typography.fontFamily
+        readonly property string iconFontFamily: root.typography.iconFontFamily
     }
 
     // Radius presets

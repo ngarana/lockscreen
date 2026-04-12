@@ -52,6 +52,7 @@ QtObject {
         readonly property int textSizeClock: 96
         readonly property int textSizeDate: 28
         readonly property string fontFamily: "Inter"
+        readonly property string iconFontFamily: "CaskaydiaCove Nerd Font"
     }
 
     // ========================================================================

@@ -1,7 +1,7 @@
 // IconTokens.qml - Icon Glyph Token Definitions
 //
 // Unicode glyph constants for system icons.
-// Uses proper Unicode symbols instead of emoji for consistent rendering.
+// Uses Nerd Font icons for consistent rendering across all systems.
 //
 // Usage:
 //   import "../theme" as Theme
@@ -9,6 +9,7 @@
 //   Text {
 //       text: Theme.ThemeEngine.icons.applications
 //       font.pixelSize: 16
+//       font.family: Theme.fonts.iconFontFamily
 //   }
 
 import QtQuick
@@ -18,116 +19,116 @@ QtObject {
     // System Icons
     // ========================================================================
 
-    // Volume icons (U+1F507-U+1F50A range avoided; using simpler symbols)
-    readonly property string volumeHigh: "🔊"    // Speaker with sound waves
-    readonly property string volumeMedium: "🔉"  // Speaker with one sound wave
-    readonly property string volumeLow: "🔈"     // Speaker with no sound waves
-    readonly property string volumeMuted: "🔇"   // Muted speaker
+    // Volume icons (Nerd Font)
+    readonly property string volumeHigh: "󰕾"     // nf-md-volume_high
+    readonly property string volumeMedium: "󰖀"   // nf-md-volume_medium
+    readonly property string volumeLow: "󰕿"      // nf-md_volume_low
+    readonly property string volumeMuted: "󰖁"    // nf-md_volume_mute
 
     // Display icons
-    readonly property string brightness: "☀"     // White sun (U+2600)
-    readonly property string brightnessLow: "🌤"  // Sun behind small cloud
+    readonly property string brightness: "󰃠"     // nf-md-brightness_5
+    readonly property string brightnessLow: "󰃞"  // nf-md-brightness_low
 
     // ========================================================================
     // Battery Icons
     // ========================================================================
 
-    readonly property string battery: "🔋"           // Battery
-    readonly property string batteryCharging: "⚡"    // High voltage symbol
-    readonly property string batteryLow: "◷"         // Clock face (low indicator)
-    readonly property string batteryCritical: "⚠"    // Warning sign
+    readonly property string battery: "󰁹"           // nf-md-battery
+    readonly property string batteryCharging: "󰂄"    // nf-md-battery_charging
+    readonly property string batteryLow: "󰂎"         // nf-md-battery_alert
+    readonly property string batteryCritical: "󰂃"    // nf-md-battery_charging_10
 
     // ========================================================================
     // Network Icons
     // ========================================================================
 
-    readonly property string wifi: "📶"          // Antenna with bars
-    readonly property string wifiOff: "✕"        // Multiplication sign (no wifi)
-    readonly property string ethernet: "⌘"       // Place of interest sign (wired)
-    readonly property string bluetooth: "⚭"      // Bluetooth symbol (U+26AD)
-    readonly property string bluetoothOff: "⊘"   // Prohibited circle
-    readonly property string airplane: "✈"       // Airplane (U+2708)
+    readonly property string wifi: "󰤨"          // nf-md-wifi
+    readonly property string wifiOff: "󰤮"        // nf-md-wifi_off
+    readonly property string ethernet: "󰈀"       // nf-md-ethernet
+    readonly property string bluetooth: "󰂯"      // nf-md-bluetooth
+    readonly property string bluetoothOff: "󰂲"   // nf-md-bluetooth_off
+    readonly property string airplane: "󰀝"       // nf-md-airplane
 
     // ========================================================================
     // Display & Screen Icons
     // ========================================================================
 
-    readonly property string screenMirroring: "⧉"   // Overlapping squares (screen mirroring)
-    readonly property string display: "🖥"            // Desktop computer
-    readonly property string displayExternal: "🖥"    // External display
-    readonly property string nightLight: "☾"         // Crescent moon (night light)
-    readonly property string focus: "◎"              // Bullseye (focus mode)
-    readonly property string creativeCloud: "☁"      // Cloud (creative cloud)
+    readonly property string screenMirroring: "󰍺"   // nf-md-mirror
+    readonly property string display: "󰍹"            // nf-md-monitor
+    readonly property string displayExternal: "󰍹"    // nf-md-monitor
+    readonly property string nightLight: "󰖔"         // nf-md-nightlight
+    readonly property string focus: "󰋲"              // nf-md-target
+    readonly property string creativeCloud: "󰖐"      // nf-md-cloud
 
     // ========================================================================
     // User & Profile Icons
     // ========================================================================
 
-    readonly property string user: "👤"           // Bust in silhouette
-    readonly property string userGroup: "👥"      // Busts in silhouette
-    readonly property string avatar: "●"          // Circle (user avatar placeholder)
+    readonly property string user: "󰈠"           // nf-md-account
+    readonly property string userGroup: "󰈂"      // nf-md-account_group
+    readonly property string avatar: "󰈣"          // nf-md-account_circle
 
     // ========================================================================
     // Weather Icons
     // ========================================================================
 
-    readonly property string weatherSun: "☀"         // Sun
-    readonly property string weatherPartlyCloudy: "⛅" // Sun behind cloud
-    readonly property string weatherCloudy: "☁"      // Cloud
-    readonly property string weatherRain: "🌧"       // Cloud with rain
-    readonly property string weatherSnow: "🌨"       // Cloud with snow
-    readonly property string weatherStorm: "⛈"       // Cloud with lightning
-    readonly property string weatherFog: "🌫"        // Fog
+    readonly property string weatherSun: "󰖙"         // nf-md-white_balance_sunny
+    readonly property string weatherPartlyCloudy: "󰖕" // nf-md-weather_partly_cloudy
+    readonly property string weatherCloudy: "󰖐"      // nf-md-cloud
+    readonly property string weatherRain: "󰼳"       // nf-md-weather_rainy
+    readonly property string weatherSnow: "󰼴"       // nf-md-weather_snowy
+    readonly property string weatherStorm: "󰙾"       // nf-md-weather_lightning
+    readonly property string weatherFog: "󰖑"        // nf-md-weather_fog
 
     // ========================================================================
     // Status & Utility Icons
     // ========================================================================
 
-    readonly property string dice: "⚄"           // Die face five (dice/random)
-    readonly property string target: "◎"          // Bullseye/target
-    readonly property string grid: "⊞"            // Squared times (grid view)
-    readonly property string folder: "📁"         // File folder
-    readonly property string timer: "⏱"           // Stopwatch
-    readonly property string mic: "🎤"            // Microphone
-    readonly property string search: "🔍"         // Magnifying glass
-    readonly property string closeCircle: "⊗"     // Circled times (close/cancel)
-    readonly property string window: "▭"          // White rectangle (window)
+    readonly property string dice: "󰎴"           // nf-md-dice
+    readonly property string target: "󰋲"          // nf-md-target
+    readonly property string grid: "󰏘"            // nf-md-view_grid
+    readonly property string folder: "󰉋"         // nf-md-folder
+    readonly property string timer: "󰥔"           // nf-md-timer
+    readonly property string mic: "󰍬"            // nf-md-microphone
+    readonly property string search: "󰍉"          // nf-md-magnify
+    readonly property string closeCircle: "󰨥"     // nf-md-close_circle
+    readonly property string window: "󰏘"          // nf-md-window
 
     // ========================================================================
     // Application Icons
     // ========================================================================
 
-    readonly property string applications: "⊞"   // Squared times (app grid)
-    readonly property string settings: "⚙"       // Gear (U+2699)
-    readonly property string notifications: "🔔" // Bell
-    readonly property string notificationsOff: "🔕" // Bell with slash
-    readonly property string calendar: "📅"      // Calendar
-    readonly property string weather: "☁"        // Cloud (U+2601)
-    readonly property string media: "♫"          // Beamed eighth notes (U+266B)
+    readonly property string applications: "󰏘"   // nf-md-view_grid
+    readonly property string settings: "󰒓"       // nf-md-cog
+    readonly property string notifications: "󰂚"  // nf-md-bell
+    readonly property string notificationsOff: "󰂛" // nf-md-bell_off
+    readonly property string calendar: "󰃭"      // nf-md-calendar
+    readonly property string weather: "󰖐"        // nf-md-cloud
+    readonly property string media: "󰎈"          // nf-md-music
 
     // ========================================================================
     // Status & UI Icons
     // ========================================================================
 
-    readonly property string check: "✓"          // Check mark (U+2713)
-    readonly property string close: "✕"          // Multiplication X (U+2715)
-    readonly property string warning: "⚠"        // Warning sign (U+26A0)
-    readonly property string error: "✗"          // Ballot X (U+2717)
-    readonly property string info: "ℹ"           // Information source (U+2139)
-    readonly property string arrow: "▸"          // White right-pointing small triangle
+    readonly property string check: "✓"          // Check mark
+    readonly property string close: "✕"          // Multiplication X
+    readonly property string warning: "⚠"        // Warning sign
+    readonly property string error: "✗"          // Ballot X
+    readonly property string info: "ℹ"           // Information source
+    readonly property string arrow: "▸"          // Right-pointing triangle
     readonly property string arrowDown: "▾"      // Down-pointing triangle
     readonly property string arrowUp: "▴"        // Up-pointing triangle
     readonly property string plus: "+"
-    readonly property string minus: "−"          // Minus sign (U+2212)
+    readonly property string minus: "−"          // Minus sign
     readonly property string dots: "⋯"           // Midline horizontal ellipsis
 
     // ========================================================================
     // Power Icons
     // ========================================================================
 
-    readonly property string power: "⏻"          // Power symbol (U+23FB)
-    readonly property string sleep: "⏾"          // Sleep mode (U+23FE)
-    readonly property string restart: "↻"        // Clockwise arrow (U+21BB)
-    readonly property string logout: "⏻"         // Power off / logout
-    readonly property string lock: "🔒"          // Lock (U+1F512)
+    readonly property string power: "󰐥"          // nf-md-power
+    readonly property string sleep: "󰤄"          // nf-md-sleep
+    readonly property string restart: "󰑐"        // nf-md-restart
+    readonly property string logout: "󰍃"         // nf-md-logout
+    readonly property string lock: "󰌾"           // nf-md-lock
 }

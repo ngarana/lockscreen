@@ -13,6 +13,7 @@ QtObject {
 
     readonly property string fontFamily: "Inter"
     readonly property string fontFamilyMono: "JetBrains Mono"
+    readonly property string iconFontFamily: "CaskaydiaCove Nerd Font"
 
     // ========================================================================
     // Font Sizes
