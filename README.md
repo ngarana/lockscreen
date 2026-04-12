@@ -7,6 +7,7 @@ A modern, high-performance, and visually stunning lockscreen for Hyprland on Arc
 - **Dynamic Video Backgrounds**: Seamless cross-fading video backgrounds inspired by the Aerial SDDM theme.
 - **Time-Aware Playlists**: Automatically switches between day and night video playlists (6:30 AM - 6:30 PM).
 - **Glassmorphic UI**: Ultra-modern aesthetic using backdrop blur, semi-transparent surfaces, and Catppuccin Mocha colors.
+- **Audio Control**: Integrated MPRIS-based media player with play/pause controls and metadata display.
 - **Reveal-on-Interaction**: Minimalist idle state (Clock & Power only) that reveals the authentication UI upon movement or interaction.
 - **Secure**: Implements the `ext_session_lock_v1` protocol and system PAM authentication.
 
@@ -14,7 +15,7 @@ A modern, high-performance, and visually stunning lockscreen for Hyprland on Arc
 
 The lockscreen features:
 - **Idle View**: Large floating clock with date and a subtle glassmorphic power button.
-- **Interaction View**: Smoothly fades in a pill-shaped password field and expanded power options.
+- **Interaction View**: Smoothly fades in a pill-shaped password field, expanded power options, and audio controls.
 - **Visuals**: Continuous video playback with 2-second crossfade transitions between clips.
 
 ## Requirements
@@ -41,21 +42,32 @@ lockscreen/
 ├── shell.qml                    # Main entry point
 ├── run.sh                       # Development launcher (no lock)
 ├── lock.sh                      # Production launcher (full lock)
+├── test.sh                      # Test suite runner
 ├── playlists/                   # M3U playlists for day/night videos
 ├── videos/                      # Symlink to video assets
+├── tests/
+│   └── manual_audio_test.sh     # Manual audio testing script
 ├── src/
+│   ├── audio/
+│   │   ├── AudioService.qml      # MPRIS player model wrapper
+│   │   └── qmldir                # QML module definition
 │   ├── services/                # Logic Singletons
 │   │   ├── LockController.qml   # PAM Auth management
 │   │   ├── VideoConfig.qml      # Playlist & Timing config
 │   │   ├── PowerManager.qml     # System actions
-│   │   └── Theme.qml            # Modern styling tokens (Glassmorphism)
+│   │   ├── AudioService.qml     # Audio service singleton
+│   │   └── Theme.qml            # Modern styling tokens (Glassmorphism & Audio)
 │   ├── components/              # UI Building Blocks
 │   │   ├── VideoBackground.qml  # Dual-MediaPlayer engine
 │   │   ├── Clock.qml            # Typography-focused clock
 │   │   ├── PasswordField.qml    # Reactive input field
-│   │   └── ActionButton.qml     # Animated power icons
+│   │   ├── ActionButton.qml     # Animated power icons
+│   │   ├── AudioController.qml  # Audio player controls
+│   │   ├── AudioMetadata.qml    # Media metadata display
+│   │   ├── AudioPlayerButton.qml # Play/pause button
+│   │   └── qmldir               # QML module definition
 │   └── widgets/
-│       └── LockScreen.qml       # Main layout & interaction logic
+│       └── LockScreen.qml       # Main layout & interaction logic (with audio)
 ```
 
 ## Configuration
@@ -104,6 +116,18 @@ Status checks and manual control:
 qs ipc -p . call lockscreen status
 # Force lock
 qs ipc -p . call lockscreen lock
+```
+
+## Testing
+
+Run the automated test suite:
+```bash
+./test.sh
+```
+
+For manual audio testing:
+```bash
+./tests/manual_audio_test.sh
 ```
 
 ## Hyprland Setup
