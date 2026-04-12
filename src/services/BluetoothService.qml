@@ -252,6 +252,7 @@ QtObject {
     }
 
     function _parseStatus(output) {
+        if (!output) return;
         const lines = output.split("\n")
         let wasPowered = root.isPowered
 

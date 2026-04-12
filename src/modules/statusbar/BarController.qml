@@ -25,26 +25,23 @@ QtObject {
     // Bar visibility (renamed to avoid signal conflict with QtObject)
     property bool isVisible: true
 
-    // Bar height in pixels
-    property int barHeight: 36
+    // Bar height in pixels (macOS-style compact)
+    property int barHeight: 26
 
-    // Auto-hide behavior
+    // Auto-hide behavior (disabled for macOS-style always-visible bar)
     property bool autoHide: false
 
     // Auto-hide delay in milliseconds
     property int autoHideDelay: 1000
 
     // Module visibility toggles
-    property bool showWorkspaceIndicator: true
+    property bool showWorkspaceIndicator: false
     property bool showClock: true
     property bool showSystemTray: true
     property bool showNetworkIndicator: true
     property bool showBatteryIndicator: true
     property bool showVolumeIndicator: true
-    property bool showBrightnessIndicator: false
-
-    // Layout mode: "macos" (centered clock, spread sections) or "windows" (right-aligned)
-    property string layoutMode: "macos"
+    property bool showBrightnessIndicator: true
 
     // Multi-monitor mode: "all" (show on all), "primary" (primary only), "active" (active only)
     property string monitorMode: "all"
@@ -71,9 +68,6 @@ QtObject {
 
     // Emitted when height changes
     signal heightUpdated(int height)
-
-    // Emitted when layout mode changes
-    signal layoutModeUpdated(string mode)
 
     // Emitted when a module toggle changes
     signal moduleVisibilityChanged(string module, bool visible)
@@ -103,17 +97,6 @@ QtObject {
     function toggleAutoHide() {
         root.autoHide = !root.autoHide
         Core.Logger.debug("Auto-hide: " + (root.autoHide ? "enabled" : "disabled"), "BarController")
-    }
-
-    // Set layout mode
-    function setLayoutMode(mode) {
-        if (mode === "macos" || mode === "windows") {
-            root.layoutMode = mode
-            layoutModeUpdated(mode)
-            Core.Logger.debug("Layout mode: " + mode, "BarController")
-        } else {
-            Core.Logger.warning("Invalid layout mode: " + mode, "BarController")
-        }
     }
 
     // Toggle a specific module visibility

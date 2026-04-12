@@ -49,6 +49,51 @@ QtObject {
     readonly property string airplane: "✈"       // Airplane (U+2708)
 
     // ========================================================================
+    // Display & Screen Icons
+    // ========================================================================
+
+    readonly property string screenMirroring: "⧉"   // Overlapping squares (screen mirroring)
+    readonly property string display: "🖥"            // Desktop computer
+    readonly property string displayExternal: "🖥"    // External display
+    readonly property string nightLight: "☾"         // Crescent moon (night light)
+    readonly property string focus: "◎"              // Bullseye (focus mode)
+    readonly property string creativeCloud: "☁"      // Cloud (creative cloud)
+
+    // ========================================================================
+    // User & Profile Icons
+    // ========================================================================
+
+    readonly property string user: "👤"           // Bust in silhouette
+    readonly property string userGroup: "👥"      // Busts in silhouette
+    readonly property string avatar: "●"          // Circle (user avatar placeholder)
+
+    // ========================================================================
+    // Weather Icons
+    // ========================================================================
+
+    readonly property string weatherSun: "☀"         // Sun
+    readonly property string weatherPartlyCloudy: "⛅" // Sun behind cloud
+    readonly property string weatherCloudy: "☁"      // Cloud
+    readonly property string weatherRain: "🌧"       // Cloud with rain
+    readonly property string weatherSnow: "🌨"       // Cloud with snow
+    readonly property string weatherStorm: "⛈"       // Cloud with lightning
+    readonly property string weatherFog: "🌫"        // Fog
+
+    // ========================================================================
+    // Status & Utility Icons
+    // ========================================================================
+
+    readonly property string dice: "⚄"           // Die face five (dice/random)
+    readonly property string target: "◎"          // Bullseye/target
+    readonly property string grid: "⊞"            // Squared times (grid view)
+    readonly property string folder: "📁"         // File folder
+    readonly property string timer: "⏱"           // Stopwatch
+    readonly property string mic: "🎤"            // Microphone
+    readonly property string search: "🔍"         // Magnifying glass
+    readonly property string closeCircle: "⊗"     // Circled times (close/cancel)
+    readonly property string window: "▭"          // White rectangle (window)
+
+    // ========================================================================
     // Application Icons
     // ========================================================================
 

@@ -3,7 +3,6 @@ module StatusBarModule
 # Main components
 StatusBar 1.0 StatusBar.qml
 StatusBarLeft 1.0 StatusBarLeft.qml
-StatusBarCenter 1.0 StatusBarCenter.qml
 StatusBarRight 1.0 StatusBarRight.qml
 
 # Tray item component

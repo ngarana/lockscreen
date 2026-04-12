@@ -236,6 +236,7 @@ QtObject {
     }
 
     function _parseBatteryInfo(output, path, index) {
+        if (!output) return;
         const lines = output.split("\n")
         let battery = {
             path: path,
@@ -391,7 +392,7 @@ QtObject {
 
     function _checkAcPower() {
         const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["cat", "/sys/class/power_supply/AC/online"]; running: true; onExited: function(c) { if (c === 0) root.acConnected = (stdout.trim() === "1") } }',
+            'import Quickshell.Io; Process { command: ["cat", "/sys/class/power_supply/AC/online"]; running: true; onExited: function(c) { if (c === 0 && stdout) root.acConnected = (stdout.trim() === "1") } }',
             root
         )
     }

@@ -146,6 +146,7 @@ signal displayBrightnessChanged(string display, int value)
     }
 
     function _parseBrightnessctlList(output) {
+        if (!output) return;
         const lines = output.split("\n")
         const newDisplays = []
         root._displays = {}
@@ -195,6 +196,7 @@ if (newDisplays.length > 0) {
     }
 
     function _parseXrandrList(output) {
+        if (!output) return;
         const lines = output.split("\n")
         const newDisplays = []
         root._displays = {}

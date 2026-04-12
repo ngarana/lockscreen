@@ -188,12 +188,14 @@ ShellRoot {
             required property var modelData
             screen: modelData
 
-            // Anchor to top edge
+            // Full-width bar at top edge (macOS-style)
             anchors {
                 top: true
                 left: true
                 right: true
             }
+
+            implicitHeight: BarController.barHeight
 
             // Status bar component
             StatusBar {

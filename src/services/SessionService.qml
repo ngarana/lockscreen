@@ -217,6 +217,7 @@ QtObject {
     }
 
     function _parsePasswd(output) {
+        if (!output) return;
         // Format: username:password:UID:GID:display_name:home:shell
         const parts = output.split(":")
         if (parts.length >= 5) {

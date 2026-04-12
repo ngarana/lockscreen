@@ -237,6 +237,7 @@ QtObject {
     }
 
     function _parseSignalStrength(output) {
+        if (!output) return;
         const lines = output.split("\n")
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim()
@@ -268,6 +269,7 @@ QtObject {
     }
 
     function _parseNetworks(output) {
+        if (!output) return;
         const networks = []
         const lines = output.split("\n")
 

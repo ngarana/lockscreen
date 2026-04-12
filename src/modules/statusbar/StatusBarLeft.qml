@@ -1,101 +1,62 @@
 // StatusBarLeft.qml - Left Section of Status Bar
 //
-// Left section containing:
-// - App launcher button (Apple menu style)
-// - Workspace indicators (Hyprland workspaces)
-// - Active window title (optional)
+// Left section showing active application name (macOS "Finder" style).
+// Displays the Apple logo, active app name, and macOS-style menus.
 //
-// macOS-style layout with icon-based launcher and compact workspace dots.
 
 import QtQuick
 import QtQuick.Layouts
 import "../../atoms" as Atoms
-import "../../molecules" as Molecules
 import "../../services" as Services
 import "../../theme" as Theme
 
 RowLayout {
     id: root
 
-    spacing: 10
+    spacing: 16
 
     // ========================================================================
-    // App Launcher Button
+    // Apple Logo
     // ========================================================================
 
-    // macOS-style app launcher button with icon
-    Rectangle {
-        id: launcherButton
-        color: "transparent"
-        radius: Theme.ThemeEngine.radius.small
+    Text {
+        text: ""
+        font.pixelSize: 15
+        color: Theme.ThemeEngine.colors.textPrimary
+        Layout.alignment: Qt.AlignVCenter
+        Layout.leftMargin: 8
+    }
 
-        property bool hovered: launcherMouse.containsMouse
-        property bool pressed: false
+    // ========================================================================
+    // Active Application Name (macOS "Finder" style)
+    // ========================================================================
 
-        Layout.preferredWidth: 28
-        Layout.preferredHeight: 28
+    Atoms.Label {
+        id: appNameLabel
+        text: root.activeAppName
+        fontSize: Theme.ThemeEngine.typography.sizeSm
+        fontWeight: Theme.ThemeEngine.typography.weightBold
+        color: Theme.ThemeEngine.colors.textPrimary
 
-        Text {
-            anchors.centerIn: parent
-            text: Theme.ThemeEngine.icons.applications
-            font.pixelSize: 18
-            color: launcherButton.hovered ? Theme.ThemeEngine.colors.textPrimary : Theme.ThemeEngine.colors.textSecondary
-        }
+        Layout.alignment: Qt.AlignVCenter
+    }
 
-        MouseArea {
-            id: launcherMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onPressed: launcherButton.pressed = true
-            onReleased: {
-                launcherButton.pressed = false
-                if (containsMouse) {
-                    // TODO: Trigger launcher visibility toggle
-                    // This will be connected when Launcher module is implemented
-                }
+    // ========================================================================
+    // Mac Menu Items
+    // ========================================================================
+
+    RowLayout {
+        spacing: 14
+        Layout.alignment: Qt.AlignVCenter
+
+        Repeater {
+            model: ["File", "Edit", "View", "Go", "Window", "Help"]
+            Atoms.Label {
+                text: modelData
+                fontSize: Theme.ThemeEngine.typography.sizeSm
+                color: Theme.ThemeEngine.colors.textPrimary
+                fontWeight: Theme.ThemeEngine.typography.weightRegular
             }
-        }
-    }
-
-    Divider {
-        Layout.preferredWidth: 1
-        Layout.preferredHeight: 18
-        color: Theme.ThemeEngine.colors.glassBorder
-    }
-
-    // ========================================================================
-    // Workspace Indicators
-    // ========================================================================
-
-    Molecules.WorkspaceIndicator {
-        id: workspaceIndicator
-        visible: Services.BarController.showWorkspaceIndicator
-        maxWorkspaces: 10
-
-        Layout.alignment: Qt.AlignVCenter
-    }
-
-    // ========================================================================
-    // Active Window Title (Optional)
-    // ========================================================================
-
-    Rectangle {
-        id: windowTitleContainer
-        visible: root.showWindowTitle
-        Layout.fillWidth: true
-        Layout.alignment: Qt.AlignVCenter
-        Layout.preferredHeight: 20
-        color: "transparent"
-
-        Atoms.Label {
-            id: windowTitle
-            anchors.fill: parent
-            text: root.activeWindowTitle
-            fontSize: Theme.ThemeEngine.typography.sizeSm
-            color: Theme.ThemeEngine.colors.textSecondary
-            truncate: true
-            horizontalAlignment: Text.AlignLeft
         }
     }
 
@@ -103,25 +64,18 @@ RowLayout {
     // Public Properties
     // ========================================================================
 
-    // Show active window title
-    property bool showWindowTitle: false
-
-    // Active window title (from HyprlandService)
-    readonly property string activeWindowTitle: {
+    // Active app name (from HyprlandService)
+    readonly property string activeAppName: {
         if (Services.HyprlandService.activeWindow &&
             Services.HyprlandService.activeWindow.title) {
-            return Services.HyprlandService.activeWindow.title
+            const title = Services.HyprlandService.activeWindow.title
+            const parts = title.split(" - ")
+            if (parts.length > 1) {
+                return parts[parts.length - 1]
+            }
+            return title
         }
-        return ""
-    }
-
-    // ========================================================================
-    // Divider Component
-    // ========================================================================
-
-    component Divider: Rectangle {
-        color: Theme.ThemeEngine.colors.surface1
-        radius: 1
+        return "Finder"
     }
 
     // ========================================================================
@@ -131,10 +85,10 @@ RowLayout {
     Connections {
         target: Services.HyprlandService
         function onWindowFocusChanged(window) {
-            // Force update of window title
+            // Force update of app name
         }
         function onWindowTitleChanged(window) {
-            // Force update of window title
+            // Force update of app name
         }
     }
 }

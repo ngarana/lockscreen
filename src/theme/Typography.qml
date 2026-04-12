@@ -34,6 +34,7 @@ QtObject {
     // ========================================================================
 
     readonly property int weightLight: Font.Light
+    readonly property int weightRegular: Font.Normal
     readonly property int weightNormal: Font.Normal
     readonly property int weightMedium: Font.Medium
     readonly property int weightSemiBold: Font.DemiBold
