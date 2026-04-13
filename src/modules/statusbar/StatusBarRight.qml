@@ -102,7 +102,28 @@ RowLayout {
             size: 26
             iconSize: 14
             tooltip: "Volume: " + Math.round((Services.AudioService ? Services.AudioService.volume : 0) * 100) + "%"
-            onClicked: Services.BarController.toggleModule("quicksettings")
+            onClicked: {
+                if (Services.AudioService && Services.AudioService.canSetVolume) {
+                    if (Services.AudioService.volume > 0) {
+                        Services.AudioService.setVolume(0);
+                    } else {
+                        Services.AudioService.setVolume(0.5);
+                    }
+                }
+            }
+            onWheel: function(wheel) {
+                if (Services.AudioService && Services.AudioService.canSetVolume) {
+                    var step = 0.05; // 5%
+                    if (wheel.angleDelta.y > 0) {
+                        var newVol = Math.min(1.0, Services.AudioService.volume + step);
+                        Services.AudioService.setVolume(newVol);
+                    } else {
+                        var newVol = Math.max(0.0, Services.AudioService.volume - step);
+                        Services.AudioService.setVolume(newVol);
+                    }
+                    wheel.accepted = true;
+                }
+            }
         }
 
         // Brightness Control Toggle
@@ -116,9 +137,10 @@ RowLayout {
                 if (Services.BrightnessService && Services.BrightnessService.isAvailable) {
                     if (wheel.angleDelta.y > 0) {
                         Services.BrightnessService.increase()
-                    } else {
+                    } else if (wheel.angleDelta.y < 0) {
                         Services.BrightnessService.decrease()
                     }
+                    wheel.accepted = true
                 }
             }
         }

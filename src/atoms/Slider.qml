@@ -140,6 +140,22 @@ Rectangle {
             onEntered: root._isHovered = true
             onExited: root._isHovered = false
 
+            onWheel: function(wheel) {
+                if (wheel.angleDelta.y === 0) return;
+                
+                let delta = wheel.angleDelta.y > 0 ? root.stepSize : -root.stepSize
+                let newValue = root.value + delta
+                
+                // Clamp to range
+                newValue = Math.max(root.from, Math.min(root.to, newValue))
+                
+                if (newValue !== root.value) {
+                    root.value = newValue
+                    root.moved()
+                }
+                wheel.accepted = true
+            }
+
             function updateValue(mouseX, mouseY) {
                 let normalized
                 if (root.orientation === Qt.Horizontal) {

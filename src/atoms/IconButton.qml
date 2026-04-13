@@ -36,7 +36,7 @@ Rectangle {
     property string tooltipPosition: "top"
 
     signal clicked()
-    signal wheel(wheel)
+    signal wheel(var wheel)
 
     // Internal state
     property bool _isHovered: false
@@ -55,8 +55,7 @@ Rectangle {
         return "transparent"
     }
 
-    // Cursor shape for better UX
-    cursorShape: _isHovered ? Qt.PointingHandCursor : Qt.ArrowCursor
+
 
     border.width: 0
 

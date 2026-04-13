@@ -232,13 +232,17 @@ signal displayBrightnessChanged(string display, int value)
             const line = lines[i].trim()
             if (line.length === 0) continue
 
-            // Parse: class, name, encoded brightness, current brightness, max brightness
+            // Parse: name, class, current absolute, percentage, max brightness
             const parts = line.split(",")
             if (parts.length >= 5) {
-                const deviceClass = parts[0]
-                const name = parts[1]
-                const current = parseInt(parts[3]) || 0
+                const name = parts[0]
+                const deviceClass = parts[1]
+                const current = parseInt(parts[2]) || 0
                 const max = parseInt(parts[4]) || 1
+                
+                // Percentage can be extracted from parts[3] (e.g. "83%") or calculated
+                const percentStr = parts[3].replace('%', '')
+                const percentage = parseInt(percentStr) || Math.round((current / max) * 100)
 
                 if (deviceClass === "backlight" || deviceClass === "leds") {
                     const display = {
@@ -246,7 +250,7 @@ signal displayBrightnessChanged(string display, int value)
                         type: deviceClass,
                         current: current,
                         max: max,
-                        percentage: Math.round((current / max) * 100)
+                        percentage: Math.max(0, Math.min(100, percentage))
                     }
 
                     newDisplays.push(display)
@@ -360,8 +364,11 @@ if (displays.length > 0 && displays[0].name === displayName) {
 
 // Adjust brightness by delta
 function adjustBrightness(delta) {
-    const newBrightness = primaryBrightness + delta
-    setAllBrightness(newBrightness)
+    const nextVal = Math.max(minBrightness, Math.min(100, primaryBrightness + delta))
+    if (nextVal !== primaryBrightness) {
+        primaryBrightness = nextVal
+        setAllBrightness(primaryBrightness)
+    }
 }
 
     // Increase brightness by step

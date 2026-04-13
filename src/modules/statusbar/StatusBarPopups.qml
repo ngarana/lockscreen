@@ -44,7 +44,7 @@ Item {
             brightness: (Services.BrightnessService && Services.BrightnessService.primaryBrightness) || 0
             
             onVolumeChanged: (val) => Services.AudioService.setVolume(val)
-            onBrightnessChanged: (val) => Services.BrightnessService.setBrightness(val)
+            onBrightnessChanged: (val) => Services.BrightnessService.setAllBrightness(val)
             onWifiToggled: (enabled) => Services.NetworkService.setEnabled(enabled)
             onBluetoothToggled: (enabled) => Services.BluetoothService.setEnabled(enabled)
         }
