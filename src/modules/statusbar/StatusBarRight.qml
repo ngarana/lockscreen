@@ -98,6 +98,7 @@ RowLayout {
 
         // Volume Control Toggle
         Atoms.IconButton {
+            id: volumeButton
             icon: root._volumeIcon
             size: 26
             iconSize: 14
@@ -111,16 +112,29 @@ RowLayout {
                     }
                 }
             }
+
+            // Volume wheel debouncing
+            property real accumulatedDelta: 0
+            property Timer volumeTimer: Timer {
+                interval: 50 // 50ms debounce
+                repeat: false
+                onTriggered: {
+                    if (Services.AudioService && Services.AudioService.canSetVolume && volumeButton.accumulatedDelta !== 0) {
+                        var step = 0.05; // 5% per significant wheel movement
+                        var delta = volumeButton.accumulatedDelta > 0 ? step : -step;
+                        var newVol = Math.max(0.0, Math.min(1.0, Services.AudioService.volume + delta));
+                        Services.AudioService.setVolume(newVol);
+                        volumeButton.accumulatedDelta = 0;
+                    }
+                }
+            }
+
             onWheel: function(wheel) {
                 if (Services.AudioService && Services.AudioService.canSetVolume) {
-                    var step = 0.05; // 5%
-                    if (wheel.angleDelta.y > 0) {
-                        var newVol = Math.min(1.0, Services.AudioService.volume + step);
-                        Services.AudioService.setVolume(newVol);
-                    } else {
-                        var newVol = Math.max(0.0, Services.AudioService.volume - step);
-                        Services.AudioService.setVolume(newVol);
-                    }
+                    // Accumulate wheel delta
+                    volumeButton.accumulatedDelta += wheel.angleDelta.y;
+                    // Start/restart timer
+                    volumeButton.volumeTimer.restart();
                     wheel.accepted = true;
                 }
             }
