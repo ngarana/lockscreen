@@ -57,9 +57,10 @@ RowLayout {
         
         Text {
             id: logoText
-            text: ""
+            text: Theme.ThemeEngine.icons.applications
+            font.family: Theme.ThemeEngine.fonts.iconFontFamily
             font.pixelSize: 16
-            color: Theme.ThemeEngine.colors.textPrimary
+            color: Theme.ThemeEngine.colors.primary
             anchors.centerIn: parent
         }
 

@@ -46,49 +46,17 @@ Rectangle {
     implicitHeight: root.barHeight
 
     // ========================================================================
-    // Background - macOS-style menu bar (semi-transparent dark surface)
+    // Background - Glassmorphic Pill
     // ========================================================================
 
-    Rectangle {
+    Components.GlassPanel {
         id: background
         anchors.fill: parent
-        color: Qt.rgba(
-            Theme.ThemeEngine.colors.surface.r,
-            Theme.ThemeEngine.colors.surface.g,
-            Theme.ThemeEngine.colors.surface.b,
-            0.85
-        )
-        radius: 0
-
-        // Subtle bottom border line
-        Rectangle {
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: 1
-            color: Qt.rgba(
-                Theme.ThemeEngine.colors.glassBorder.r,
-                Theme.ThemeEngine.colors.glassBorder.g,
-                Theme.ThemeEngine.colors.glassBorder.b,
-                0.15
-            )
-        }
-
-        // Top highlight gradient (frosted glass reflection)
-        Rectangle {
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: parent.height * 0.5
-            gradient: Gradient {
-                orientation: Gradient.Vertical
-                GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.08) }
-                GradientStop { position: 0.5; color: Qt.rgba(1, 1, 1, 0.03) }
-                GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.0) }
-            }
-            radius: 0
-            z: 1
-        }
+        backgroundColor: Theme.ThemeEngine.colors.glass
+        borderColor: Theme.ThemeEngine.colors.glassBorder
+        radius: Theme.ThemeEngine.radius.large
+        elevation: 1
+        blurIntensity: 0.4
     }
 
     // ========================================================================

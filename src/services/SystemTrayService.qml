@@ -182,10 +182,10 @@ QtObject {
 
         const items = []
 
-        // Check for common tray applications
-        _checkForTrayApp(items, "nm-applet", "Network Manager", "network-wireless-symbolic", "nm-applet")
-        _checkForTrayApp(items, "blueman-applet", "Bluetooth", "bluetooth-symbolic", "blueman-manager")
-        _checkForTrayApp(items, "volumeicon", "Volume", "audio-volume-high-symbolic", "pavucontrol")
+        // Check for common tray applications (Network/Bluetooth are natively handled so mock triggers are removed to prevent image://icon warnings)
+        // _checkForTrayApp(items, "nm-applet", "Network Manager", "network-wireless-symbolic", "nm-applet")
+        // _checkForTrayApp(items, "blueman-applet", "Bluetooth", "bluetooth-symbolic", "blueman-manager")
+        // _checkForTrayApp(items, "volumeicon", "Volume", "audio-volume-high-symbolic", "pavucontrol")
         _checkForTrayApp(items, "parcellite", "Clipboard", "edit-paste-symbolic", "parcellite")
         _checkForTrayApp(items, "kdeconnect-indicator", "KDE Connect", "phone-symbolic", "kdeconnect-app")
         _checkForTrayApp(items, "flameshot", "Flameshot", "camera-photo-symbolic", "flameshot")

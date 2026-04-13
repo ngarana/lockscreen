@@ -71,19 +71,17 @@ RowLayout {
 
         // Screen Mirroring Icon
         Text {
-            text: ""  // Font Awesome: clone/screen-mirroring
+            text: Theme.ThemeEngine.icons.screenMirroring
             font.pixelSize: 14
-            font.family: "Font Awesome 7 Free"
-            font.weight: Font.Bold
-            color: "#8E54E9"
+            font.family: Theme.ThemeEngine.fonts.iconFontFamily
+            color: Theme.ThemeEngine.colors.primary
         }
 
         // Display Icon
         Text {
-            text: ""  // Font Awesome: desktop
+            text: Theme.ThemeEngine.icons.display
             font.pixelSize: 14
-            font.family: "Font Awesome 7 Free"
-            font.weight: Font.Bold
+            font.family: Theme.ThemeEngine.fonts.iconFontFamily
             color: Theme.ThemeEngine.colors.textPrimary
         }
 
@@ -91,7 +89,7 @@ RowLayout {
         Text {
             text: Theme.ThemeEngine.icons.focus
             font.pixelSize: 14
-            font.family: Theme.fonts.iconFontFamily
+            font.family: Theme.ThemeEngine.fonts.iconFontFamily
             color: Theme.ThemeEngine.colors.textPrimary
         }
 
@@ -99,7 +97,7 @@ RowLayout {
         Text {
             text: Theme.ThemeEngine.icons.grid
             font.pixelSize: 14
-            font.family: Theme.fonts.iconFontFamily
+            font.family: Theme.ThemeEngine.fonts.iconFontFamily
             color: Theme.ThemeEngine.colors.textPrimary
         }
     }
@@ -112,7 +110,7 @@ RowLayout {
         visible: Services.BarController.showBrightnessIndicator
         text: Theme.ThemeEngine.icons.brightness
         font.pixelSize: 14
-        font.family: Theme.fonts.iconFontFamily
+        font.family: Theme.ThemeEngine.fonts.iconFontFamily
         color: Theme.ThemeEngine.colors.textPrimary
         Layout.alignment: Qt.AlignVCenter
 
@@ -134,7 +132,7 @@ RowLayout {
         visible: Services.BarController.showVolumeIndicator
         text: root._volumeIcon
         font.pixelSize: 14
-        font.family: Theme.fonts.iconFontFamily
+        font.family: Theme.ThemeEngine.fonts.iconFontFamily
         color: Theme.ThemeEngine.colors.textPrimary
         Layout.alignment: Qt.AlignVCenter
 
@@ -156,7 +154,7 @@ RowLayout {
         text: root._networkIcon
         visible: Services.BarController.showNetworkIndicator
         font.pixelSize: 14
-        font.family: Theme.fonts.iconFontFamily
+        font.family: Theme.ThemeEngine.fonts.iconFontFamily
         color: Theme.ThemeEngine.colors.textPrimary
         Layout.alignment: Qt.AlignVCenter
     }
@@ -181,7 +179,7 @@ RowLayout {
         Text {
             text: root._batteryIcon
             font.pixelSize: 14
-            font.family: Theme.fonts.iconFontFamily
+            font.family: Theme.ThemeEngine.fonts.iconFontFamily
             color: Theme.ThemeEngine.colors.textPrimary
             Layout.alignment: Qt.AlignVCenter
         }
@@ -200,7 +198,7 @@ RowLayout {
             anchors.centerIn: parent
             text: Theme.ThemeEngine.icons.notifications
             font.pixelSize: 14
-            font.family: Theme.fonts.iconFontFamily
+            font.family: Theme.ThemeEngine.fonts.iconFontFamily
             color: Theme.ThemeEngine.colors.textPrimary
         }
 
@@ -247,7 +245,7 @@ RowLayout {
             anchors.centerIn: parent
             text: Theme.ThemeEngine.icons.settings
             font.pixelSize: 14
-            font.family: Theme.fonts.iconFontFamily
+            font.family: Theme.ThemeEngine.fonts.iconFontFamily
             color: Theme.ThemeEngine.colors.textPrimary
         }
         
