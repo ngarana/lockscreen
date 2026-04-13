@@ -134,9 +134,9 @@ Item {
                     }
                 }
                 
-                // 3. Final fallback
-                if (currentSource !== "image://icon/application-x-executable-symbolic") {
-                    source = "image://icon/application-x-executable-symbolic"
+                // 3. Final fallback (empty to suppress warnings if theme is incomplete)
+                if (currentSource !== "") {
+                    source = ""
                 }
             }
         }

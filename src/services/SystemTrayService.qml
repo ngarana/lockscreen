@@ -1,24 +1,24 @@
 // SystemTrayService.qml - System Tray Protocol Service
 //
 // Singleton for managing system tray icons and context menus.
-// Implements the StatusNotifierItem (SNI) protocol for tray icon support.
+// Implements the StatusNotifierItem (SNI) protocol via Quickshell.Services.SystemTray.
 //
 // Responsibilities:
-// - System tray protocol implementation (SNI)
+// - System tray protocol integration
 // - Tray icon management
-// - Context menu handling
-// - Tray item activation
+// - Tray item activation and interaction
 //
 // Usage:
 // import "../services"
 //
-// Connections {
-//     target: SystemTrayService
-//     function onTrayItemsChanged() { updateTrayIcons() }
+// Repeater {
+//     model: SystemTrayService.trayItems
+//     // ...
 // }
 
 pragma Singleton
 import Quickshell
+import Quickshell.Services.SystemTray
 import QtQuick
 import "../core" as Core
 
@@ -26,249 +26,122 @@ QtObject {
     id: root
 
     // ========================================================================
-    // Configuration
-    // ========================================================================
-
-    // Maximum number of tray items to display
-    property int maxItems: 20
-
-    // Update interval for polling (ms)
-    property int updateInterval: 2000
-
-    // ========================================================================
     // State Properties (Read-Only)
     // ========================================================================
 
-    // List of tray items
-    property var trayItems: []
+    // Direct access to the system tray items model
+    // This is an ObjectModel containing SystemTrayItem objects
+    property var trayItems: SystemTray.items
 
-    // Number of tray items
-    property int trayItemCount: 0
+    // Reactive count of tray items
+    property var trayItemCount: (SystemTray.items && SystemTray.items.count !== undefined) ? SystemTray.items.count : 0
 
-    // Whether tray is available/enabled
+    // Whether tray is available/ready
     property bool isAvailable: true
-
-    // Whether SNI watcher is available
-    property bool sniAvailable: false
 
     // ========================================================================
     // Signals
     // ========================================================================
 
-    // Emitted when a tray item is activated
-    signal trayItemActivated(string itemId)
+    // Emitted when the set of tray items changes
 
-    // Emitted when a tray item menu is requested
-    signal trayItemMenuRequested(string itemId)
-
-    // ========================================================================
-    // Private Properties
-    // ========================================================================
-
-    property var _updateTimer: Timer {
-        interval: root.updateInterval
-        running: true
-        repeat: true
-        onTriggered: root._updateTrayItems()
-    }
 
     // ========================================================================
     // Public Methods
     // ========================================================================
 
-    // Refresh tray items
+    // Refresh tray items (usually handled automatically by Quickshell)
     function refresh() {
-        _updateTrayItems()
+        // Quickshell handles SNI updates automatically
     }
 
-    // Activate a tray item (left-click)
+    // Activate a tray item (typically left-click)
     function activateItem(itemId) {
-        Core.Logger.debug("Activating tray item: " + itemId, "SystemTrayService")
-
-        // Find the item
-        for (let i = 0; i < trayItems.length; i++) {
-            if (trayItems[i].id === itemId) {
-                // Emit signal
-                trayItemActivated(itemId)
-
-                // Try to activate via dbus (placeholder)
-                _activateViaDBus(itemId, "Activate")
-                return true
-            }
+        const item = _getItemById(itemId);
+        if (item) {
+            Core.Logger.debug("Activating tray item: " + itemId, "SystemTrayService");
+            item.activate();
+            return true;
         }
-        return false
+        return false;
     }
 
-    // Secondary activate a tray item (right-click - open menu)
+    // Secondary activate a tray item (typically right-click)
     function secondaryActivateItem(itemId) {
-        Core.Logger.debug("Secondary activate tray item: " + itemId, "SystemTrayService")
-
-        // Find the item
-        for (let i = 0; i < trayItems.length; i++) {
-            if (trayItems[i].id === itemId) {
-                // Emit signal
-                trayItemMenuRequested(itemId)
-
-                // Try to show menu via dbus (placeholder)
-                _activateViaDBus(itemId, "ContextMenu")
-                return true
-            }
+        const item = _getItemById(itemId);
+        if (item) {
+            Core.Logger.debug("Secondary activating tray item: " + itemId, "SystemTrayService");
+            item.secondaryActivate();
+            return true;
         }
-        return false
+        return false;
     }
 
     // Scroll on a tray item
     function scrollOnItem(itemId, delta, orientation) {
-        // orientation: "horizontal" or "vertical"
-        Core.Logger.debug("Scroll on tray item: " + itemId + " delta: " + delta, "SystemTrayService")
-        // Implementation would send Scroll event via dbus
+        const item = _getItemById(itemId);
+        if (item) {
+            item.scroll(delta, orientation === "horizontal");
+            return true;
+        }
+        return false;
     }
 
-    // Get item by ID
+    // Helper functions for easy access from components
+    
     function getItem(itemId) {
-        for (let i = 0; i < trayItems.length; i++) {
-            if (trayItems[i].id === itemId) {
-                return trayItems[i]
-            }
-        }
-        return null
+        return _getItemById(itemId);
     }
 
-    // Get icon for tray item
     function getItemIcon(itemId) {
-        const item = getItem(itemId)
-        if (item && item.icon) {
-            return item.icon
+        const item = _getItemById(itemId);
+        if (item) {
+            // Return either the icon name or the icon theme path if it exists
+            return item.icon || "";
         }
-        return "application-x-executable-symbolic"
+        return "";
     }
 
-    // Get tooltip for tray item
     function getItemTooltip(itemId) {
-        const item = getItem(itemId)
-        if (item && item.tooltip) {
-            return item.tooltip
+        const item = _getItemById(itemId);
+        if (item) {
+            return item.tooltipTitle || item.title || "";
         }
-        return item ? item.title : ""
+        return "";
     }
 
-    // Get attention icon (for notifications)
-    function getAttentionIcon(itemId) {
-        const item = getItem(itemId)
-        if (item && item.attentionIcon) {
-            return item.attentionIcon
-        }
-        return getItemIcon(itemId)
-    }
-
-    // Check if item needs attention
     function needsAttention(itemId) {
-        const item = getItem(itemId)
-        return item ? item.needsAttention : false
+        const item = _getItemById(itemId);
+        if (item) {
+            // attentionIcon is set when the item is in high-importance state
+            return item.attentionIcon !== "";
+        }
+        return false;
     }
 
     // ========================================================================
-    // Private Methods
+    // Private Helpers
     // ========================================================================
 
-    function _updateTrayItems() {
-        // In a full implementation, this would:
-        // 1. Check for StatusNotifierWatcher on D-Bus
-        // 2. Get list of registered items from org.freedesktop.StatusNotifierWatcher
-        // 3. For each item, get properties from StatusNotifierItem interface
-
-        // For now, we simulate with common tray applications
-        // This is a placeholder - real implementation would use D-Bus
-
-        const items = []
-
-        // Check for common tray applications (Network/Bluetooth are natively handled so mock triggers are removed to prevent image://icon warnings)
-        // _checkForTrayApp(items, "nm-applet", "Network Manager", "network-wireless-symbolic", "nm-applet")
-        // _checkForTrayApp(items, "blueman-applet", "Bluetooth", "bluetooth-symbolic", "blueman-manager")
-        // _checkForTrayApp(items, "volumeicon", "Volume", "audio-volume-high-symbolic", "pavucontrol")
-        _checkForTrayApp(items, "parcellite", "Clipboard", "edit-paste-symbolic", "parcellite")
-        _checkForTrayApp(items, "kdeconnect-indicator", "KDE Connect", "phone-symbolic", "kdeconnect-app")
-        _checkForTrayApp(items, "flameshot", "Flameshot", "camera-photo-symbolic", "flameshot")
-
-        // Update items if changed
-        if (JSON.stringify(items) !== JSON.stringify(trayItems)) {
-            trayItems = items
-            trayItemCount = items.length
-            trayItemsChanged()
+    // Internal helper to find an item in the model by its ID
+    function _getItemById(itemId) {
+        // Since SystemTray.items is a model, we iterate through it
+        for (let i = 0; i < SystemTray.items.count; i++) {
+            const item = SystemTray.items.get(i);
+            if (item && item.id === itemId) return item;
         }
+        return null;
     }
 
-    function _checkForTrayApp(items, processName, title, icon, tooltip) {
-        // This is a simplified check - real implementation would use D-Bus
-        // Check if process is running
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["pgrep", "-x", "' + processName + '"]; running: true; onExited: function(c) { if (c === 0) root._addTrayItem("' + processName + '", "' + title + '", "' + icon + '", "' + tooltip + '") } }',
-            root
-        )
-    }
+    // Quickshell SystemTray.items model handles its own change notifications. 
+    // Consumers like Repeaters will automatically update when the model changes.
 
-    function _addTrayItem(id, title, icon, tooltip) {
-        // This is called from the process callback
-        // In practice, we'd maintain the items list properly
-        const newItems = trayItems.slice()
-
-        // Check if already exists
-        let exists = false
-        for (let i = 0; i < newItems.length; i++) {
-            if (newItems[i].id === id) {
-                exists = true
-                break
-            }
-        }
-
-        if (!exists) {
-            newItems.push({
-                id: id,
-                title: title,
-                icon: icon,
-                tooltip: tooltip,
-                attentionIcon: "",
-                needsAttention: false,
-                category: "ApplicationStatus",
-                status: "Active"
-            })
-
-            trayItems = newItems
-            trayItemCount = newItems.length
-            trayItemsChanged()
-        }
-    }
-
-    function _removeTrayItem(id) {
-        const newItems = []
-        for (let i = 0; i < trayItems.length; i++) {
-            if (trayItems[i].id !== id) {
-                newItems.push(trayItems[i])
-            }
-        }
-
-        if (newItems.length !== trayItems.length) {
-            trayItems = newItems
-            trayItemCount = newItems.length
-            trayItemsChanged()
-        }
-    }
-
-    function _activateViaDBus(itemId, action) {
-        // Placeholder for D-Bus activation
-        // Real implementation would:
-        // 1. Get the service name from the itemId
-        // 2. Call the appropriate method on the StatusNotifierItem interface
-        Core.Logger.debug("D-Bus " + action + " for " + itemId, "SystemTrayService")
-    }
 
     // ========================================================================
     // Initialization
     // ========================================================================
 
     Component.onCompleted: {
-        // Check if StatusNotifierWatcher is available
-        Core.Logger.info("SystemTrayService initialized", "SystemTrayService")
-        _updateTrayItems()
+        Core.Logger.info("SystemTrayService initialized with Quickshell SNI backend", "SystemTrayService");
     }
 }
