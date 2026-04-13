@@ -58,8 +58,15 @@ Item {
     // Detect if the icon is a unicode glyph (Nerd Font character or symbol)
     // These are typically single or multi-byte unicode characters
     readonly property bool _isUnicodeGlyph: {
-        const src = icon.toString()
+        let src = icon.toString()
         if (!src || src.length === 0) return false
+        
+        // If it's a resolved file URL, extract the filename (the potential glyph)
+        if (src.startsWith("file://")) {
+            const parts = src.split("/")
+            src = parts[parts.length - 1]
+        }
+        
         // Check if it's a single unicode character or a short unicode string
         if (src.length <= 2) {
             const code = src.codePointAt(0)
@@ -116,10 +123,19 @@ Item {
     // Text-based Icon (for Nerd Font glyphs)
     // ========================================================================
 
+    readonly property string _glyph: {
+        let src = icon.toString()
+        if (src.startsWith("file://")) {
+            const parts = src.split("/")
+            return parts[parts.length - 1]
+        }
+        return src
+    }
+
     Text {
         id: textIcon
         anchors.centerIn: parent
-        text: root.icon.toString()
+        text: root._glyph
         font.family: Theme.ThemeEngine.fonts.iconFontFamily
         font.pixelSize: root.size
         color: root.color

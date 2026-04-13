@@ -45,14 +45,16 @@ Item {
     RowLayout {
         id: rowLayout
         anchors.fill: parent
-        spacing: 6
+        spacing: 4
+        Layout.alignment: Qt.AlignVCenter
 
         // Battery icon
         Item {
             id: batteryIconContainer
             visible: root.showIcon
-            width: 22
+            width: 24
             height: 12
+            Layout.alignment: Qt.AlignVCenter
 
             // Battery outline
             Rectangle {
@@ -106,8 +108,11 @@ Item {
             visible: root.showPercentage
             text: root._percentage + "%"
             fontSize: Theme.ThemeEngine.typography.sizeSm
+            Layout.alignment: Qt.AlignVCenter
+            Layout.topMargin: -1 // Subtle adjustment for vertical center
             color: root._getBatteryColor()
             fontWeight: root._isCritical ? Theme.ThemeEngine.typography.weightBold : Theme.ThemeEngine.typography.weightNormal
+            verticalAlignment: Text.AlignVCenter
         }
     }
 

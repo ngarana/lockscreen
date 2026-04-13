@@ -96,6 +96,24 @@ RowLayout {
             tooltip: "Focus"
         }
 
+        // Volume Control Toggle
+        Atoms.IconButton {
+            icon: root._volumeIcon
+            size: 26
+            iconSize: 14
+            tooltip: "Volume: " + Math.round((Services.AudioService ? Services.AudioService.volume : 0) * 100) + "%"
+            onClicked: Services.BarController.toggleModule("quicksettings")
+        }
+
+        // Brightness Control Toggle
+        Atoms.IconButton {
+            icon: root._brightnessIcon
+            size: 26
+            iconSize: 14
+            tooltip: "Brightness: " + (Services.BrightnessService ? Services.BrightnessService.primaryBrightness : 100) + "%"
+            onClicked: Services.BarController.toggleModule("quicksettings")
+        }
+
         Atoms.IconButton {
             icon: Theme.ThemeEngine.icons.grid
             size: 26
@@ -201,7 +219,7 @@ RowLayout {
 
     readonly property string _volumeIcon: {
         const volume = (Services.AudioService && Services.AudioService.volume) || 0
-        if (volume === 0) {
+        if (volume <= 0.05) { // Handle near-zero/muted
             return Theme.ThemeEngine.icons.volumeMuted
         } else if (volume < 0.33) {
             return Theme.ThemeEngine.icons.volumeLow
@@ -209,6 +227,15 @@ RowLayout {
             return Theme.ThemeEngine.icons.volumeMedium
         } else {
             return Theme.ThemeEngine.icons.volumeHigh
+        }
+    }
+
+    readonly property string _brightnessIcon: {
+        const brightness = (Services.BrightnessService && Services.BrightnessService.primaryBrightness) || 100
+        if (brightness < 50) {
+            return Theme.ThemeEngine.icons.brightnessLow
+        } else {
+            return Theme.ThemeEngine.icons.brightness
         }
     }
 

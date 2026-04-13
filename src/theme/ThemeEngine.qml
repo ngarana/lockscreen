@@ -28,7 +28,7 @@ QtObject {
     // ========================================================================
 
     // Current theme variant name
-    property string currentTheme: "catppuccin-mocha"
+    property string currentTheme: "gruvbox-dark"
 
     // Whether the current theme is dark mode
     readonly property bool isDark: true
@@ -40,8 +40,8 @@ QtObject {
     // Token Groups
     // ========================================================================
 
-    // Color palette
-    readonly property var colors: ColorPalette {}
+    // Color palette - Using Gruvbox Dark
+    readonly property var colors: ColorPaletteGruvbox {}
 
     // Typography definitions
     readonly property var typography: Typography {}

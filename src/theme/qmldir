@@ -2,6 +2,7 @@ module Theme
 
 singleton ThemeEngine 1.0 ThemeEngine.qml
 ColorPalette 1.0 ColorPalette.qml
+ColorPaletteGruvbox 1.0 ColorPaletteGruvbox.qml
 Typography 1.0 Typography.qml
 Spacing 1.0 Spacing.qml
 Effects 1.0 Effects.qml

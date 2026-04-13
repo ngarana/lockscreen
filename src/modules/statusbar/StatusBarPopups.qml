@@ -41,7 +41,7 @@ Item {
             wifiEnabled: (Services.NetworkService && Services.NetworkService.wifiEnabled) || false
             bluetoothEnabled: (Services.BluetoothService && Services.BluetoothService.isPowered) || false
             volume: (Services.AudioService && Services.AudioService.volume) || 0
-            brightness: (Services.BrightnessService && Services.BrightnessService.brightness) || 0
+            brightness: (Services.BrightnessService && Services.BrightnessService.primaryBrightness) || 0
             
             onVolumeChanged: (val) => Services.AudioService.setVolume(val)
             onBrightnessChanged: (val) => Services.BrightnessService.setBrightness(val)
