@@ -36,6 +36,7 @@ Rectangle {
     property string tooltipPosition: "top"
 
     signal clicked()
+    signal wheel(wheel)
 
     // Internal state
     property bool _isHovered: false
@@ -53,6 +54,9 @@ Rectangle {
         if (_isHovered) return Theme.ThemeEngine.colors.glassHover
         return "transparent"
     }
+
+    // Cursor shape for better UX
+    cursorShape: _isHovered ? Qt.PointingHandCursor : Qt.ArrowCursor
 
     border.width: 0
 
@@ -102,6 +106,8 @@ Rectangle {
             root._isHovered = false
             root._isPressed = false
         }
+
+        onWheel: root.wheel(wheel)
     }
 
     // Press animation

@@ -26,7 +26,7 @@ RowLayout {
     id: root
 
     // Public API
-    property int value: Services.BrightnessService.brightness
+    property int value: Services.BrightnessService.primaryBrightness
     property bool showIcon: true
     property int orientation: Qt.Horizontal
 
@@ -77,7 +77,7 @@ RowLayout {
     Connections {
         target: Services.BrightnessService
         function onBrightnessChanged() {
-            root.value = Services.BrightnessService.brightness
+            root.value = Services.BrightnessService.primaryBrightness
         }
     }
 

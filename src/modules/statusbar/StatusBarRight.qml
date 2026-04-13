@@ -112,6 +112,15 @@ RowLayout {
             iconSize: 14
             tooltip: "Brightness: " + (Services.BrightnessService ? Services.BrightnessService.primaryBrightness : 100) + "%"
             onClicked: Services.BarController.toggleModule("quicksettings")
+            onWheel: function(wheel) {
+                if (Services.BrightnessService && Services.BrightnessService.isAvailable) {
+                    if (wheel.angleDelta.y > 0) {
+                        Services.BrightnessService.increase()
+                    } else {
+                        Services.BrightnessService.decrease()
+                    }
+                }
+            }
         }
 
         Atoms.IconButton {
@@ -307,5 +316,15 @@ RowLayout {
 
     Component.onCompleted: {
         _updateClock()
+        // Force service instantiation
+        if (Services.BatteryService) {
+            Services.BatteryService.refresh()
+        }
+        if (Services.NetworkService) {
+            Services.NetworkService.refresh()
+        }
+        if (Services.BrightnessService) {
+            Services.BrightnessService.refresh()
+        }
     }
 }

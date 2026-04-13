@@ -93,10 +93,11 @@ QtObject {
     property var _statusProcess: Process {
         id: statusProcess
         command: []
+        stdout: StdioCollector {}
 
         onExited: function(code, status) {
-            if (code === 0) {
-                root._parseStatus(stdout)
+            if (code === 0 && this.stdout.text) {
+                root._parseStatus(this.stdout.text)
             }
         }
     }
@@ -104,11 +105,34 @@ QtObject {
     property var _scanProcess: Process {
         id: scanProcess
         command: []
+        stdout: StdioCollector {}
 
         onExited: function(code, status) {
-            if (code === 0) {
-                root._parseNetworks(stdout)
+            if (code === 0 && this.stdout.text) {
+                root._parseNetworks(this.stdout.text)
             }
+        }
+    }
+
+    property var _signalProcess: Process {
+        id: signalProcess
+        command: ["nmcli", "-t", "-f", "ACTIVE,SIGNAL", "device", "wifi"]
+        stdout: StdioCollector {}
+
+        onExited: function(code, status) {
+            if (code === 0 && this.stdout.text) {
+                root._parseSignalStrength(this.stdout.text)
+            }
+        }
+    }
+
+    property var _internetProcess: Process {
+        id: internetProcess
+        command: ["ping", "-c", "1", "-W", "1", "1.1.1.1"]
+        stdout: StdioCollector {}
+
+        onExited: function(code, status) {
+            root.hasInternet = (code === 0)
         }
     }
 
@@ -132,6 +156,7 @@ QtObject {
     // Scan for available networks
     function scanNetworks() {
         // Use nmcli if available
+        scanProcess.running = false
         scanProcess.command = ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list", "--rescan", "yes"]
         scanProcess.running = true
     }
@@ -166,6 +191,7 @@ QtObject {
 
     function _updateStatus() {
         // Check using nmcli
+        statusProcess.running = false
         statusProcess.command = ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"]
         statusProcess.running = true
     }
@@ -230,10 +256,8 @@ QtObject {
     }
 
     function _updateSignalStrength() {
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["nmcli", "-t", "-f", "ACTIVE,SIGNAL", "device", "wifi"]; running: true; onExited: function(c) { if (c === 0) root._parseSignalStrength(stdout) } }',
-            root
-        )
+        _signalProcess.running = false
+        _signalProcess.running = true
     }
 
     function _parseSignalStrength(output) {
@@ -302,10 +326,8 @@ QtObject {
 
     function _checkInternet() {
         // Quick check by attempting to reach a well-known host
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["ping", "-c", "1", "-W", "1", "1.1.1.1"]; running: true; onExited: function(c) { root.hasInternet = (c === 0) } }',
-            root
-        )
+        _internetProcess.running = false
+        _internetProcess.running = true
     }
 
     // ========================================================================

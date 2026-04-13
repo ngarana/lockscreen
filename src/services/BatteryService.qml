@@ -57,12 +57,58 @@ QtObject {
         onTriggered: root.refresh()
     }
 
+    property var _batteryProcess: Process {
+        id: batteryProcess
+        command: ["upower", "-i", "/org/freedesktop/UPower/devices/DisplayDevice"]
+        stdout: StdioCollector {}
+
+        onExited: function(code, status) {
+            if (code === 0 && this.stdout.text) {
+                root._parseUPower(this.stdout.text)
+            } else {
+                root._fallbackToSysfs()
+            }
+        }
+    }
+
+    property var _acPowerProcess: Process {
+        id: acPowerProcess
+        command: ["sh", "-c", "cat /sys/class/power_supply/AC*/online || cat /sys/class/power_supply/ADP*/online"]
+        stdout: StdioCollector {}
+
+        onExited: function(code, status) {
+            if (code === 0 && this.stdout.text) {
+                root.acConnected = (this.stdout.text.trim() === "1")
+            }
+        }
+    }
+
+    property var _fallbackProcess: Process {
+        id: fallbackProcess
+        command: ["cat", "/sys/class/power_supply/BAT0/capacity"]
+        stdout: StdioCollector {}
+
+        onExited: function(code, status) {
+            if (code === 0 && this.stdout.text) {
+                const capacity = parseInt(this.stdout.text.trim())
+                if (!isNaN(capacity)) {
+                    root.percentage = capacity
+                    root.hasBattery = true
+                    root._updateLevelCategory()
+                    root.batteryLevelChanged(root.percentage)
+                    root.batteryChanged()
+                }
+            }
+        }
+    }
+
     // ========================================================================
     // Public Methods
     // ========================================================================
 
     function refresh() {
-        _updateBattery()
+        _batteryProcess.running = false
+        _batteryProcess.running = true
     }
 
     // ========================================================================
@@ -70,11 +116,13 @@ QtObject {
     // ========================================================================
 
     function _updateBattery() {
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["upower", "-i", "/org/freedesktop/UPower/devices/DisplayDevice"]; running: true; onExited: function(c, s) { if (c === 0) root._parseUPower(stdout) } }',
-            root
-        )
+        _batteryProcess.running = false
+        _batteryProcess.running = true
     }
+
+
+
+
 
     function _parseUPower(output) {
         if (!output) {
@@ -91,7 +139,7 @@ QtObject {
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim()
-            if (line.startsWith("percentage:")) {
+            if (line.includes("percentage:")) {
                 newPercentage = parseInt(line.split(":")[1].replace("%", "").trim())
                 foundBattery = true
             } else if (line.startsWith("state:")) {
@@ -121,12 +169,7 @@ QtObject {
         root.isCharging = newIsCharging
         root.isFullyCharged = newIsFull
 
-        // Determine level category
-        if (root.percentage >= 95) root.levelCategory = "full"
-        else if (root.percentage >= 50) root.levelCategory = "high"
-        else if (root.percentage >= 30) root.levelCategory = "medium"
-        else if (root.percentage >= 15) root.levelCategory = "low"
-        else root.levelCategory = "critical"
+        root._updateLevelCategory()
 
         if (oldPercentage !== root.percentage) {
             batteryLevelChanged(root.percentage)
@@ -141,19 +184,21 @@ QtObject {
     }
 
     function _checkAcPower() {
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["sh", "-c", "cat /sys/class/power_supply/AC*/online || cat /sys/class/power_supply/ADP*/online"]; running: true; onExited: function(c, s) { if (c === 0 && stdout) root.acConnected = (stdout.trim() === "1") } }',
-            root
-        )
+        _acPowerProcess.running = false
+        _acPowerProcess.running = true
     }
 
     function _fallbackToSysfs() {
-        // Implementation for systems without upower or DisplayDevice
-        // Simplified for now, just checking BAT0
-        const process = Qt.createQmlObject(
-            'import Quickshell.Io; Process { command: ["cat", "/sys/class/power_supply/BAT0/capacity"]; running: true; onExited: function(c, s) { if (c === 0 && stdout) root.percentage = parseInt(stdout.trim()) } }',
-            root
-        )
+        _fallbackProcess.running = false
+        _fallbackProcess.running = true
+    }
+
+    function _updateLevelCategory() {
+        if (root.percentage >= 95) root.levelCategory = "full"
+        else if (root.percentage >= 50) root.levelCategory = "high"
+        else if (root.percentage >= 30) root.levelCategory = "medium"
+        else if (root.percentage >= 15) root.levelCategory = "low"
+        else root.levelCategory = "critical"
     }
 
     Component.onCompleted: {
