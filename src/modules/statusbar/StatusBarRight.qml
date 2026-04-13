@@ -126,24 +126,7 @@ RowLayout {
             }
         }
 
-        // Brightness Control Toggle
-        Atoms.IconButton {
-            icon: root._brightnessIcon
-            size: 26
-            iconSize: 14
-            tooltip: "Brightness: " + (Services.BrightnessService ? Services.BrightnessService.primaryBrightness : 100) + "%"
-            onClicked: Services.BarController.toggleModule("quicksettings")
-            onWheel: function(wheel) {
-                if (Services.BrightnessService && Services.BrightnessService.isAvailable) {
-                    if (wheel.angleDelta.y > 0) {
-                        Services.BrightnessService.increase()
-                    } else if (wheel.angleDelta.y < 0) {
-                        Services.BrightnessService.decrease()
-                    }
-                    wheel.accepted = true
-                }
-            }
-        }
+
 
         Atoms.IconButton {
             icon: Theme.ThemeEngine.icons.grid
@@ -156,6 +139,12 @@ RowLayout {
     // ========================================================================
     // Status Indicators (Molecules)
     // ========================================================================
+
+    Molecules.BrightnessIndicator {
+        visible: Services.BarController && Services.BarController.showBrightnessIndicator
+        Layout.alignment: Qt.AlignVCenter
+        onClicked: Services.BarController.toggleModule("quicksettings")
+    }
 
     Molecules.NetworkIndicator {
         visible: Services.BarController && Services.BarController.showNetworkIndicator
@@ -261,14 +250,7 @@ RowLayout {
         }
     }
 
-    readonly property string _brightnessIcon: {
-        const brightness = (Services.BrightnessService && Services.BrightnessService.primaryBrightness) || 100
-        if (brightness < 50) {
-            return Theme.ThemeEngine.icons.brightnessLow
-        } else {
-            return Theme.ThemeEngine.icons.brightness
-        }
-    }
+
 
     // ========================================================================
     // Update Timer for Clock

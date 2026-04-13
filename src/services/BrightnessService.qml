@@ -81,26 +81,7 @@ signal displayBrightnessChanged(string display, int value)
 
     property var _displays: ({}) // Internal display state
 
-    // Process objects for various operations
-    property var _checkBrightnessctlProcess: Process {
-        id: checkBrightnessctlProcess
-        command: ["which", "brightnessctl"]
-        stdout: StdioCollector {}
 
-        onExited: function(code, status) {
-            root._onBrightnessctlCheck(code)
-        }
-    }
-
-    property var _checkXrandrProcess: Process {
-        id: checkXrandrProcess
-        command: ["which", "xrandr"]
-        stdout: StdioCollector {}
-
-        onExited: function(code, status) {
-            root._onXrandrCheck(code)
-        }
-    }
 
     property var _enumerateBacklightProcess: Process {
         id: enumerateBacklightProcess
@@ -108,23 +89,17 @@ signal displayBrightnessChanged(string display, int value)
         stdout: StdioCollector {}
 
         onExited: function(code, status) {
+            Core.Logger.info("enumerate brightnessctl exited with code: " + code, "BrightnessService")
             if (code === 0 && this.stdout.text) {
+                Core.Logger.info("brightnessctl list output: " + this.stdout.text.trim(), "BrightnessService")
                 root._parseBrightnessctlList(this.stdout.text)
+            } else {
+                Core.Logger.error("Failed to enumerate brightness devices, code: " + code, "BrightnessService")
             }
         }
     }
 
-    property var _enumerateXrandrProcess: Process {
-        id: enumerateXrandrProcess
-        command: ["xrandr", "--listmonitors"]
-        stdout: StdioCollector {}
 
-        onExited: function(code, status) {
-            if (code === 0 && this.stdout.text) {
-                root._parseXrandrList(this.stdout.text)
-            }
-        }
-    }
 
     property var _setBrightnessctlProcess: Process {
         id: setBrightnessctlProcess
@@ -132,6 +107,7 @@ signal displayBrightnessChanged(string display, int value)
 
         onExited: function(code, status) {
             root.isAdjusting = false
+            Core.Logger.info("brightnessctl command exited with code: " + code, "BrightnessService")
             if (code === 0) {
                 // Extract device and percentage from command for callback
                 const cmd = this.command
@@ -139,30 +115,16 @@ signal displayBrightnessChanged(string display, int value)
                     const device = cmd[2]
                     const percentageStr = cmd[4].replace('%', '')
                     const percentage = parseInt(percentageStr)
+                    Core.Logger.info("Brightness set successfully: " + device + " = " + percentage + "%", "BrightnessService")
                     root._updateBrightnessAfterSet(device, percentage)
                 }
+            } else {
+                Core.Logger.error("Failed to set brightness, exit code: " + code, "BrightnessService")
             }
         }
     }
 
-    property var _setXrandrProcess: Process {
-        id: setXrandrProcess
-        stdout: StdioCollector {}
 
-        onExited: function(code, status) {
-            root.isAdjusting = false
-            if (code === 0) {
-                // Extract display and percentage from command for callback
-                const cmd = this.command
-                if (cmd.length >= 6) {
-                    const display = cmd[2]
-                    const brightnessValue = parseFloat(cmd[4])
-                    const percentage = Math.round(brightnessValue * 100)
-                    root._updateBrightnessAfterSet(display, percentage)
-                }
-            }
-        }
-    }
 
     // ========================================================================
     // Public Methods
@@ -172,49 +134,15 @@ signal displayBrightnessChanged(string display, int value)
     function initialize() {
         Core.Logger.info("Initializing BrightnessService", "BrightnessService")
 
-        // Try brightnessctl first (most reliable for backlight)
-        _checkBrightnessctl()
+        // Directly use brightnessctl (known to be available)
+        controlMethod = "brightnessctl"
+        isAvailable = true
+        availabilityChanged(true)
+        _enumerateBacklightDevices()
+        Core.Logger.info("Using brightnessctl for brightness control", "BrightnessService")
     }
 
-    // Check if brightnessctl is available
-    function _checkBrightnessctl() {
-        _checkBrightnessctlProcess.running = false
-        _checkBrightnessctlProcess.running = true
-    }
 
-    function _onBrightnessctlCheck(exitCode) {
-        if (exitCode === 0) {
-            controlMethod = "brightnessctl"
-            isAvailable = true
-            availabilityChanged(true)
-            _enumerateBacklightDevices()
-            Core.Logger.info("Using brightnessctl for brightness control", "BrightnessService")
-        } else {
-            // Fall back to xrandr
-            _checkXrandr()
-        }
-    }
-
-    // Check if xrandr is available
-    function _checkXrandr() {
-        _checkXrandrProcess.running = false
-        _checkXrandrProcess.running = true
-    }
-
-    function _onXrandrCheck(exitCode) {
-        if (exitCode === 0) {
-            controlMethod = "xrandr"
-            isAvailable = true
-            availabilityChanged(true)
-            _enumerateXrandrDisplays()
-            Core.Logger.info("Using xrandr for brightness control", "BrightnessService")
-        } else {
-            controlMethod = "none"
-            isAvailable = false
-            availabilityChanged(false)
-            Core.Logger.warning("No brightness control method available", "BrightnessService")
-        }
-    }
 
     // Enumerate backlight devices using brightnessctl
     function _enumerateBacklightDevices() {
@@ -255,6 +183,7 @@ signal displayBrightnessChanged(string display, int value)
 
                     newDisplays.push(display)
                     root._displays[name] = display
+                    Core.Logger.info("Found brightness device: " + name + " (" + deviceClass + ") at " + percentage + "%", "BrightnessService")
                 }
             }
         }
@@ -268,43 +197,7 @@ if (newDisplays.length > 0) {
 }
     }
 
-    // Enumerate displays using xrandr
-    function _enumerateXrandrDisplays() {
-        _enumerateXrandrProcess.running = false
-        _enumerateXrandrProcess.running = true
-    }
 
-    function _parseXrandrList(output) {
-        if (!output) return;
-        const lines = output.split("\n")
-        const newDisplays = []
-        root._displays = {}
-
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim()
-            if (line.length === 0 || line.startsWith("0:")) continue
-
-            // Parse monitor line: index: +*DisplayName resolution ...
-            const match = line.match(/^\s*\d+:\s+[+\*]?\s*(\S+)/)
-            if (match) {
-                const name = match[1]
-                const display = {
-                    name: name,
-                    type: "xrandr",
-                    current: 100,
-                    max: 100,
-                    percentage: 100
-                }
-
-                newDisplays.push(display)
-                root._displays[name] = display
-            }
-        }
-
-displays = newDisplays
-displayCount = newDisplays.length
-primaryBrightness = 100
-    }
 
     // Get brightness for a specific display
     function getBrightness(displayName) {
@@ -320,27 +213,19 @@ primaryBrightness = 100
 
         percentage = Math.max(minBrightness, Math.min(100, percentage))
 
-        if (controlMethod === "brightnessctl") {
-            _setBrightnessctl(displayName, percentage)
-        } else if (controlMethod === "xrandr") {
-            _setXrandrBrightness(displayName, percentage)
-        }
+        _setBrightnessctl(displayName, percentage)
     }
 
     function _setBrightnessctl(device, percentage) {
         isAdjusting = true
         _setBrightnessctlProcess.running = false
         _setBrightnessctlProcess.command = ["brightnessctl", "-d", device, "set", percentage + "%"]
+        Core.Logger.info("Setting brightness: " + device + " to " + percentage + "%", "BrightnessService")
+        Core.Logger.info("Command: " + _setBrightnessctlProcess.command.join(" "), "BrightnessService")
         _setBrightnessctlProcess.running = true
     }
 
-    function _setXrandrBrightness(display, percentage) {
-        isAdjusting = true
-        const brightnessValue = percentage / 100
-        _setXrandrProcess.running = false
-        _setXrandrProcess.command = ["xrandr", "--output", display, "--brightness", brightnessValue.toString()]
-        _setXrandrProcess.running = true
-    }
+
 
     function _updateBrightnessAfterSet(displayName, percentage) {
         if (root._displays[displayName]) {
@@ -395,13 +280,7 @@ function getIconName() {
 
     // Refresh brightness values
     function refresh() {
-        if (controlMethod === "brightnessctl") {
-            _enumerateBacklightDevices()
-        } else if (controlMethod === "xrandr") {
-            // xrandr doesn't provide a way to read current brightness
-            // so we just update the displays list
-            _enumerateXrandrDisplays()
-        }
+        _enumerateBacklightDevices()
     }
 
     // ========================================================================
