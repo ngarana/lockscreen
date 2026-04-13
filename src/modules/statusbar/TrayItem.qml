@@ -86,9 +86,13 @@ Rectangle {
 
         onClicked: function(mouse) {
             if (mouse.button === Qt.LeftButton) {
-                Services.SystemTrayService.activateItem(root.itemId)
+                if (Services.SystemTrayService) {
+                    Services.SystemTrayService.activateItem(root.itemId)
+                }
             } else if (mouse.button === Qt.RightButton) {
-                Services.SystemTrayService.secondaryActivateItem(root.itemId)
+                if (Services.SystemTrayService) {
+                    Services.SystemTrayService.secondaryActivateItem(root.itemId)
+                }
             }
         }
     }
@@ -99,6 +103,7 @@ Rectangle {
 
     Connections {
         target: Services.SystemTrayService
+        enabled: target !== null
         function onTrayItemsChanged() {
             // Update if item data changed
         }

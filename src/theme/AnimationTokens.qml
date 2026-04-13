@@ -22,13 +22,13 @@ QtObject {
     // Easing Curves
     // ========================================================================
 
-    readonly property var easeInOut: Easing.InOutQuad
-    readonly property var easeIn: Easing.InQuad
-    readonly property var easeOut: Easing.OutQuad
-    readonly property var easeOutBack: Easing.OutBack
-    readonly property var easeInBack: Easing.InBack
-    readonly property var easeOutElastic: Easing.OutElastic
-    readonly property var easeInOutCubic: Easing.InOutCubic
+    readonly property int easeInOut: Easing.InOutQuad
+    readonly property int easeIn: Easing.InQuad
+    readonly property int easeOut: Easing.OutQuad
+    readonly property int easeOutBack: Easing.OutBack
+    readonly property int easeInBack: Easing.InBack
+    readonly property int easeOutElastic: Easing.OutElastic
+    readonly property int easeInOutCubic: Easing.InOutCubic
 
     // ========================================================================
     // Animation Presets (preconfigured combinations)
@@ -36,26 +36,26 @@ QtObject {
 
     readonly property var fade: QtObject {
         readonly property int duration: root.medium
-        readonly property var easing: root.easeInOut
+        readonly property int easing: root.easeInOut
     }
 
     readonly property var slide: QtObject {
         readonly property int duration: root.slow
-        readonly property var easing: root.easeOut
+        readonly property int easing: root.easeOut
     }
 
     readonly property var scale: QtObject {
         readonly property int duration: root.fast
-        readonly property var easing: root.easeOut
+        readonly property int easing: root.easeOut
     }
 
     readonly property var revealPreset: QtObject {
         readonly property int duration: root.reveal
-        readonly property var easing: root.easeInOut
+        readonly property int easing: root.easeInOut
     }
 
     readonly property var spring: QtObject {
         readonly property int duration: root.medium
-        readonly property var easing: root.easeOutBack
+        readonly property int easing: root.easeOutBack
     }
 }

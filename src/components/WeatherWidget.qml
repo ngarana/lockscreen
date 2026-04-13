@@ -21,6 +21,7 @@ import QtQuick
 import QtQuick.Layouts
 import "../services" as Services
 import "../atoms" as Atoms
+import "../theme" as Theme
 
 Item {
     id: root
@@ -59,31 +60,31 @@ Item {
         id: panel
         anchors.fill: parent
 
-        color: Services.Theme.colors.glass
-        radius: Services.Theme.radius.large
+        color: Theme.ThemeEngine.colors.glass
+        radius: Theme.ThemeEngine.radius.large
         border.width: 1
-        border.color: Services.Theme.colors.glassBorder
+        border.color: Theme.ThemeEngine.colors.glassBorder
 
         ColumnLayout {
             id: mainLayout
             anchors.fill: parent
-            anchors.margins: Services.Theme.spacing.medium
-            spacing: Services.Theme.spacing.small
+            anchors.margins: Theme.ThemeEngine.spacing.medium
+            spacing: Theme.ThemeEngine.spacing.small
 
             // ====== Header: Location + Refresh ======
 
             RowLayout {
                 id: headerLayout
                 Layout.fillWidth: true
-                spacing: Services.Theme.spacing.small
+                spacing: Theme.ThemeEngine.spacing.small
 
                 Text {
                     id: locationText
                     text: root.location
                     font.pixelSize: 14
-                    font.family: Services.Theme.fonts.fontFamily
+                    font.family: Theme.ThemeEngine.fonts.fontFamily
                     font.weight: Font.Medium
-                    color: Services.Theme.colors.text
+                    color: Theme.ThemeEngine.colors.text
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }
@@ -114,8 +115,8 @@ Item {
                 Text {
                     text: "⚠ " + root.errorMessage
                     font.pixelSize: 12
-                    font.family: Services.Theme.fonts.fontFamily
-                    color: Services.Theme.colors.warning
+                    font.family: Theme.ThemeEngine.fonts.fontFamily
+                    color: Theme.ThemeEngine.colors.warning
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
                 }
@@ -127,7 +128,7 @@ Item {
                 id: currentLayout
                 visible: !root.hasError
                 Layout.fillWidth: true
-                spacing: Services.Theme.spacing.medium
+                spacing: Theme.ThemeEngine.spacing.medium
 
                 // Weather icon
                 Text {
@@ -146,17 +147,17 @@ Item {
                         id: tempText
                         text: Math.round(root.temperature) + root._tempUnit
                         font.pixelSize: 32
-                        font.family: Services.Theme.fonts.fontFamily
+                        font.family: Theme.ThemeEngine.fonts.fontFamily
                         font.weight: Font.Bold
-                        color: Services.Theme.colors.text
+                        color: Theme.ThemeEngine.colors.text
                     }
 
                     Text {
                         id: conditionText
                         text: root.condition
                         font.pixelSize: 14
-                        font.family: Services.Theme.fonts.fontFamily
-                        color: Services.Theme.colors.textSubtle
+                        font.family: Theme.ThemeEngine.fonts.fontFamily
+                        color: Theme.ThemeEngine.colors.textSecondary
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                     }
@@ -168,7 +169,7 @@ Item {
             RowLayout {
                 visible: !root.hasError
                 Layout.fillWidth: true
-                spacing: Services.Theme.spacing.large
+                spacing: Theme.ThemeEngine.spacing.large
 
                 // Humidity
                 Row {
@@ -180,8 +181,8 @@ Item {
                     Text {
                         text: root.humidity + "%"
                         font.pixelSize: 12
-                        font.family: Services.Theme.fonts.fontFamily
-                        color: Services.Theme.colors.textMuted
+                        font.family: Theme.ThemeEngine.fonts.fontFamily
+                        color: Theme.ThemeEngine.colors.textMuted
                     }
                 }
 
@@ -195,8 +196,8 @@ Item {
                     Text {
                         text: root.windSpeed.toFixed(1) + " " + root._speedUnit
                         font.pixelSize: 12
-                        font.family: Services.Theme.fonts.fontFamily
-                        color: Services.Theme.colors.textMuted
+                        font.family: Theme.ThemeEngine.fonts.fontFamily
+                        color: Theme.ThemeEngine.colors.textMuted
                     }
                 }
 
@@ -209,7 +210,7 @@ Item {
                 id: forecastRow
                 visible: root.showForecast && root.forecastData.length > 0 && !root.hasError
                 Layout.fillWidth: true
-                spacing: Services.Theme.spacing.small
+                spacing: Theme.ThemeEngine.spacing.small
 
                 Repeater {
                     model: root.forecastData.slice(0, 5)  // Max 5 days
@@ -227,8 +228,8 @@ Item {
                             Text {
                                 text: modelData.day
                                 font.pixelSize: 10
-                                font.family: Services.Theme.fonts.fontFamily
-                                color: Services.Theme.colors.textMuted
+                                font.family: Theme.ThemeEngine.fonts.fontFamily
+                                color: Theme.ThemeEngine.colors.textMuted
                                 anchors.horizontalCenter: parent.horizontalCenter
                             }
 
@@ -241,17 +242,17 @@ Item {
                             Text {
                                 text: modelData.high + "°"
                                 font.pixelSize: 11
-                                font.family: Services.Theme.fonts.fontFamily
+                                font.family: Theme.ThemeEngine.fonts.fontFamily
                                 font.weight: Font.Medium
-                                color: Services.Theme.colors.text
+                                color: Theme.ThemeEngine.colors.text
                                 anchors.horizontalCenter: parent.horizontalCenter
                             }
 
                             Text {
                                 text: modelData.low + "°"
                                 font.pixelSize: 10
-                                font.family: Services.Theme.fonts.fontFamily
-                                color: Services.Theme.colors.textMuted
+                                font.family: Theme.ThemeEngine.fonts.fontFamily
+                                color: Theme.ThemeEngine.colors.textMuted
                                 anchors.horizontalCenter: parent.horizontalCenter
                             }
                         }

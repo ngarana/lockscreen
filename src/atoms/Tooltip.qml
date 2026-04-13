@@ -49,8 +49,8 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: -2
         radius: parent.radius + 2
-        color: Theme.ThemeEngine.colors.shadowMd.color
-        opacity: Theme.ThemeEngine.colors.shadowMd.opacity
+        color: Theme.ThemeEngine.effects.shadowMd.color
+        opacity: Theme.ThemeEngine.effects.shadowMd.opacity
         z: -1
     }
 

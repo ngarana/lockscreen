@@ -46,6 +46,13 @@ QtObject {
     // Multi-monitor mode: "all" (show on all), "primary" (primary only), "active" (active only)
     property string monitorMode: "all"
 
+    // Popup visibility states
+    property bool quickSettingsVisible: false
+    property bool weatherVisible: false
+    property bool notificationsVisible: false
+    property bool systemMonitorVisible: false
+    property bool audioControllerVisible: false
+
     // ========================================================================
     // State Properties
     // ========================================================================
@@ -126,9 +133,38 @@ QtObject {
                 root.showVolumeIndicator = !root.showVolumeIndicator
                 moduleVisibilityChanged(module, root.showVolumeIndicator)
                 break
+            case "quicksettings":
+                root.quickSettingsVisible = !root.quickSettingsVisible
+                moduleVisibilityChanged(module, root.quickSettingsVisible)
+                break
+            case "weather":
+                root.weatherVisible = !root.weatherVisible
+                moduleVisibilityChanged(module, root.weatherVisible)
+                break
+            case "notifications":
+                root.notificationsVisible = !root.notificationsVisible
+                moduleVisibilityChanged(module, root.notificationsVisible)
+                break
+            case "monitor":
+                root.systemMonitorVisible = !root.systemMonitorVisible
+                moduleVisibilityChanged(module, root.systemMonitorVisible)
+                break
+            case "audio":
+                root.audioControllerVisible = !root.audioControllerVisible
+                moduleVisibilityChanged(module, root.audioControllerVisible)
+                break
             default:
                 Core.Logger.warning("Unknown module: " + module, "BarController")
         }
+    }
+
+    // Close all popups
+    function closePopups() {
+        root.quickSettingsVisible = false
+        root.weatherVisible = false
+        root.notificationsVisible = false
+        root.systemMonitorVisible = false
+        root.audioControllerVisible = false
     }
 
     // Show the bar (override auto-hide)

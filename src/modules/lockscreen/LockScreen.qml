@@ -62,6 +62,7 @@ Item {
 
     Connections {
         target: LockController
+        enabled: target !== null
 
         function onUnlockSuccess() {
             root.isUnlocking = true
@@ -185,7 +186,9 @@ Item {
             }
 
             onSubmitted: function(password) {
-                LockController.authenticate(password)
+                if (LockController) {
+                    LockController.authenticate(password)
+                }
             }
 
             onEscaped: {
@@ -202,8 +205,8 @@ Item {
             id: statusMessage
             anchors.horizontalCenter: parent.horizontalCenter
             y: passwordField.y + passwordField.height + Theme.spacing.medium
-            message: LockController.statusMessage
-            isError: LockController.hasError
+            message: (LockController && LockController.statusMessage) || ""
+            isError: LockController && LockController.hasError
 
             opacity: root.uiRevealed ? 1.0 : 0.0
 
@@ -255,25 +258,25 @@ Item {
             ActionButton {
                 icon: "⏾"
                 label: "Suspend"
-                onClicked: PowerManager.suspend()
+                onClicked: { if (PowerManager) PowerManager.suspend() }
             }
 
             ActionButton {
                 icon: "⏻"
                 label: "Hibernate"
-                onClicked: PowerManager.hibernate()
+                onClicked: { if (PowerManager) PowerManager.hibernate() }
             }
 
             ActionButton {
                 icon: "↻"
                 label: "Reboot"
-                onClicked: PowerManager.reboot()
+                onClicked: { if (PowerManager) PowerManager.reboot() }
             }
 
             ActionButton {
                 icon: "⏼"
                 label: "Shutdown"
-                onClicked: PowerManager.shutdown()
+                onClicked: { if (PowerManager) PowerManager.shutdown() }
             }
         }
 

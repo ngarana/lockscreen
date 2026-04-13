@@ -31,8 +31,8 @@ Rectangle {
     // Public Properties
     // ========================================================================
 
-    // Bar height (from controller)
-    property int barHeight: Services.BarController.barHeight
+    // Bar height (from controller) with default fallback
+    property int barHeight: (Services.BarController && Services.BarController.barHeight) || 26
 
     // Section visibility
     property bool showLeft: true
@@ -102,6 +102,7 @@ Rectangle {
 
     Connections {
         target: Services.BarController
+        enabled: target !== null
         function onBarVisibilityChanged(visible) {
             root.visible = visible
         }
@@ -115,6 +116,6 @@ Rectangle {
     // ========================================================================
 
     Component.onCompleted: {
-        root.visible = Services.BarController.isVisible
+        root.visible = Services.BarController && Services.BarController.isVisible
     }
 }

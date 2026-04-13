@@ -22,7 +22,6 @@
 //   - valueFormat: string - Format string for value display
 
 import QtQuick
-import QtQuick.Controls.Basic
 import "../theme" as Theme
 
 Rectangle {
@@ -37,7 +36,7 @@ Rectangle {
     property bool showValue: false
     property string valueFormat: "%1"
 
-    signal valueChanged(real value)
+    // signal valueChanged(real value) - Implicitly provided by property real value
     signal moved()
 
     // Internal
@@ -161,7 +160,6 @@ Rectangle {
 
                 if (newValue !== root.value) {
                     root.value = newValue
-                    root.valueChanged(newValue)
                 }
             }
         }

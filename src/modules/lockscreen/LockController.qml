@@ -57,7 +57,7 @@ QtObject {
     // ========================================================================
 
     // Reference to the WlSessionLock instance (set by shell.qml)
-    property var lockInstance: null
+    property WlSessionLock lockInstance: null
 
     // Tracks if PAM emitted an error (to avoid duplicate error handling)
     property bool pamHadError: false
@@ -145,7 +145,7 @@ QtObject {
     // PAM Context (Internal)
     // ========================================================================
 
-    property var pamContext: PamContext {
+    property PamContext pamContext: PamContext {
         id: pamContext
 
         // Use the 'login' PAM configuration

@@ -3,11 +3,12 @@
 // Provides theme-integrated icon display with support for:
 // - PNG/SVG files
 // - System icon theme names (via image://icon/ provider)
+// - Nerd Font unicode glyphs (rendered as text)
 // - Color overlays for monochrome icons
 // - Automatic layout and sizing
 //
 // Properties:
-// - icon: url — The icon source (path or name)
+// - icon: url — The icon source (path, name, or unicode glyph)
 // - size: int — Side length of the icon (default 24)
 // - color: color — Color applied to monochrome icons
 //
@@ -16,6 +17,12 @@
 //       icon: "network-wireless"
 //       size: 16
 //       color: Theme.colors.primary
+//   }
+//
+//   // Or with Nerd Font glyph:
+//   Icon {
+//       icon: "󰕾"  // nf-md-volume_high
+//       size: 16
 //   }
 
 import QtQuick
@@ -48,9 +55,39 @@ Item {
     // Internal Logic
     // ========================================================================
 
+    // Detect if the icon is a unicode glyph (Nerd Font character or symbol)
+    // These are typically single or multi-byte unicode characters
+    readonly property bool _isUnicodeGlyph: {
+        const src = icon.toString()
+        if (!src || src.length === 0) return false
+        // Check if it's a single unicode character or a short unicode string
+        if (src.length <= 2) {
+            const code = src.codePointAt(0)
+            // Check for common unicode symbol ranges:
+            // - U+2190-U+21FF (Arrows: ↻ ↺ etc.)
+            // - U+2300-U+23FF (Misc Technical: ⏻ ⏼ ⏾ ⏻ etc.)
+            // - U+2700-U+27BF (Dingbats)
+            // - U+E000-U+F8FF (BMP Private Use Area - Nerd Fonts)
+            // - U+F000-U+FFFF (Supplementary Private Use Area / Nerd Fonts)
+            // - U+F0000-U+FFFFD (Supplementary Private Use Area-A)
+            // - U+100000-U+10FFFD (Supplementary Private Use Area-B)
+            return (code >= 0x2190 && code <= 0x21FF) ||  // Arrows
+                   (code >= 0x2300 && code <= 0x23FF) ||  // Misc Technical (power symbols)
+                   (code >= 0x2700 && code <= 0x27BF) ||  // Dingbats
+                   (code >= 0xE000 && code <= 0xF8FF) ||  // BMP PUA (Nerd Fonts)
+                   (code >= 0xF000 && code <= 0xFFFF) ||  // Nerd Font range
+                   (code >= 0xF0000 && code <= 0xFFFFD) || // PUA-A
+                   (code >= 0x100000 && code <= 0x10FFFD)  // PUA-B
+        }
+        return false
+    }
+
     readonly property string _resolvedSource: {
         const src = icon.toString()
         if (!src) return ""
+        
+        // If it's a unicode glyph, don't resolve as image path
+        if (root._isUnicodeGlyph) return ""
         
         // If it's already an explicit provider or absolute path, use as is
         if (src.startsWith("image://") || src.startsWith("/") || src.startsWith("qrc:/")) return src
@@ -76,6 +113,22 @@ Item {
     readonly property bool _isSvg: icon.toString().toLowerCase().endsWith('.svg')
 
     // ========================================================================
+    // Text-based Icon (for Nerd Font glyphs)
+    // ========================================================================
+
+    Text {
+        id: textIcon
+        anchors.centerIn: parent
+        text: root.icon.toString()
+        font.family: Theme.ThemeEngine.fonts.iconFontFamily
+        font.pixelSize: root.size
+        color: root.color
+        visible: root._isUnicodeGlyph
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter
+    }
+
+    // ========================================================================
     // Image Component
     // ========================================================================
 
@@ -91,6 +144,8 @@ Item {
         mipmap: true
         asynchronous: true
         cache: true
+        // Hide image when rendering as unicode glyph
+        visible: !root._isUnicodeGlyph && root._resolvedSource !== ""
 
         // Internal state to prevent loops
         property bool _triedSymbolic: false
@@ -143,7 +198,7 @@ Item {
     }
 
     // ========================================================================
-    // Color Overlay
+    // Color Overlay (for image-based icons)
     // ========================================================================
 
     ColorOverlay {
@@ -151,6 +206,6 @@ Item {
         source: image
         color: root.color
         // Apply color overlay for all monochrome icons to match theme
-        visible: image.status === Image.Ready
+        visible: image.status === Image.Ready && !root._isUnicodeGlyph
     }
 }

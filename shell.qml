@@ -184,22 +184,30 @@ ShellRoot {
     Variants {
         model: root.statusbarEnabled ? Quickshell.screens : []
 
-        PanelWindow {
+        delegate: Item {
             required property var modelData
-            screen: modelData
 
-            // Full-width bar at top edge (macOS-style)
-            anchors {
-                top: true
-                left: true
-                right: true
+            PanelWindow {
+                screen: modelData
+
+                // Full-width bar at top edge (macOS-style)
+                anchors {
+                    top: true
+                    left: true
+                    right: true
+                }
+
+                implicitHeight: BarController.barHeight
+
+                // Status bar component
+                StatusBar {
+                    anchors.fill: parent
+                }
             }
 
-            implicitHeight: BarController.barHeight
-
-            // Status bar component
-            StatusBar {
-                anchors.fill: parent
+            // Popups (Floating Windows)
+            StatusBarPopups {
+                screen: modelData
             }
         }
     }

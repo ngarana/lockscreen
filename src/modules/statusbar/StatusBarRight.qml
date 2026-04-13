@@ -25,7 +25,7 @@ RowLayout {
     // ========================================================================
     
     Molecules.WorkspaceIndicator {
-        visible: Services.BarController.showWorkspaceIndicator
+        visible: Services.BarController && Services.BarController.showWorkspaceIndicator
         Layout.alignment: Qt.AlignVCenter
     }
 
@@ -35,26 +35,31 @@ RowLayout {
 
     RowLayout {
         id: trayContainer
-        visible: Services.BarController.showSystemTray && Services.SystemTrayService.trayItemCount > 0
+        visible: Services.BarController && Services.BarController.showSystemTray
+                 && Services.SystemTrayService && Services.SystemTrayService.trayItemCount > 0
         spacing: 12
 
         Repeater {
             id: trayRepeater
-            model: Services.SystemTrayService.trayItems
+            model: Services.SystemTrayService ? Services.SystemTrayService.trayItems : []
 
             StatusBarModule.TrayItem {
-                itemId: modelData.id
-                itemIcon: Services.SystemTrayService.getItemIcon(modelData.id)
-                itemTooltip: Services.SystemTrayService.getItemTooltip(modelData.id)
-                needsAttention: Services.SystemTrayService.needsAttention(modelData.id)
+                itemId: modelData ? String(modelData.id) : ""
+                itemIcon: (Services.SystemTrayService && modelData)
+                          ? String(Services.SystemTrayService.getItemIcon(modelData.id)) : ""
+                itemTooltip: (Services.SystemTrayService && modelData)
+                             ? String(Services.SystemTrayService.getItemTooltip(modelData.id)) : ""
+                needsAttention: (Services.SystemTrayService && modelData)
+                                ? Services.SystemTrayService.needsAttention(modelData.id) : false
 
-                Layout.preferredWidth: 18
-                Layout.preferredHeight: 18
+                Layout.preferredWidth: 20
+                Layout.preferredHeight: 20
             }
         }
 
         Connections {
             target: Services.SystemTrayService
+            enabled: target !== null
             function onTrayItemsChanged() {
                 trayRepeater.model = Services.SystemTrayService.trayItems
             }
@@ -62,199 +67,95 @@ RowLayout {
     }
 
     // ========================================================================
-    // Supplementary macOS Icons
-    // ========================================================================
-
-    RowLayout {
-        spacing: 12
-        Layout.alignment: Qt.AlignVCenter
-
-        // Screen Mirroring Icon
-        Text {
-            text: Theme.ThemeEngine.icons.screenMirroring
-            font.pixelSize: 14
-            font.family: Theme.ThemeEngine.fonts.iconFontFamily
-            color: Theme.ThemeEngine.colors.primary
-        }
-
-        // Display Icon
-        Text {
-            text: Theme.ThemeEngine.icons.display
-            font.pixelSize: 14
-            font.family: Theme.ThemeEngine.fonts.iconFontFamily
-            color: Theme.ThemeEngine.colors.textPrimary
-        }
-
-        // Focus Mode Icon
-        Text {
-            text: Theme.ThemeEngine.icons.focus
-            font.pixelSize: 14
-            font.family: Theme.ThemeEngine.fonts.iconFontFamily
-            color: Theme.ThemeEngine.colors.textPrimary
-        }
-
-        // Grid View Icon
-        Text {
-            text: Theme.ThemeEngine.icons.grid
-            font.pixelSize: 14
-            font.family: Theme.ThemeEngine.fonts.iconFontFamily
-            color: Theme.ThemeEngine.colors.textPrimary
-        }
-    }
-
-    // ========================================================================
-    // Brightness Indicator
-    // ========================================================================
-
-    Text {
-        visible: Services.BarController.showBrightnessIndicator
-        text: Theme.ThemeEngine.icons.brightness
-        font.pixelSize: 14
-        font.family: Theme.ThemeEngine.fonts.iconFontFamily
-        color: Theme.ThemeEngine.colors.textPrimary
-        Layout.alignment: Qt.AlignVCenter
-
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onWheel: function(wheel) {
-                const delta = wheel.angleDelta.y > 0 ? 0.05 : -0.05
-                Services.BrightnessService.setBrightness(Math.max(0, Math.min(1, Services.BrightnessService.brightness + delta)))
-            }
-        }
-    }
-
-    // ========================================================================
-    // Volume Indicator
-    // ========================================================================
-
-    Text {
-        visible: Services.BarController.showVolumeIndicator
-        text: root._volumeIcon
-        font.pixelSize: 14
-        font.family: Theme.ThemeEngine.fonts.iconFontFamily
-        color: Theme.ThemeEngine.colors.textPrimary
-        Layout.alignment: Qt.AlignVCenter
-
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onWheel: function(wheel) {
-                const delta = wheel.angleDelta.y > 0 ? 0.05 : -0.05
-                Services.AudioService.setVolume(Math.max(0, Math.min(1, Services.AudioService.volume + delta)))
-            }
-        }
-    }
-
-    // ========================================================================
-    // Network Indicator
-    // ========================================================================
-
-    Text {
-        text: root._networkIcon
-        visible: Services.BarController.showNetworkIndicator
-        font.pixelSize: 14
-        font.family: Theme.ThemeEngine.fonts.iconFontFamily
-        color: Theme.ThemeEngine.colors.textPrimary
-        Layout.alignment: Qt.AlignVCenter
-    }
-
-    // ========================================================================
-    // Battery Indicator (with percentage text)
+    // Supplementary macOS Icons (Mirroring, Display, Focus, Grid)
     // ========================================================================
 
     RowLayout {
         spacing: 4
-        visible: Services.BarController.showBatteryIndicator && Services.BatteryService.percentage > 0
         Layout.alignment: Qt.AlignVCenter
 
-        Atoms.Label {
-            text: Services.BatteryService.percentage + "%"
-            fontSize: Theme.ThemeEngine.typography.sizeSm
-            color: Theme.ThemeEngine.colors.textPrimary
-            fontWeight: Theme.ThemeEngine.typography.weightMedium
-            Layout.alignment: Qt.AlignVCenter
+        Atoms.IconButton {
+            icon: Theme.ThemeEngine.icons.screenMirroring
+            size: 26
+            iconSize: 14
+            tooltip: "AirPlay"
         }
-        
-        Text {
-            text: root._batteryIcon
-            font.pixelSize: 14
-            font.family: Theme.ThemeEngine.fonts.iconFontFamily
-            color: Theme.ThemeEngine.colors.textPrimary
-            Layout.alignment: Qt.AlignVCenter
+
+        Atoms.IconButton {
+            icon: Theme.ThemeEngine.icons.display
+            size: 26
+            iconSize: 14
+            tooltip: "Display"
+            onClicked: Services.BarController.toggleModule("monitor")
+        }
+
+        Atoms.IconButton {
+            icon: Theme.ThemeEngine.icons.focus
+            size: 26
+            iconSize: 14
+            tooltip: "Focus"
+        }
+
+        Atoms.IconButton {
+            icon: Theme.ThemeEngine.icons.grid
+            size: 26
+            iconSize: 14
+            tooltip: "Windows"
         }
     }
 
     // ========================================================================
-    // Notification Center Toggle
+    // Status Indicators (Molecules)
     // ========================================================================
 
-    Item {
-        Layout.preferredWidth: 20
-        Layout.preferredHeight: 20
+    Molecules.NetworkIndicator {
+        visible: Services.BarController && Services.BarController.showNetworkIndicator
         Layout.alignment: Qt.AlignVCenter
+        onClicked: Services.BarController.toggleModule("quicksettings")
+    }
 
-        Text {
-            anchors.centerIn: parent
-            text: Theme.ThemeEngine.icons.notifications
-            font.pixelSize: 14
-            font.family: Theme.ThemeEngine.fonts.iconFontFamily
-            color: Theme.ThemeEngine.colors.textPrimary
-        }
-
-        // Badge for unread notifications
-        Rectangle {
-            visible: Services.NotificationService.unreadCount > 0
-            anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.topMargin: -2
-            anchors.rightMargin: -2
-            width: 10
-            height: 10
-            radius: 5
-            color: Theme.ThemeEngine.colors.error
-
-            Text {
-                anchors.centerIn: parent
-                text: Services.NotificationService.unreadCount > 9 ? "9+" : Services.NotificationService.unreadCount
-                font.pixelSize: 6
-                font.weight: Font.Bold
-                color: Theme.ThemeEngine.colors.background
-            }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                // Toggle notification center
-            }
-        }
+    Molecules.BatteryIndicator {
+        visible: Services.BarController && Services.BarController.showBatteryIndicator
+        Layout.alignment: Qt.AlignVCenter
+        showPercentage: true
     }
 
     // ========================================================================
-    // Control Center Toggle
+    // Notification & Control Center Popups
     // ========================================================================
 
-    Item {
-        Layout.preferredWidth: 20
-        Layout.preferredHeight: 20
+    RowLayout {
+        spacing: 4
         Layout.alignment: Qt.AlignVCenter
-        
-        Text {
-            anchors.centerIn: parent
-            text: Theme.ThemeEngine.icons.settings
-            font.pixelSize: 14
-            font.family: Theme.ThemeEngine.fonts.iconFontFamily
-            color: Theme.ThemeEngine.colors.textPrimary
-        }
-        
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                // Toggle control center
+
+        // Notification Center Toggle
+        Atoms.IconButton {
+            id: notificationToggle
+            icon: Theme.ThemeEngine.icons.notifications
+            size: 26
+            iconSize: 14
+            tooltip: "Notifications"
+            onClicked: Services.BarController.toggleModule("notifications")
+
+            // Badge - overlaying the icon button
+            Atoms.Badge {
+                visible: Services.NotificationService && Services.NotificationService.unreadCount > 0
+                text: Services.NotificationService.unreadCount > 9 ? "9+" : String(Services.NotificationService.unreadCount)
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.topMargin: 2
+                anchors.rightMargin: 2
+                size: "small"
             }
+        }
+
+        // Control Center (Quick Settings) Toggle
+        Atoms.IconButton {
+            icon: Theme.ThemeEngine.icons.settings
+            size: 26
+            iconSize: 14
+            tooltip: "Control Center"
+            onClicked: Services.BarController.toggleModule("quicksettings")
         }
     }
 
@@ -264,11 +165,16 @@ RowLayout {
 
     Atoms.Label {
         text: root._timeText
-        visible: Services.BarController.showClock
+        visible: Services.BarController && Services.BarController.showClock
         fontSize: Theme.ThemeEngine.typography.sizeSm
         fontWeight: Theme.ThemeEngine.typography.weightMedium
         color: Theme.ThemeEngine.colors.textPrimary
         Layout.alignment: Qt.AlignVCenter
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: Services.BarController.toggleModule("weather")
+        }
     }
 
     // ========================================================================
@@ -278,7 +184,7 @@ RowLayout {
     property string _timeText: ""
 
     readonly property string _networkIcon: {
-        if (Services.NetworkService.isConnected) {
+        if (Services.NetworkService && Services.NetworkService.isConnected) {
             return Services.NetworkService.connectionType === "wifi"
                 ? Theme.ThemeEngine.icons.wifi
                 : Theme.ThemeEngine.icons.ethernet
@@ -287,18 +193,19 @@ RowLayout {
     }
 
     readonly property string _batteryIcon: {
-        if (Services.BatteryService.isCharging) {
+        if (Services.BatteryService && Services.BatteryService.isCharging) {
             return Theme.ThemeEngine.icons.batteryCharging
         }
         return Theme.ThemeEngine.icons.battery
     }
 
     readonly property string _volumeIcon: {
-        if (Services.AudioService.volume === 0) {
+        const volume = (Services.AudioService && Services.AudioService.volume) || 0
+        if (volume === 0) {
             return Theme.ThemeEngine.icons.volumeMuted
-        } else if (Services.AudioService.volume < 0.33) {
+        } else if (volume < 0.33) {
             return Theme.ThemeEngine.icons.volumeLow
-        } else if (Services.AudioService.volume < 0.66) {
+        } else if (volume < 0.66) {
             return Theme.ThemeEngine.icons.volumeMedium
         } else {
             return Theme.ThemeEngine.icons.volumeHigh
@@ -344,21 +251,25 @@ RowLayout {
 
     Connections {
         target: Services.AudioService
+        enabled: target !== null
         function onVolumeChanged() {} // Force update
     }
 
     Connections {
         target: Services.BrightnessService
+        enabled: target !== null
         function onBrightnessChanged() {} // Force update
     }
 
     Connections {
         target: Services.NetworkService
+        enabled: target !== null
         function onNetworkStatusChanged() {} // Force update
     }
 
     Connections {
         target: Services.BatteryService
+        enabled: target !== null
         function onBatteryLevelChanged() {} // Force update
         function onChargingStatusChanged() {} // Force update
     }

@@ -174,7 +174,7 @@ RowLayout {
     // ========================================================================
 
     function _updateActiveAppName() {
-        if (Services.HyprlandService.activeWindow &&
+        if (Services.HyprlandService && Services.HyprlandService.activeWindow &&
             Services.HyprlandService.activeWindow.title) {
             const title = Services.HyprlandService.activeWindow.title
             const parts = title.split(" - ")
@@ -190,6 +190,7 @@ RowLayout {
 
     Connections {
         target: Services.HyprlandService
+        enabled: target !== null
 
         function onWindowFocusChanged(window) {
             _updateActiveAppName()

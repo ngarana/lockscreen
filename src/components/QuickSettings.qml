@@ -26,6 +26,7 @@ import QtQuick.Layouts
 import "../services" as Services
 import "../atoms" as Atoms
 import "../molecules" as Molecules
+import "../theme" as Theme
 
 Item {
     id: root
@@ -55,8 +56,8 @@ Item {
     signal dndToggled(bool enabled)
     signal airplaneModeToggled(bool enabled)
     signal nightLightToggled(bool enabled)
-    signal volumeChanged(real value)
-    signal brightnessChanged(real value)
+    // signal volumeChanged(real value) - Implicit
+    // signal brightnessChanged(real value) - Implicit
 
     // ====== Glassmorphic Panel ======
 
@@ -187,11 +188,11 @@ Item {
                         font.pixelSize: 16
                     }
 
-                    Slider {
+                    Atoms.Slider {
                         id: volumeSlider
                         Layout.fillWidth: true
                         value: root.volume
-                        onValueChanged: root.volumeChanged(value)
+                        onValueChanged: root.volume = value
                     }
 
                     Text {
@@ -214,11 +215,11 @@ Item {
                         font.pixelSize: 16
                     }
 
-                    Slider {
+                    Atoms.Slider {
                         id: brightnessSlider
                         Layout.fillWidth: true
                         value: root.brightness
-                        onValueChanged: root.brightnessChanged(value)
+                        onValueChanged: root.brightness = value
                     }
 
                     Text {
@@ -251,19 +252,19 @@ Item {
 
         property bool hovered: mouseArea.containsMouse
 
-        radius: Services.Theme.radius.medium
+        radius: Theme.ThemeEngine.radius.medium
         color: {
             if (!enabled) return Qt.rgba(0, 0, 0, 0.2)
-            if (active) return Services.Theme.colors.glassActive
-            if (hovered) return Services.Theme.colors.glassHover
-            return Services.Theme.colors.glass
+            if (active) return Theme.ThemeEngine.colors.glassActive
+            if (hovered) return Theme.ThemeEngine.colors.glassHover
+            return Theme.ThemeEngine.colors.glass
         }
 
         border.width: active ? 1 : 0
-        border.color: Services.Theme.colors.primary
+        border.color: Theme.ThemeEngine.colors.primary
 
         Behavior on color {
-            ColorAnimation { duration: Services.Theme.animation.fast }
+            ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
         }
 
         Column {

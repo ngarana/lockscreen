@@ -4,6 +4,7 @@ module StatusBarModule
 StatusBar 1.0 StatusBar.qml
 StatusBarLeft 1.0 StatusBarLeft.qml
 StatusBarRight 1.0 StatusBarRight.qml
+StatusBarPopups 1.0 StatusBarPopups.qml
 
 # Tray item component
 TrayItem 1.0 TrayItem.qml

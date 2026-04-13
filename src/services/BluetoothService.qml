@@ -276,6 +276,7 @@ QtObject {
     }
 
     function _parseDevices(output) {
+        if (!output) return
         const devices = []
         const lines = output.split("\n")
 

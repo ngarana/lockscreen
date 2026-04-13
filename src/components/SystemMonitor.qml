@@ -19,6 +19,7 @@ import QtQuick
 import QtQuick.Layouts
 import "../services" as Services
 import "../atoms" as Atoms
+import "../theme" as Theme
 
 Item {
     id: root
@@ -42,8 +43,8 @@ Item {
     property real networkUp: 0    // KB/s
 
     // Internal state
-    property var _cpuHistory: []
-    property var _ramHistory: []
+    property list<real> _cpuHistory: []
+    property list<real> _ramHistory: []
 
     // Signals
     signal refreshRequested()
@@ -87,16 +88,16 @@ Item {
         id: panel
         anchors.fill: parent
 
-        color: Services.Theme.colors.glass
-        radius: Services.Theme.radius.large
+        color: Theme.ThemeEngine.colors.glass
+        radius: Theme.ThemeEngine.radius.large
         border.width: 1
-        border.color: Services.Theme.colors.glassBorder
+        border.color: Theme.ThemeEngine.colors.glassBorder
 
         ColumnLayout {
             id: mainLayout
             anchors.fill: parent
-            anchors.margins: Services.Theme.spacing.medium
-            spacing: Services.Theme.spacing.medium
+            anchors.margins: Theme.ThemeEngine.spacing.medium
+            spacing: Theme.ThemeEngine.spacing.medium
 
             // ====== CPU Section ======
 
@@ -107,14 +108,14 @@ Item {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Services.Theme.spacing.small
+                    spacing: Theme.ThemeEngine.spacing.small
 
                     Text {
                         text: "CPU"
                         font.pixelSize: 12
-                        font.family: Services.Theme.fonts.fontFamily
+                        font.family: Theme.ThemeEngine.fonts.fontFamily
                         font.weight: Font.Medium
-                        color: Services.Theme.colors.text
+                        color: Theme.ThemeEngine.colors.text
                     }
 
                     Item { Layout.fillWidth: true }
@@ -122,8 +123,8 @@ Item {
                     Text {
                         text: root.cpuUsage.toFixed(1) + "%"
                         font.pixelSize: 12
-                        font.family: Services.Theme.fonts.fontFamily
-                        color: Services.Theme.colors.textMuted
+                        font.family: Theme.ThemeEngine.fonts.fontFamily
+                        color: Theme.ThemeEngine.colors.textMuted
                     }
                 }
 
@@ -132,7 +133,7 @@ Item {
                     Layout.fillWidth: true
                     implicitHeight: 6
                     radius: 3
-                    color: Services.Theme.colors.glassBorder
+                    color: Theme.ThemeEngine.colors.glassBorder
 
                     Rectangle {
                         anchors.left: parent.left
@@ -159,7 +160,7 @@ Item {
                         if (history.length < 2) return
 
                         ctx.beginPath()
-                        ctx.strokeStyle = Services.Theme.colors.primary
+                        ctx.strokeStyle = Theme.ThemeEngine.colors.primary
                         ctx.lineWidth = 2
 
                         var stepX = width / (root.graphHistory - 1)
@@ -179,9 +180,9 @@ Item {
                         ctx.lineTo(0, height)
                         ctx.closePath()
                         ctx.fillStyle = Qt.rgba(
-                            Services.Theme.colors.primary.r,
-                            Services.Theme.colors.primary.g,
-                            Services.Theme.colors.primary.b,
+                            Theme.ThemeEngine.colors.primary.r,
+                            Theme.ThemeEngine.colors.primary.g,
+                            Theme.ThemeEngine.colors.primary.b,
                             0.2
                         )
                         ctx.fill()
@@ -205,14 +206,14 @@ Item {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Services.Theme.spacing.small
+                    spacing: Theme.ThemeEngine.spacing.small
 
                     Text {
                         text: "RAM"
                         font.pixelSize: 12
-                        font.family: Services.Theme.fonts.fontFamily
+                        font.family: Theme.ThemeEngine.fonts.fontFamily
                         font.weight: Font.Medium
-                        color: Services.Theme.colors.text
+                        color: Theme.ThemeEngine.colors.text
                     }
 
                     Item { Layout.fillWidth: true }
@@ -220,8 +221,8 @@ Item {
                     Text {
                         text: root.ramUsed.toFixed(1) + " / " + root.ramTotal.toFixed(1) + " GB"
                         font.pixelSize: 12
-                        font.family: Services.Theme.fonts.fontFamily
-                        color: Services.Theme.colors.textMuted
+                        font.family: Theme.ThemeEngine.fonts.fontFamily
+                        color: Theme.ThemeEngine.colors.textMuted
                     }
                 }
 
@@ -230,7 +231,7 @@ Item {
                     Layout.fillWidth: true
                     implicitHeight: 6
                     radius: 3
-                    color: Services.Theme.colors.glassBorder
+                    color: Theme.ThemeEngine.colors.glassBorder
 
                     Rectangle {
                         anchors.left: parent.left
@@ -257,7 +258,7 @@ Item {
                         if (history.length < 2) return
 
                         ctx.beginPath()
-                        ctx.strokeStyle = Services.Theme.colors.success
+                        ctx.strokeStyle = Theme.ThemeEngine.colors.success
                         ctx.lineWidth = 2
 
                         var stepX = width / (root.graphHistory - 1)
@@ -277,9 +278,9 @@ Item {
                         ctx.lineTo(0, height)
                         ctx.closePath()
                         ctx.fillStyle = Qt.rgba(
-                            Services.Theme.colors.success.r,
-                            Services.Theme.colors.success.g,
-                            Services.Theme.colors.success.b,
+                            Theme.ThemeEngine.colors.success.r,
+                            Theme.ThemeEngine.colors.success.g,
+                            Theme.ThemeEngine.colors.success.b,
                             0.2
                         )
                         ctx.fill()
@@ -298,7 +299,7 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: Services.Theme.spacing.large
+                spacing: Theme.ThemeEngine.spacing.large
 
                 // Disk
                 Row {
@@ -311,8 +312,8 @@ Item {
                     Text {
                         text: root.diskUsage.toFixed(0) + "%"
                         font.pixelSize: 11
-                        font.family: Services.Theme.fonts.fontFamily
-                        color: Services.Theme.colors.textMuted
+                        font.family: Theme.ThemeEngine.fonts.fontFamily
+                        color: Theme.ThemeEngine.colors.textMuted
                     }
                 }
 
@@ -323,24 +324,24 @@ Item {
                     Text {
                         text: "↓"
                         font.pixelSize: 12
-                        color: Services.Theme.colors.success
+                        color: Theme.ThemeEngine.colors.success
                     }
                     Text {
                         text: (root.networkDown / 1024).toFixed(1) + " MB/s"
                         font.pixelSize: 11
-                        font.family: Services.Theme.fonts.fontFamily
-                        color: Services.Theme.colors.textMuted
+                        font.family: Theme.ThemeEngine.fonts.fontFamily
+                        color: Theme.ThemeEngine.colors.textMuted
                     }
                     Text {
                         text: "↑"
                         font.pixelSize: 12
-                        color: Services.Theme.colors.primary
+                        color: Theme.ThemeEngine.colors.primary
                     }
                     Text {
                         text: (root.networkUp / 1024).toFixed(1) + " MB/s"
                         font.pixelSize: 11
-                        font.family: Services.Theme.fonts.fontFamily
-                        color: Services.Theme.colors.textMuted
+                        font.family: Theme.ThemeEngine.fonts.fontFamily
+                        color: Theme.ThemeEngine.colors.textMuted
                     }
                 }
 
@@ -352,8 +353,8 @@ Item {
     // ====== Helper Functions ======
 
     function _getUsageColor(usage) {
-        if (usage >= 90) return Services.Theme.colors.error
-        if (usage >= 70) return Services.Theme.colors.warning
-        return Services.Theme.colors.primary
+        if (usage >= 90) return Theme.ThemeEngine.colors.error
+        if (usage >= 70) return Theme.ThemeEngine.colors.warning
+        return Theme.ThemeEngine.colors.primary
     }
 }
