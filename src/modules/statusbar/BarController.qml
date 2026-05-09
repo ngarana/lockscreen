@@ -134,24 +134,19 @@ QtObject {
                 moduleVisibilityChanged(module, root.showVolumeIndicator)
                 break
             case "quicksettings":
-                root.quickSettingsVisible = !root.quickSettingsVisible
-                moduleVisibilityChanged(module, root.quickSettingsVisible)
+                _togglePopupVisibility(module)
                 break
             case "weather":
-                root.weatherVisible = !root.weatherVisible
-                moduleVisibilityChanged(module, root.weatherVisible)
+                _togglePopupVisibility(module)
                 break
             case "notifications":
-                root.notificationsVisible = !root.notificationsVisible
-                moduleVisibilityChanged(module, root.notificationsVisible)
+                _togglePopupVisibility(module)
                 break
             case "monitor":
-                root.systemMonitorVisible = !root.systemMonitorVisible
-                moduleVisibilityChanged(module, root.systemMonitorVisible)
+                _togglePopupVisibility(module)
                 break
             case "audio":
-                root.audioControllerVisible = !root.audioControllerVisible
-                moduleVisibilityChanged(module, root.audioControllerVisible)
+                _togglePopupVisibility(module)
                 break
             default:
                 Core.Logger.warning("Unknown module: " + module, "BarController")
@@ -160,11 +155,11 @@ QtObject {
 
     // Close all popups
     function closePopups() {
-        root.quickSettingsVisible = false
-        root.weatherVisible = false
-        root.notificationsVisible = false
-        root.systemMonitorVisible = false
-        root.audioControllerVisible = false
+        _setPopupState("quicksettings", false)
+        _setPopupState("weather", false)
+        _setPopupState("notifications", false)
+        _setPopupState("monitor", false)
+        _setPopupState("audio", false)
     }
 
     // Show the bar (override auto-hide)
@@ -186,6 +181,66 @@ QtObject {
     // Initialize with defaults
     function initialize() {
         Core.Logger.info("BarController initialized", "BarController")
+    }
+
+    function _popupState(module) {
+        switch (module) {
+            case "quicksettings":
+                return root.quickSettingsVisible
+            case "weather":
+                return root.weatherVisible
+            case "notifications":
+                return root.notificationsVisible
+            case "monitor":
+                return root.systemMonitorVisible
+            case "audio":
+                return root.audioControllerVisible
+            default:
+                return false
+        }
+    }
+
+    function _setPopupState(module, visible) {
+        switch (module) {
+            case "quicksettings":
+                if (root.quickSettingsVisible !== visible) {
+                    root.quickSettingsVisible = visible
+                    moduleVisibilityChanged(module, visible)
+                }
+                break
+            case "weather":
+                if (root.weatherVisible !== visible) {
+                    root.weatherVisible = visible
+                    moduleVisibilityChanged(module, visible)
+                }
+                break
+            case "notifications":
+                if (root.notificationsVisible !== visible) {
+                    root.notificationsVisible = visible
+                    moduleVisibilityChanged(module, visible)
+                }
+                break
+            case "monitor":
+                if (root.systemMonitorVisible !== visible) {
+                    root.systemMonitorVisible = visible
+                    moduleVisibilityChanged(module, visible)
+                }
+                break
+            case "audio":
+                if (root.audioControllerVisible !== visible) {
+                    root.audioControllerVisible = visible
+                    moduleVisibilityChanged(module, visible)
+                }
+                break
+            default:
+                Core.Logger.warning("Unknown popup module: " + module, "BarController")
+        }
+    }
+
+    function _togglePopupVisibility(module) {
+        const nextVisible = !root._popupState(module)
+        root.closePopups()
+        root._setPopupState(module, nextVisible)
     }
 
     // ========================================================================

@@ -77,7 +77,7 @@ Item {
                 Atoms.IconButton {
                     implicitWidth: 32
                     implicitHeight: 32
-                    icon: "◂"
+                    icon: "←"
                     iconSize: 16
                     onClicked: _previousMonth()
                 }
@@ -122,7 +122,7 @@ Item {
                 Atoms.IconButton {
                     implicitWidth: 32
                     implicitHeight: 32
-                    icon: "▸"
+                    icon: "→"
                     iconSize: 16
                     onClicked: _nextMonth()
                 }
@@ -135,7 +135,7 @@ Item {
                     Atoms.IconButton {
                         implicitWidth: 24
                         implicitHeight: 24
-                        icon: "◂"
+                        icon: "←"
                         iconSize: 12
                         onClicked: _previousYear()
                     }
@@ -143,7 +143,7 @@ Item {
                     Atoms.IconButton {
                         implicitWidth: 24
                         implicitHeight: 24
-                        icon: "▸"
+                        icon: "→"
                         iconSize: 12
                         onClicked: _nextYear()
                     }

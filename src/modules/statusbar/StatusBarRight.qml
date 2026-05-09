@@ -1,13 +1,11 @@
-// StatusBarRight.qml - Right Section of Status Bar
+// StatusBarRight.qml - Right section of the macOS-style status bar
 //
-// Right section mimicking macOS layout exactly:
-// Features standard macOS tray icons (Screen sharing, display, bluetooth, etc.),
-// weather, network, battery, control center, and uniform clock.
-//
-// Compact icon-based design, minimal spacing.
+// Provides compact menu-bar status items, grouped controls, and
+// click targets for the status bar popups.
 
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
 import "." as StatusBarModule
 import "../../atoms" as Atoms
 import "../../molecules" as Molecules
@@ -17,27 +15,96 @@ import "../../theme" as Theme
 RowLayout {
     id: root
 
-    spacing: 12
+    readonly property string networkIcon: {
+        if (!Services.NetworkService || !Services.NetworkService.isConnected) {
+            return Theme.ThemeEngine.icons.wifiOff
+        }
+        if (Services.NetworkService.connectionType === "ethernet") {
+            return Theme.ThemeEngine.icons.ethernet
+        }
+        return Theme.ThemeEngine.icons.wifi
+    }
+
+    readonly property string bluetoothIcon: {
+        if (!Services.BluetoothService || !Services.BluetoothService.isPowered) {
+            return Theme.ThemeEngine.icons.bluetoothOff
+        }
+        return Theme.ThemeEngine.icons.bluetooth
+    }
+
+    readonly property string batteryIcon: {
+        if (Services.BatteryService && Services.BatteryService.isCharging) {
+            return Theme.ThemeEngine.icons.batteryCharging
+        }
+        return Theme.ThemeEngine.icons.battery
+    }
+
+    readonly property color batteryColor: {
+        if (!Services.BatteryService) {
+            return Theme.ThemeEngine.colors.textPrimary
+        }
+        if (Services.BatteryService.isCharging) {
+            return Theme.ThemeEngine.colors.success
+        }
+        if (Services.BatteryService.percentage <= 15) {
+            return Theme.ThemeEngine.colors.error
+        }
+        if (Services.BatteryService.percentage <= 30) {
+            return Theme.ThemeEngine.colors.warning
+        }
+        return Theme.ThemeEngine.colors.textPrimary
+    }
+
+    readonly property string batteryLabel: Services.BatteryService ? String(Services.BatteryService.percentage) + "%" : ""
+
+    readonly property string brightnessLabel: {
+        if (!Services.BrightnessService) {
+            return ""
+        }
+        return String(Services.BrightnessService.primaryBrightness) + "%"
+    }
+
+    readonly property string volumeIcon: {
+        const currentVolume = Services.AudioService ? Services.AudioService.volume : 0
+        if (currentVolume <= 0.05) {
+            return Theme.ThemeEngine.icons.volumeMuted
+        }
+        if (currentVolume < 0.33) {
+            return Theme.ThemeEngine.icons.volumeLow
+        }
+        if (currentVolume < 0.66) {
+            return Theme.ThemeEngine.icons.volumeMedium
+        }
+        return Theme.ThemeEngine.icons.volumeHigh
+    }
+
+    readonly property string volumeLabel: {
+        const currentVolume = Services.AudioService ? Services.AudioService.volume : 0
+        return String(Math.round(currentVolume * 100)) + "%"
+    }
+
+    readonly property string notificationIcon: {
+        if (Services.NotificationService && Services.NotificationService.doNotDisturb) {
+            return Theme.ThemeEngine.icons.notificationsOff
+        }
+        return Theme.ThemeEngine.icons.notifications
+    }
+
+    spacing: 1
     layoutDirection: Qt.LeftToRight
 
-    // ========================================================================
-    // Hyprland Workspace Indicator
-    // ========================================================================
-    
     Molecules.WorkspaceIndicator {
         visible: Services.BarController && Services.BarController.showWorkspaceIndicator
         Layout.alignment: Qt.AlignVCenter
     }
 
-    // ========================================================================
-    // System Tray
-    // ========================================================================
-
     RowLayout {
         id: trayContainer
-        visible: Services.BarController && Services.BarController.showSystemTray
-                 && Services.SystemTrayService && Services.SystemTrayService.trayItemCount > 0
-        spacing: 12
+        visible: Services.BarController
+                 && Services.BarController.showSystemTray
+                 && Services.SystemTrayService
+                 && Services.SystemTrayService.trayItemCount > 0
+        spacing: 0
 
         Repeater {
             id: trayRepeater
@@ -51,290 +118,173 @@ RowLayout {
                              ? String(Services.SystemTrayService.getItemTooltip(modelData.id)) : ""
                 needsAttention: (Services.SystemTrayService && modelData)
                                 ? Services.SystemTrayService.needsAttention(modelData.id) : false
-
                 Layout.preferredWidth: 20
                 Layout.preferredHeight: 20
             }
         }
+    }
 
-        Connections {
-            target: Services.SystemTrayService
-            enabled: target !== null
-            function onTrayItemsChanged() {
-                trayRepeater.model = Services.SystemTrayService.trayItems
+    StatusBarModule.MenuBarButton {
+        leadingIcon: Theme.ThemeEngine.icons.screenMirroring
+        tooltip: "Displays"
+        iconSize: 11
+        itemHeight: 20
+        onClicked: Services.BarController.toggleModule("monitor")
+    }
+
+    StatusBarModule.MenuBarButton {
+        leadingIcon: Services.NotificationService && Services.NotificationService.doNotDisturb
+                     ? Theme.ThemeEngine.icons.nightLight : Theme.ThemeEngine.icons.focus
+        tooltip: Services.NotificationService && Services.NotificationService.doNotDisturb
+                 ? "Disable Do Not Disturb" : "Enable Do Not Disturb"
+        active: Services.NotificationService && Services.NotificationService.doNotDisturb
+        iconSize: 11
+        itemHeight: 20
+        onClicked: {
+            if (Services.NotificationService) {
+                Services.NotificationService.toggleDoNotDisturb()
             }
         }
     }
 
-    // ========================================================================
-    // Supplementary macOS Icons (Mirroring, Display, Focus, Grid)
-    // ========================================================================
-
-    RowLayout {
-        spacing: 4
-        Layout.alignment: Qt.AlignVCenter
-
-        Atoms.IconButton {
-            icon: Theme.ThemeEngine.icons.screenMirroring
-            size: 26
-            iconSize: 14
-            tooltip: "AirPlay"
-        }
-
-        Atoms.IconButton {
-            icon: Theme.ThemeEngine.icons.display
-            size: 26
-            iconSize: 14
-            tooltip: "Display"
-            onClicked: Services.BarController.toggleModule("monitor")
-        }
-
-        Atoms.IconButton {
-            icon: Theme.ThemeEngine.icons.focus
-            size: 26
-            iconSize: 14
-            tooltip: "Focus"
-        }
-
-        // Volume Control Toggle
-        Atoms.IconButton {
-            id: volumeButton
-            icon: root._volumeIcon
-            size: 26
-            iconSize: 14
-            tooltip: "Volume: " + Math.round((Services.AudioService ? Services.AudioService.volume : 0) * 100) + "%"
-            onClicked: {
-                if (Services.AudioService && Services.AudioService.canSetVolume) {
-                    if (Services.AudioService.volume > 0) {
-                        Services.AudioService.setVolume(0);
-                    } else {
-                        Services.AudioService.setVolume(0.5);
-                    }
-                }
-            }
-
-            // Volume wheel debouncing
-            property real accumulatedDelta: 0
-            property Timer volumeTimer: Timer {
-                interval: 50 // 50ms debounce
-                repeat: false
-                onTriggered: {
-                    if (Services.AudioService && Services.AudioService.canSetVolume && volumeButton.accumulatedDelta !== 0) {
-                        var step = 0.05; // 5% per significant wheel movement
-                        var delta = volumeButton.accumulatedDelta > 0 ? step : -step;
-                        var newVol = Math.max(0.0, Math.min(1.0, Services.AudioService.volume + delta));
-                        Services.AudioService.setVolume(newVol);
-                        volumeButton.accumulatedDelta = 0;
-                    }
-                }
-            }
-
-            onWheel: function(wheel) {
-                if (Services.AudioService && Services.AudioService.canSetVolume) {
-                    // Accumulate wheel delta
-                    volumeButton.accumulatedDelta += wheel.angleDelta.y;
-                    // Start/restart timer
-                    volumeButton.volumeTimer.restart();
-                    wheel.accepted = true;
-                }
-            }
-        }
-
-
-
-        Atoms.IconButton {
-            icon: Theme.ThemeEngine.icons.grid
-            size: 26
-            iconSize: 14
-            tooltip: "Windows"
-        }
-    }
-
-    // ========================================================================
-    // Status Indicators (Molecules)
-    // ========================================================================
-
-    Molecules.BrightnessIndicator {
-        visible: Services.BarController && Services.BarController.showBrightnessIndicator
-        Layout.alignment: Qt.AlignVCenter
+    StatusBarModule.MenuBarButton {
+        visible: Services.BluetoothService
+                 && (Services.BluetoothService.isPowered || Services.BluetoothService.hasConnectedDevice)
+        leadingIcon: root.bluetoothIcon
+        tooltip: Services.BluetoothService && Services.BluetoothService.hasConnectedDevice
+                 ? "Bluetooth connected" : "Bluetooth"
+        iconSize: 11
+        itemHeight: 20
+        active: Services.BluetoothService && Services.BluetoothService.hasConnectedDevice
         onClicked: Services.BarController.toggleModule("quicksettings")
     }
 
-    Molecules.NetworkIndicator {
+    StatusBarModule.MenuBarButton {
         visible: Services.BarController && Services.BarController.showNetworkIndicator
-        Layout.alignment: Qt.AlignVCenter
+        leadingIcon: root.networkIcon
+        tooltip: Services.NetworkService && Services.NetworkService.isConnected
+                 ? Services.NetworkService.ssid || "Connected" : "Network"
+        iconSize: 11
+        itemHeight: 20
+        active: Services.NetworkService && Services.NetworkService.isConnected
         onClicked: Services.BarController.toggleModule("quicksettings")
     }
 
-    Molecules.BatteryIndicator {
-        visible: Services.BarController && Services.BarController.showBatteryIndicator
-        Layout.alignment: Qt.AlignVCenter
-        showPercentage: true
-    }
-
-    // ========================================================================
-    // Notification & Control Center Popups
-    // ========================================================================
-
-    RowLayout {
-        spacing: 4
-        Layout.alignment: Qt.AlignVCenter
-
-        // Notification Center Toggle
-        Atoms.IconButton {
-            id: notificationToggle
-            icon: Theme.ThemeEngine.icons.notifications
-            size: 26
-            iconSize: 14
-            tooltip: "Notifications"
-            onClicked: Services.BarController.toggleModule("notifications")
-
-            // Badge - overlaying the icon button
-            Atoms.Badge {
-                visible: Services.NotificationService && Services.NotificationService.unreadCount > 0
-                text: Services.NotificationService.unreadCount > 9 ? "9+" : String(Services.NotificationService.unreadCount)
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.topMargin: 2
-                anchors.rightMargin: 2
-                size: "small"
+    StatusBarModule.MenuBarButton {
+        visible: Services.BarController && Services.BarController.showBrightnessIndicator
+        leadingIcon: Theme.ThemeEngine.icons.brightness
+        tooltip: "Brightness " + root.brightnessLabel
+        iconSize: 11
+        itemHeight: 20
+        onClicked: Services.BarController.toggleModule("quicksettings")
+        onWheel: function(wheel) {
+            if (!Services.BrightnessService) {
+                return
             }
-        }
-
-        // Control Center (Quick Settings) Toggle
-        Atoms.IconButton {
-            icon: Theme.ThemeEngine.icons.settings
-            size: 26
-            iconSize: 14
-            tooltip: "Control Center"
-            onClicked: Services.BarController.toggleModule("quicksettings")
+            const delta = wheel.angleDelta.y > 0 ? 5 : -5
+            const newValue = Math.max(5, Math.min(100, Services.BrightnessService.primaryBrightness + delta))
+            Services.BrightnessService.setAllBrightness(newValue)
+            wheel.accepted = true
         }
     }
 
-    // ========================================================================
-    // Clock Display
-    // ========================================================================
+    StatusBarModule.MenuBarButton {
+        visible: Services.BarController && Services.BarController.showVolumeIndicator
+        leadingIcon: root.volumeIcon
+        tooltip: "Volume " + root.volumeLabel
+        iconSize: 11
+        itemHeight: 20
+        onClicked: Services.BarController.toggleModule("audio")
+        onWheel: function(wheel) {
+            if (!Services.AudioService || !Services.AudioService.canSetVolume) {
+                return
+            }
+            const step = wheel.angleDelta.y > 0 ? 0.05 : -0.05
+            const newValue = Math.max(0.0, Math.min(1.0, Services.AudioService.volume + step))
+            Services.AudioService.setVolume(newValue)
+            wheel.accepted = true
+        }
+    }
 
-    Atoms.Label {
-        text: root._timeText
-        visible: Services.BarController && Services.BarController.showClock
-        fontSize: Theme.ThemeEngine.typography.sizeSm
-        fontWeight: Theme.ThemeEngine.typography.weightMedium
-        color: Theme.ThemeEngine.colors.textPrimary
-        Layout.alignment: Qt.AlignVCenter
-        
-        MouseArea {
+    StatusBarModule.MenuBarButton {
+        visible: Services.BarController && Services.BarController.showBatteryIndicator
+        leadingIcon: root.batteryIcon
+        label: root.batteryLabel
+        foregroundColor: root.batteryColor
+        textSize: 11
+        tooltip: Services.BatteryService && Services.BatteryService.isCharging
+                 ? "Battery charging" : "Battery"
+        iconSize: 11
+        itemHeight: 20
+        onClicked: Services.BarController.toggleModule("monitor")
+    }
+
+    Item {
+        implicitWidth: notificationButton.implicitWidth
+        implicitHeight: notificationButton.implicitHeight
+
+        StatusBarModule.MenuBarButton {
+            id: notificationButton
             anchors.fill: parent
-            onClicked: Services.BarController.toggleModule("weather")
+            leadingIcon: root.notificationIcon
+            tooltip: Services.NotificationService && Services.NotificationService.unreadCount > 0
+                     ? String(Services.NotificationService.unreadCount) + " unread notifications"
+                     : "Notifications"
+            active: Services.BarController && Services.BarController.notificationsVisible
+            iconSize: 11
+            itemHeight: 20
+            onClicked: Services.BarController.toggleModule("notifications")
+        }
+
+        Atoms.Badge {
+            visible: Services.NotificationService && Services.NotificationService.unreadCount > 0
+            text: Services.NotificationService.unreadCount > 9 ? "9+" : String(Services.NotificationService.unreadCount)
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.topMargin: 1
+            anchors.rightMargin: 0
+            size: "small"
         }
     }
 
-    // ========================================================================
-    // Internal Properties
-    // ========================================================================
-
-    property string _timeText: ""
-
-    readonly property string _networkIcon: {
-        if (Services.NetworkService && Services.NetworkService.isConnected) {
-            return Services.NetworkService.connectionType === "wifi"
-                ? Theme.ThemeEngine.icons.wifi
-                : Theme.ThemeEngine.icons.ethernet
-        }
-        return Theme.ThemeEngine.icons.wifiOff
+    StatusBarModule.MenuBarButton {
+        leadingIcon: Theme.ThemeEngine.icons.settings
+        tooltip: "Control Center"
+        active: Services.BarController && Services.BarController.quickSettingsVisible
+        iconSize: 11
+        itemHeight: 20
+        onClicked: Services.BarController.toggleModule("quicksettings")
     }
 
-    readonly property string _batteryIcon: {
-        if (Services.BatteryService && Services.BatteryService.isCharging) {
-            return Theme.ThemeEngine.icons.batteryCharging
-        }
-        return Theme.ThemeEngine.icons.battery
+    StatusBarModule.MenuBarButton {
+        visible: Services.BarController && Services.BarController.showClock
+        label: root.clockText
+        tooltip: "Open calendar and weather"
+        textWeight: Theme.ThemeEngine.typography.weightSemiBold
+        textSize: 11
+        horizontalPadding: 8
+        itemHeight: 20
+        onClicked: Services.BarController.toggleModule("weather")
     }
 
-    readonly property string _volumeIcon: {
-        const volume = (Services.AudioService && Services.AudioService.volume) || 0
-        if (volume <= 0.05) { // Handle near-zero/muted
-            return Theme.ThemeEngine.icons.volumeMuted
-        } else if (volume < 0.33) {
-            return Theme.ThemeEngine.icons.volumeLow
-        } else if (volume < 0.66) {
-            return Theme.ThemeEngine.icons.volumeMedium
-        } else {
-            return Theme.ThemeEngine.icons.volumeHigh
-        }
+    readonly property string clockText: {
+        const now = clock.date
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        return days[now.getDay()] + " "
+             + months[now.getMonth()] + " "
+             + now.getDate() + " "
+             + (now.getHours() < 10 ? "0" : "") + now.getHours()
+             + ":" + (now.getMinutes() < 10 ? "0" : "") + now.getMinutes()
     }
 
-
-
-    // ========================================================================
-    // Update Timer for Clock
-    // ========================================================================
-
-    Timer {
-        id: clockTimer
-        interval: 1000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: root._updateClock()
+    SystemClock {
+        id: clock
+        precision: SystemClock.Minutes
     }
-
-    function _updateClock() {
-        const now = new Date()
-        
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        
-        const dayName = days[now.getDay()]
-        const monthName = months[now.getMonth()]
-        const date = now.getDate()
-        const hours = root._pad(now.getHours())
-        const minutes = root._pad(now.getMinutes())
-        const seconds = root._pad(now.getSeconds())
-        
-        root._timeText = dayName + " " + monthName + " " + date + " " + hours + ":" + minutes + ":" + seconds
-    }
-
-    function _pad(num) {
-        return num < 10 ? "0" + num : num
-    }
-
-    // ========================================================================
-    // Service Connections
-    // ========================================================================
-
-    Connections {
-        target: Services.AudioService
-        enabled: target !== null
-        function onVolumeChanged() {} // Force update
-    }
-
-    Connections {
-        target: Services.BrightnessService
-        enabled: target !== null
-        function onBrightnessChanged() {} // Force update
-    }
-
-    Connections {
-        target: Services.NetworkService
-        enabled: target !== null
-        function onNetworkStatusChanged() {} // Force update
-    }
-
-    Connections {
-        target: Services.BatteryService
-        enabled: target !== null
-        function onBatteryLevelChanged() {} // Force update
-        function onChargingStatusChanged() {} // Force update
-    }
-
-    // ========================================================================
-    // Initialization
-    // ========================================================================
 
     Component.onCompleted: {
-        _updateClock()
-        // Force service instantiation
         if (Services.BatteryService) {
             Services.BatteryService.refresh()
         }
@@ -343,6 +293,9 @@ RowLayout {
         }
         if (Services.BrightnessService) {
             Services.BrightnessService.refresh()
+        }
+        if (Services.BluetoothService) {
+            Services.BluetoothService.refresh()
         }
     }
 }

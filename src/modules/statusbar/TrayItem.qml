@@ -19,8 +19,8 @@ import "../../theme" as Theme
 
 Rectangle {
     id: root
-    implicitWidth: 24
-    implicitHeight: 24
+    implicitWidth: 20
+    implicitHeight: 20
 
     // ========================================================================
     // Public Properties
@@ -42,8 +42,9 @@ Rectangle {
     // Visual Configuration
     // ========================================================================
 
-    color: "transparent"
-    radius: Theme.ThemeEngine.radius.small
+    color: pressed ? Qt.alpha(Theme.ThemeEngine.colors.rosewater, 0.18)
+                   : hovered ? Qt.alpha(Theme.ThemeEngine.colors.rosewater, 0.12) : "transparent"
+    radius: 6
 
     property bool hovered: mouseArea.containsMouse
     property bool pressed: false
@@ -56,7 +57,7 @@ Rectangle {
         id: trayIcon
         anchors.centerIn: parent
         icon: root.itemIcon
-        size: 18
+        size: 14
         color: root.hovered ? Theme.ThemeEngine.colors.textPrimary : Theme.ThemeEngine.colors.textSecondary
         opacity: root.needsAttention ? (0.5 + 0.5 * Math.sin(Date.now() / 200)) : 1.0
 
@@ -95,6 +96,20 @@ Rectangle {
                 }
             }
         }
+
+        onWheel: function(wheel) {
+            if (Services.SystemTrayService) {
+                Services.SystemTrayService.scrollOnItem(root.itemId, wheel.angleDelta.y, "vertical")
+                wheel.accepted = true
+            }
+        }
+    }
+
+    Atoms.Tooltip {
+        target: root
+        visible: root.itemTooltip !== "" && root.hovered
+        text: root.itemTooltip
+        position: "bottom"
     }
 
     // ========================================================================

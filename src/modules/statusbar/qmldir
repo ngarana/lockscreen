@@ -11,3 +11,6 @@ TrayItem 1.0 TrayItem.qml
 
 # Singleton controller
 singleton BarController 1.0 BarController.qml
+
+# Internal helpers
+internal MenuBarButton MenuBarButton.qml

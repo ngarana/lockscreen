@@ -10,7 +10,7 @@
 //   - dndEnabled: bool - Do Not Disturb toggle state
 //   - airplaneMode: bool - Airplane mode state
 //   - volume: real - Current volume (0-1)
-//   - brightness: real - Current brightness (0-1)
+//   - brightness: real - Current brightness (0-100)
 //   - showSliders: bool - Show volume/brightness sliders
 //
 // Signals:
@@ -43,7 +43,7 @@ Item {
     property bool nightLight: false
 
     property real volume: 0.5
-    property real brightness: 0.8
+    property real brightness: 80
     property bool showSliders: true
 
     // Service availability
@@ -88,7 +88,7 @@ Item {
                 // WiFi Toggle
                 QuickToggle {
                     id: wifiToggle
-                    icon: root.wifiEnabled ? "📶" : "📵"
+                    icon: root.wifiEnabled ? Theme.ThemeEngine.icons.wifi : Theme.ThemeEngine.icons.wifiOff
                     label: "WiFi"
                     active: root.wifiEnabled
                     enabled: root.wifiAvailable
@@ -100,7 +100,7 @@ Item {
                 // Bluetooth Toggle
                 QuickToggle {
                     id: bluetoothToggle
-                    icon: root.bluetoothEnabled ? "🔵" : "⚫"
+                    icon: root.bluetoothEnabled ? Theme.ThemeEngine.icons.bluetooth : Theme.ThemeEngine.icons.bluetoothOff
                     label: "Bluetooth"
                     active: root.bluetoothEnabled
                     enabled: root.bluetoothAvailable
@@ -112,7 +112,7 @@ Item {
                 // DND Toggle
                 QuickToggle {
                     id: dndToggle
-                    icon: root.dndEnabled ? "🔇" : "🔔"
+                    icon: root.dndEnabled ? Theme.ThemeEngine.icons.notificationsOff : Theme.ThemeEngine.icons.notifications
                     label: "DND"
                     active: root.dndEnabled
                     Layout.fillWidth: true
@@ -123,7 +123,7 @@ Item {
                 // Airplane Mode Toggle
                 QuickToggle {
                     id: airplaneToggle
-                    icon: root.airplaneMode ? "✈️" : "✈️"
+                    icon: Theme.ThemeEngine.icons.airplane
                     label: "Airplane"
                     active: root.airplaneMode
                     Layout.fillWidth: true
@@ -134,7 +134,7 @@ Item {
                 // Night Light Toggle
                 QuickToggle {
                     id: nightLightToggle
-                    icon: root.nightLight ? "🌙" : "☀️"
+                    icon: root.nightLight ? Theme.ThemeEngine.icons.nightLight : Theme.ThemeEngine.icons.brightness
                     label: "Night"
                     active: root.nightLight
                     Layout.fillWidth: true
@@ -144,7 +144,7 @@ Item {
 
                 // Placeholder slots for extensibility
                 QuickToggle {
-                    icon: "📍"
+                    icon: Theme.ThemeEngine.icons.target
                     label: "Location"
                     active: false
                     enabled: false
@@ -153,7 +153,7 @@ Item {
                 }
 
                 QuickToggle {
-                    icon: "⚡"
+                    icon: Theme.ThemeEngine.icons.battery
                     label: "Battery"
                     active: false
                     enabled: false
@@ -162,7 +162,7 @@ Item {
                 }
 
                 QuickToggle {
-                    icon: "⚙️"
+                    icon: Theme.ThemeEngine.icons.settings
                     label: "Settings"
                     active: false
                     Layout.fillWidth: true
@@ -184,13 +184,18 @@ Item {
                     spacing: Services.Theme.spacing.medium
 
                     Text {
-                        text: "🔊"
+                        text: Theme.ThemeEngine.icons.volumeHigh
                         font.pixelSize: 16
+                        font.family: Theme.ThemeEngine.fonts.iconFontFamily
+                        color: Theme.ThemeEngine.colors.textPrimary
                     }
 
                     Atoms.Slider {
                         id: volumeSlider
                         Layout.fillWidth: true
+                        from: 0
+                        to: 1
+                        stepSize: 0.01
                         value: root.volume
                         onValueChanged: root.volume = value
                     }
@@ -211,19 +216,24 @@ Item {
                     spacing: Services.Theme.spacing.medium
 
                     Text {
-                        text: "🔆"
+                        text: Theme.ThemeEngine.icons.brightness
                         font.pixelSize: 16
+                        font.family: Theme.ThemeEngine.fonts.iconFontFamily
+                        color: Theme.ThemeEngine.colors.textPrimary
                     }
 
                     Atoms.Slider {
                         id: brightnessSlider
                         Layout.fillWidth: true
+                        from: 0
+                        to: 100
+                        stepSize: 1
                         value: root.brightness
                         onValueChanged: root.brightness = value
                     }
 
                     Text {
-                        text: Math.round(root.brightness * 100) + "%"
+                        text: Math.round(root.brightness) + "%"
                         font.pixelSize: 12
                         font.family: Services.Theme.fonts.fontFamily
                         color: Services.Theme.colors.textMuted
@@ -246,15 +256,13 @@ Item {
         property string icon: ""
         property string label: ""
         property bool active: false
-        property bool enabled: true
-
         signal toggled()
 
         property bool hovered: mouseArea.containsMouse
 
         radius: Theme.ThemeEngine.radius.medium
         color: {
-            if (!enabled) return Qt.rgba(0, 0, 0, 0.2)
+            if (!enabled) return Qt.alpha(Theme.ThemeEngine.colors.surface, 0.45)
             if (active) return Theme.ThemeEngine.colors.glassActive
             if (hovered) return Theme.ThemeEngine.colors.glassHover
             return Theme.ThemeEngine.colors.glass
@@ -274,6 +282,8 @@ Item {
             Text {
                 text: toggle.icon
                 font.pixelSize: 24
+                font.family: Theme.ThemeEngine.fonts.iconFontFamily
+                color: toggle.active ? Theme.ThemeEngine.colors.textPrimary : Theme.ThemeEngine.colors.textSecondary
                 anchors.horizontalCenter: parent.horizontalCenter
                 opacity: toggle.enabled ? 1.0 : 0.4
             }

@@ -5,9 +5,9 @@
 // - Right: System tray icons, indicators (network, battery, etc.), clock
 //
 // Features:
-// - Full-width flat bar (no floating pill)
-// - Compact spacing, minimal padding
-// - macOS-style right-to-left indicator order
+// - Full-width translucent menu bar
+// - Compact spacing and subtle separators
+// - macOS-style indicator grouping
 // - Multi-monitor support
 //
 // Usage:
@@ -18,9 +18,6 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import "../../atoms" as Atoms
-import "../../molecules" as Molecules
-import "../../components" as Components
 import "../../services" as Services
 import "../../theme" as Theme
 
@@ -46,17 +43,47 @@ Rectangle {
     implicitHeight: root.barHeight
 
     // ========================================================================
-    // Background - Glassmorphic Pill
+    // Background - Flat Menu Bar
     // ========================================================================
 
-    Components.GlassPanel {
-        id: background
+    Rectangle {
         anchors.fill: parent
-        backgroundColor: Theme.ThemeEngine.colors.glass
-        borderColor: Theme.ThemeEngine.colors.glassBorder
-        radius: Theme.ThemeEngine.radius.large
-        elevation: 1
-        blurIntensity: 0.4
+        color: Qt.alpha(Theme.ThemeEngine.colors.base, 0.48)
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        gradient: Gradient {
+            orientation: Gradient.Vertical
+            GradientStop {
+                position: 0.0
+                color: Qt.alpha(Theme.ThemeEngine.colors.rosewater, 0.06)
+            }
+            GradientStop {
+                position: 0.35
+                color: Qt.alpha(Theme.ThemeEngine.colors.surface0, 0.06)
+            }
+            GradientStop {
+                position: 1.0
+                color: Qt.alpha(Theme.ThemeEngine.colors.crust, 0.03)
+            }
+        }
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 1
+        color: Qt.alpha(Theme.ThemeEngine.colors.rosewater, 0.06)
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 1
+        color: Qt.alpha(Theme.ThemeEngine.colors.overlay1, 0.18)
     }
 
     // ========================================================================
@@ -66,8 +93,10 @@ Rectangle {
     RowLayout {
         id: mainLayout
         anchors.fill: parent
-        anchors.leftMargin: 10
-        anchors.rightMargin: 10
+        anchors.leftMargin: 8
+        anchors.rightMargin: 8
+        anchors.topMargin: 1
+        anchors.bottomMargin: 1
         spacing: 6
 
         // ====================================================================
@@ -80,7 +109,6 @@ Rectangle {
             Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
         }
 
-        // Spacer - pushes everything else to the right
         Item {
             Layout.fillWidth: true
         }
