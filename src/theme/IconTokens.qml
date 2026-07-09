@@ -90,6 +90,7 @@ QtObject {
     readonly property string folder: "󰉋"         // nf-md-folder
     readonly property string timer: "󰥔"           // nf-md-timer
     readonly property string mic: "󰍬"            // nf-md-microphone
+    readonly property string micOff: "󰍭"         // nf-md-microphone_off
     readonly property string search: "󰍉"          // nf-md-magnify
     readonly property string closeCircle: "󰨥"     // nf-md-close_circle
     readonly property string window: "󰏘"          // nf-md-window

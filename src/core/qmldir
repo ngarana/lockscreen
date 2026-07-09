@@ -2,5 +2,8 @@ module Core
 
 singleton Utils 1.0 Utils.qml
 singleton Logger 1.0 Logger.qml
+singleton ShellGlobals 1.0 ShellGlobals.qml
+singleton ShellIpc 1.0 ShellIpc.qml
+
 Constants 1.0 Constants.qml
 Errors 1.0 Errors.qml

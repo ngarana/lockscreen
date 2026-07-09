@@ -1,149 +1,113 @@
-// StatusBar.qml - Main Status Bar Component (macOS-style)
+// StatusBar.qml - Horizontal status bar visual component (outfoxxed-style)
 //
-// Main status bar component with macOS-inspired layout:
-// - Left: Active application name (e.g. "Finder"), optional menu items
-// - Right: System tray icons, indicators (network, battery, etc.), clock
+// Glassmorphic horizontal bar with compact state for fullscreen workspaces.
+// Contains workspace buttons, system indicators, and clock.
 //
 // Features:
-// - Full-width translucent menu bar
-// - Compact spacing and subtle separators
-// - macOS-style indicator grouping
-// - Multi-monitor support
+// - Full-width horizontal layout
+// - Glassmorphic styling with theme colors
+// - Compact state animation for fullscreen workspaces
+// - Default property for adding bar items
 //
 // Usage:
-//   StatusBar {
-//       anchors.fill: parent
+//   PanelWindow {
+//       StatusBar { anchors.fill: parent }
 //   }
+
+pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
-import Quickshell
+import Quickshell.Hyprland
 import "../../services" as Services
 import "../../theme" as Theme
+import "../../atoms" as Atoms
+import "../../molecules" as Molecules
+import "./widgets" as Widgets
 
-Rectangle {
+Item {
     id: root
 
-    // ========================================================================
-    // Public Properties
-    // ========================================================================
+    default property alias barItems: containment.data
 
-    // Bar height (from controller) with default fallback
-    property int barHeight: (Services.BarController && Services.BarController.barHeight) || 26
+    property real baseHeight: 55
+    property real compactMargin: root.compactState * 10
 
-    // Section visibility
-    property bool showLeft: true
-    property bool showRight: true
+    readonly property bool isFullscreenWorkspace: {
+        if (!Services.HyprlandService) return false
+        try {
+            const monitor = Hyprland.monitorFor(Services.HyprlandService.currentScreen)
+            return monitor?.activeWorkspace?.hasFullscreen ?? false
+        } catch(e) {
+            return false
+        }
+    }
 
-    // ========================================================================
-    // Visual Configuration
-    // ========================================================================
+    property real compactState: isFullscreenWorkspace ? 0 : 1
 
-    color: "transparent"
-    implicitHeight: root.barHeight
-
-    // ========================================================================
-    // Background - Flat Menu Bar
-    // ========================================================================
-
-    Rectangle {
-        anchors.fill: parent
-        color: Qt.alpha(Theme.ThemeEngine.colors.base, 0.48)
+    Behavior on compactState {
+        NumberAnimation {
+            duration: 600
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: [0.0, 0.75, 0.15, 1.0, 1.0, 1.0]
+        }
     }
 
     Rectangle {
-        anchors.fill: parent
-        gradient: Gradient {
-            orientation: Gradient.Vertical
-            GradientStop {
-                position: 0.0
-                color: Qt.alpha(Theme.ThemeEngine.colors.rosewater, 0.06)
+        id: barRect
+
+        anchors {
+            left: parent.left
+            right: parent.right
+            top: parent.top
+            topMargin: root.compactMargin
+            bottomMargin: root.compactMargin
+        }
+
+        height: parent.height - (root.compactMargin * 2)
+
+        color: Qt.alpha(Theme.ThemeEngine.colors.surface0, 0.85)
+        radius: root.compactState * 5
+
+        border.width: 1
+        border.color: Qt.alpha(Theme.ThemeEngine.colors.overlay0, 0.3)
+
+        Behavior on color {
+            ColorAnimation { duration: Theme.ThemeEngine.animation.fast }
+        }
+
+        RowLayout {
+            id: containment
+            anchors {
+                fill: parent
+                leftMargin: 10
+                rightMargin: 10
+                topMargin: 5
+                bottomMargin: 5
             }
-            GradientStop {
-                position: 0.35
-                color: Qt.alpha(Theme.ThemeEngine.colors.surface0, 0.06)
+            spacing: 16
+
+            Widgets.WorkspaceButtons {
+                Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
             }
-            GradientStop {
-                position: 1.0
-                color: Qt.alpha(Theme.ThemeEngine.colors.crust, 0.03)
+
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+            }
+
+            Widgets.SystemIndicators {
+                Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+            }
+
+            Molecules.Clock {
+                Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                Layout.leftMargin: 16
+                fontSize: 12
+                showDate: false
+                format24Hour: true
+                showSeconds: false
             }
         }
-    }
-
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        height: 1
-        color: Qt.alpha(Theme.ThemeEngine.colors.rosewater, 0.06)
-    }
-
-    Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: 1
-        color: Qt.alpha(Theme.ThemeEngine.colors.overlay1, 0.18)
-    }
-
-    // ========================================================================
-    // Main Layout
-    // ========================================================================
-
-    RowLayout {
-        id: mainLayout
-        anchors.fill: parent
-        anchors.leftMargin: 8
-        anchors.rightMargin: 8
-        anchors.topMargin: 1
-        anchors.bottomMargin: 1
-        spacing: 6
-
-        // ====================================================================
-        // Left Section: App name (Finder-style)
-        // ====================================================================
-
-        StatusBarLeft {
-            id: leftSection
-            visible: root.showLeft
-            Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
-        }
-
-        Item {
-            Layout.fillWidth: true
-        }
-
-        // ====================================================================
-        // Right Section: System tray, indicators, clock
-        // ====================================================================
-
-        StatusBarRight {
-            id: rightSection
-            visible: root.showRight
-            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-        }
-    }
-
-    // ========================================================================
-    // Controller Connections
-    // ========================================================================
-
-    Connections {
-        target: Services.BarController
-        enabled: target !== null
-        function onBarVisibilityChanged(visible) {
-            root.visible = visible
-        }
-        function onHeightUpdated(height) {
-            root.barHeight = height
-        }
-    }
-
-    // ========================================================================
-    // Initialization
-    // ========================================================================
-
-    Component.onCompleted: {
-        root.visible = Services.BarController && Services.BarController.isVisible
     }
 }

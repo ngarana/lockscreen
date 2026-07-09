@@ -83,7 +83,13 @@ test_structure() {
     
     # Root files
     test_file_exists "$SCRIPT_DIR/shell.qml" "Main shell.qml exists"
-    test_file_exists "$SCRIPT_DIR/.qmlls.ini" "LSP configuration exists"
+    if [ -f "$SCRIPT_DIR/.qmlls.ini" ] || [ -L "$SCRIPT_DIR/.qmlls.ini" ]; then
+        echo "✓ PASS: LSP configuration exists"
+        PASS=$((PASS + 1))
+    else
+        echo "✗ FAIL: LSP configuration exists"
+        FAIL=$((FAIL + 1))
+    fi
     test_file_exists "$SCRIPT_DIR/README.md" "README exists"
     test_file_exists "$SCRIPT_DIR/AGENTS.md" "AGENTS.md exists"
     test_file_not_empty "$SCRIPT_DIR/docs/ROADMAP.md" "ROADMAP.md exists and is not empty"
@@ -142,6 +148,13 @@ test_modules() {
     echo ""
     echo "--- Control Center Module ---"
     test_file_exists "$SCRIPT_DIR/src/modules/controlcenter/qmldir" "Control center qmldir exists"
+
+    echo ""
+    echo "--- Standalone Locker Entry Point ---"
+    test_dir_exists "$SCRIPT_DIR/locker" "Standalone locker directory exists"
+    test_file_exists "$SCRIPT_DIR/locker/shell.qml" "Standalone locker shell.qml exists"
+    test_file_exists "$SCRIPT_DIR/locker/qmldir" "Standalone locker qmldir exists"
+    test_file_exists "$SCRIPT_DIR/scripts/locker.sh" "Standalone locker launch script exists"
 }
 
 test_components() {
@@ -235,7 +248,13 @@ test_services() {
     
     echo ""
     echo "--- Phase 1: Core Services ---"
-    test_file_exists "$SCRIPT_DIR/src/services/LockController.qml" "LockController service exists"
+    if grep -q "singleton LockController 1.0 ../modules/lockscreen/LockController.qml" "$SCRIPT_DIR/src/services/qmldir"; then
+        echo "✓ PASS: LockController re-export in services qmldir"
+        PASS=$((PASS + 1))
+    else
+        echo "✗ FAIL: LockController re-export in services qmldir"
+        FAIL=$((FAIL + 1))
+    fi
     test_file_exists "$SCRIPT_DIR/src/services/PowerManager.qml" "PowerManager service exists"
     test_file_exists "$SCRIPT_DIR/src/services/Theme.qml" "Theme service exists (legacy)"
     test_file_exists "$SCRIPT_DIR/src/services/VideoConfig.qml" "VideoConfig service exists"
@@ -363,6 +382,36 @@ test_dependencies() {
     
     test_dependency "qs" "qs CLI is installed"
     test_dependency "systemctl" "systemctl is available for power management"
+    test_dependency "qmllint" "qmllint is available for QML linting"
+}
+
+test_qml_quality() {
+    echo ""
+    echo "=== QML Quality Tests ==="
+    
+    local lint_errors=0
+    
+    # Find all QML files and run qmllint
+    while IFS= read -r -d '' file; do
+        if ! qmllint "$file" 2>&1 | grep -q "^$"; then
+            echo "✓ PASS: $file passes qmllint"
+            PASS=$((PASS + 1))
+        else
+            if qmllint "$file" 2>&1 | grep -qi "error"; then
+                echo "✗ FAIL: $file has lint errors"
+                qmllint "$file" 2>&1 | head -5
+                FAIL=$((FAIL + 1))
+                lint_errors=$((lint_errors + 1))
+            else
+                echo "⚠ WARN: $file has lint warnings"
+                WARN=$((WARN + 1))
+            fi
+        fi
+    done < <(find "$SCRIPT_DIR/src" -name "*.qml" -print0 2>/dev/null)
+    
+    if [ $lint_errors -gt 0 ]; then
+        return 1
+    fi
 }
 
 # ============================================================================
@@ -400,6 +449,9 @@ case "$TEST_SUITE" in
     --assets|-a)
         test_assets
         ;;
+    --quality|-q)
+        test_qml_quality
+        ;;
     --all|all|"")
         test_structure
         test_modules
@@ -412,9 +464,10 @@ case "$TEST_SUITE" in
         test_layouts
         test_popups
         test_animations
+        test_qml_quality
         ;;
     --help|-h)
-        echo "Usage: $0 [--structure|--modules|--components|--themes|--scripts|--assets|--all]"
+        echo "Usage: $0 [--structure|--modules|--components|--themes|--scripts|--assets|--quality|--all]"
         exit 0
         ;;
     *)

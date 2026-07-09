@@ -153,6 +153,24 @@ QtObject {
         // Implementation depends on available tools
     }
 
+    // Open network manager GUI
+    function openNetworkManager() {
+        Core.Logger.info("Opening network manager", "NetworkService")
+        _launchProcess.running = false
+        _launchProcess.command = ["nm-connection-editor"]
+        _launchProcess.running = true
+    }
+
+    property var _launchProcess: Process {
+        id: launchProcess
+        command: []
+        onExited: function(code, status) {
+            if (code !== 0) {
+                Core.Logger.warning("Failed to launch network manager", "NetworkService")
+            }
+        }
+    }
+
     // Scan for available networks
     function scanNetworks() {
         // Use nmcli if available

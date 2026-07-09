@@ -191,9 +191,16 @@ signal displayBrightnessChanged(string display, int value)
         displays = newDisplays
         displayCount = newDisplays.length
 
-// Update primary brightness (use first display)
+// Update primary brightness (use first backlight device)
 if (newDisplays.length > 0) {
-    primaryBrightness = newDisplays[0].percentage
+    for (let i = 0; i < newDisplays.length; i++) {
+        if (newDisplays[i].type === "backlight") {
+            primaryBrightness = newDisplays[i].percentage
+            // Emit signal for OSD
+            brightnessChanged(newDisplays[i].name, newDisplays[i].percentage)
+            break
+        }
+    }
 }
     }
 
@@ -233,17 +240,27 @@ if (newDisplays.length > 0) {
             displayBrightnessChanged(displayName, percentage)
             brightnessChanged(displayName, percentage)
 
-// Update primary brightness if this is the first display
-if (displays.length > 0 && displays[0].name === displayName) {
-    primaryBrightness = percentage
+// Update primary brightness if this is a backlight device
+if (displays.length > 0) {
+    for (let i = 0; i < displays.length; i++) {
+        if (displays[i].name === displayName && displays[i].type === "backlight") {
+            primaryBrightness = percentage
+            break
+        }
+    }
 }
         }
     }
 
     // Set brightness for all displays
     function setAllBrightness(percentage) {
+        if (!isAvailable || displays.length === 0) return
+        
         for (let i = 0; i < displays.length; i++) {
-            setBrightness(displays[i].name, percentage)
+            // Only set brightness for backlight devices, not LEDs
+            if (displays[i].type === "backlight") {
+                setBrightness(displays[i].name, percentage)
+            }
         }
     }
 
@@ -258,12 +275,33 @@ function adjustBrightness(delta) {
 
     // Increase brightness by step
     function increase() {
-        adjustBrightness(stepSize)
+        if (!isAvailable || displays.length === 0) return
+        _adjustBrightnessProcess.running = false
+        _adjustBrightnessProcess.command = ["brightnessctl", "set", stepSize + "%+"]
+        _adjustBrightnessProcess.running = true
     }
 
     // Decrease brightness by step
     function decrease() {
-        adjustBrightness(-stepSize)
+        if (!isAvailable || displays.length === 0) return
+        _adjustBrightnessProcess.running = false
+        _adjustBrightnessProcess.command = ["brightnessctl", "set", stepSize + "%-"]
+        _adjustBrightnessProcess.running = true
+    }
+
+    property var _adjustBrightnessProcess: Process {
+        id: adjustBrightnessProcess
+        command: []
+        onExited: function(code, status) {
+            if (code === 0) {
+                refresh()
+                // Emit signal for OSD
+                const firstBacklight = displays.find(d => d.type === "backlight")
+                if (firstBacklight) {
+                    brightnessChanged(firstBacklight.name, firstBacklight.percentage)
+                }
+            }
+        }
     }
 
 // Get icon name based on current brightness
@@ -281,6 +319,25 @@ function getIconName() {
     // Refresh brightness values
     function refresh() {
         _enumerateBacklightDevices()
+    }
+
+    // Open display settings (xrandr GUI or system settings)
+    function openDisplaySettings() {
+        Core.Logger.info("Opening display settings", "BrightnessService")
+        _launchProcess.running = false
+        // Try multiple tools in order of preference
+        _launchProcess.command = ["sh", "-c", "xfce4-display-settings || arandr || gnome-control-center display || systemsettings5 kcm_kscreen"]
+        _launchProcess.running = true
+    }
+
+    property var _launchProcess: Process {
+        id: launchProcess
+        command: []
+        onExited: function(code, status) {
+            if (code !== 0) {
+                Core.Logger.warning("Failed to launch display settings", "BrightnessService")
+            }
+        }
     }
 
     // ========================================================================

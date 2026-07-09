@@ -1,0 +1,5 @@
+module StatusBarModule.widgets
+
+BarClock 1.0 BarClock.qml
+WorkspaceButtons 1.0 WorkspaceButtons.qml
+SystemIndicators 1.0 SystemIndicators.qml

@@ -118,6 +118,23 @@ Singleton {
         setVolumeProcess.running = true
     }
 
+    // Open audio control GUI
+    function openAudioControl() {
+        launchProcess.running = false
+        launchProcess.command = ["pavucontrol"]
+        launchProcess.running = true
+    }
+
+    Process {
+        id: launchProcess
+        command: []
+        onExited: function(code, status) {
+            if (code !== 0) {
+                console.warn("Failed to launch audio control")
+            }
+        }
+    }
+
     Component.onCompleted: {
         // Check if pactl is available
         checkPactlProcess.running = false

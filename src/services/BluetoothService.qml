@@ -237,6 +237,24 @@ QtObject {
         _updateStatus()
     }
 
+    // Open Bluetooth manager GUI
+    function openBluetoothManager() {
+        Core.Logger.info("Opening Bluetooth manager", "BluetoothService")
+        launchProcess.running = false
+        launchProcess.command = ["blueman-manager"]
+        launchProcess.running = true
+    }
+
+    property var launchProcess: Process {
+        id: launchProcess
+        command: []
+        onExited: function(code, status) {
+            if (code !== 0) {
+                Core.Logger.warning("Failed to launch Bluetooth manager", "BluetoothService")
+            }
+        }
+    }
+
     // ========================================================================
     // Private Methods
     // ========================================================================

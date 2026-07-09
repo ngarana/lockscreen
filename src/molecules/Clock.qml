@@ -32,17 +32,26 @@ Item {
     property bool format24Hour: true
     property bool showSeconds: false
     property int fontSize: Theme.ThemeEngine.typography.size2xl
+    property string tooltip: ""
 
     signal clicked()
 
     // Internal state
     property string _timeText: ""
     property string _dateText: ""
+    property bool _hovered: mouseArea.containsMouse
+    property bool _pressed: mouseArea.pressed
 
     // Layout
     implicitWidth: Math.max(timeLabel.implicitWidth, dateLabel.implicitWidth)
     implicitHeight: showTime && showDate ? timeLabel.height + dateLabel.height + 4 :
                     showTime ? timeLabel.height : dateLabel.height
+
+    // Press feedback
+    scale: _pressed ? 0.98 : 1.0
+    Behavior on scale {
+        NumberAnimation { duration: Theme.ThemeEngine.animation.fast }
+    }
 
     // Update timer
     Timer {
@@ -81,11 +90,20 @@ Item {
         color: Theme.ThemeEngine.colors.textSecondary
     }
 
-    // Click area
+    // Mouse area
     MouseArea {
+        id: mouseArea
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
         onClicked: root.clicked()
+    }
+
+    // Tooltip (shows additional info on hover if tooltip text provided)
+    Atoms.Tooltip {
+        target: root
+        visible: root._hovered && root.tooltip !== ""
+        text: root.tooltip
+        position: "bottom"
     }
 
     // Update function
@@ -115,6 +133,9 @@ Item {
         // Format date
         var options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
         root._dateText = now.toLocaleDateString(Qt.locale(), options)
+
+        // Update tooltip with full date/time
+        root.tooltip = root._dateText + " " + root._timeText
     }
 
     function pad(num) {

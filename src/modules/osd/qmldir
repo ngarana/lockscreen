@@ -1,0 +1,5 @@
+module OSDModule
+
+singleton OSDController 1.0 OSDController.qml
+OSDContent 1.0 OSDContent.qml
+OSDWindow 1.0 OSDWindow.qml

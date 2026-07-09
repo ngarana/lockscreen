@@ -6,7 +6,7 @@ module Services
 # ========================================================================
 
 # Authentication and session management
-singleton LockController 1.0 LockController.qml
+singleton LockController 1.0 ../modules/lockscreen/LockController.qml
 singleton PowerManager 1.0 PowerManager.qml
 singleton SessionService 1.0 SessionService.qml
 

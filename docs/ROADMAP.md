@@ -8,9 +8,9 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 
 **Target State**: Full desktop shell with status bar, application launcher, notification center, and control center.
 
-**Last Updated**: 2026-04-12
-**Version**: 1.3
-**Status**: Phase 0, Phase 1, Phase 2, Phase 3 (Composite Components), Phase 4 (Status Bar Module) & Phase 10 Complete ✅ — Ready for Phase 5 (Application Launcher)
+**Last Updated**: 2026-07-08
+**Version**: 1.4
+**Status**: Phase 0-4, Phase 10 & Phase 13 Complete ✅ — Ready for Phase 5 (Application Launcher)
 
 ---
 
@@ -31,6 +31,7 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 | **10: Scripts & Tooling** | ✅ Done | 100% | All scripts created, theme JSON definitions, comprehensive test suite |
 | **11: Testing** | ✅ Done | 70% | Infrastructure test suite ready (126 tests passing) |
 | **12: Polish** | ⏳ Pending | 0% | |
+| **13: Standalone Locker** | ✅ Done | 100% | Standalone entry point, duplicate consolidation, test updates |
 
 ---
 
@@ -941,6 +942,33 @@ This roadmap outlines the step-by-step implementation plan for transforming Qypr
 
 ---
 
+## Phase 13: Standalone Locker Extraction
+
+**Goal**: Extract the locker into an independently runnable module with its own entry point, eliminating duplicate files and ensuring clean separation from the full shell.
+
+### 13.1 Duplicate Consolidation
+- [x] Re-export `LockController` from module in `src/services/qmldir`, remove `src/services/LockController.qml`
+- [x] Re-export `LockScreen` from module in `src/widgets/qmldir`, remove `src/widgets/LockScreen.qml`
+- [x] Fix missing `setLockInstance(sessionLock)` call in `shell.qml`
+
+### 13.2 Standalone Entry Point
+- [x] Create `locker/shell.qml` — minimal `ShellRoot` + `WlSessionLock` + `LockScreen`
+- [x] Create `locker/qmldir` — module declaration for standalone usage
+- [x] Create `scripts/locker.sh` — launcher script pointing to `locker/` entry point
+
+### 13.3 Test Updates
+- [x] Update `test_services()` to verify re-export instead of file existence
+- [x] Add standalone locker structure tests (entry point, qmldir, launch script)
+- [x] Fix `.qmlls.ini` symlink detection in test suite
+
+**Deliverables**:
+- ✅ Standalone locker launchable via `./scripts/locker.sh` or `qs -p ./locker/`
+- ✅ Zero duplicate files — canonical implementations in `src/modules/lockscreen/`
+- ✅ All 220 tests passing
+- ✅ Backward compatible — `Services.LockController` and `Widgets.LockScreen` imports still resolve
+
+---
+
 ## Phase 12: Polish & Optimization
 
 **Goal**: Final polish, performance optimization, and bug fixes.
@@ -1010,6 +1038,8 @@ Phase 9 (Models) [can run parallel to Phases 4-7]
 Phase 11 (Testing)
     ↓
 Phase 12 (Polish)
+    ↑
+Phase 13 (Standalone Locker) [depends on Phase 0#Lockscreen]
 ```
 
 ---
