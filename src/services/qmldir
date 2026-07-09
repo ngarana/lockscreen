@@ -1,40 +1,6 @@
 module Services
 
-# ========================================================================
-# Phase 1: Services Layer
-# All business logic services implemented as singletons
-# ========================================================================
-
-# Authentication and session management
 singleton LockController 1.0 ../modules/lockscreen/LockController.qml
 singleton PowerManager 1.0 PowerManager.qml
-singleton SessionService 1.0 SessionService.qml
-
-# Configuration
-singleton ConfigService 1.0 ConfigService.qml
-
-# Audio and Media
-singleton AudioService 1.0 AudioService.qml
-
-# Network and Connectivity
-singleton NetworkService 1.0 NetworkService.qml
-singleton BluetoothService 1.0 BluetoothService.qml
-
-# Power and Display
-singleton BatteryService 1.0 BatteryService.qml
-singleton BrightnessService 1.0 BrightnessService.qml
-
-# System Integration
-singleton HyprlandService 1.0 HyprlandService.qml
-singleton SystemTrayService 1.0 SystemTrayService.qml
-singleton NotificationService 1.0 NotificationService.qml
-
-# Legacy services (kept for backward compatibility)
-# Theme (legacy alias - use Theme module instead)
 singleton Theme 1.0 Theme.qml
-
-# Video configuration
 singleton VideoConfig 1.0 VideoConfig.qml
-
-# Status Bar Controller (from statusbar module)
-singleton BarController 1.0 ../modules/statusbar/BarController.qml

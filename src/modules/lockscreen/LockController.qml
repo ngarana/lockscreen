@@ -23,6 +23,7 @@
 pragma Singleton
 import Quickshell
 import Quickshell.Services.Pam
+import Quickshell.Wayland
 import QtQuick
 
 QtObject {

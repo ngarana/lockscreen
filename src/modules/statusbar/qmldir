@@ -1,5 +1,0 @@
-module StatusBarModule
-
-StatusBar 1.0 StatusBar.qml
-
-singleton BarController 1.0 BarController.qml

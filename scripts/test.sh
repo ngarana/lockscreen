@@ -1,21 +1,14 @@
 #!/usr/bin/env bash
-# test.sh - Qypr Test Suite Runner
+# test.sh - Qypr Locker Test Suite Runner
 #
-# Runs comprehensive tests for the Qypr desktop shell system.
-# Tests file structure, dependencies, module integrity, and more.
-#
-# Usage:
-#   ./test.sh              # Run all tests
-#   ./test.sh --structure  # Run structure tests only
-#   ./test.sh --modules    # Run module tests only
-#   ./test.sh --themes     # Run theme tests only
+# Tests file structure, dependencies, and module integrity
+# for the standalone lockscreen module.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PASS=0
 FAIL=0
-WARN=0
 
 # ============================================================================
 # Test Helpers
@@ -24,12 +17,11 @@ WARN=0
 test_file_exists() {
     local file="$1"
     local description="$2"
-
     if [ -f "$file" ]; then
-        echo "✓ PASS: $description"
+        echo "PASS: $description"
         PASS=$((PASS + 1))
     else
-        echo "✗ FAIL: $description (file not found: $file)"
+        echo "FAIL: $description (file not found: $file)"
         FAIL=$((FAIL + 1))
     fi
 }
@@ -37,12 +29,11 @@ test_file_exists() {
 test_dir_exists() {
     local dir="$1"
     local description="$2"
-
     if [ -d "$dir" ]; then
-        echo "✓ PASS: $description"
+        echo "PASS: $description"
         PASS=$((PASS + 1))
     else
-        echo "✗ FAIL: $description (directory not found: $dir)"
+        echo "FAIL: $description (directory not found: $dir)"
         FAIL=$((FAIL + 1))
     fi
 }
@@ -50,449 +41,144 @@ test_dir_exists() {
 test_file_not_empty() {
     local file="$1"
     local description="$2"
-
-    if [ -f "$file" ] && [ -s "$file" ]; then
-        echo "✓ PASS: $description"
+    if [ -s "$file" ]; then
+        echo "PASS: $description"
         PASS=$((PASS + 1))
     else
-        echo "⚠ WARN: $description (file empty or missing: $file)"
-        WARN=$((WARN + 1))
+        echo "FAIL: $description (file is empty)"
+        FAIL=$((FAIL + 1))
     fi
 }
 
-test_dependency() {
-    local cmd="$1"
-    local description="$2"
-
-    if command -v "$cmd" >/dev/null 2>&1; then
-        echo "✓ PASS: $description"
+test_grep() {
+    local pattern="$1"
+    local file="$2"
+    local description="$3"
+    if grep -q "$pattern" "$file"; then
+        echo "PASS: $description"
         PASS=$((PASS + 1))
     else
-        echo "✗ FAIL: $description"
+        echo "FAIL: $description (pattern not found: $pattern)"
         FAIL=$((FAIL + 1))
     fi
 }
 
 # ============================================================================
-# Test Suites
+# Structure Tests
 # ============================================================================
 
-test_structure() {
-    echo ""
-    echo "=== File Structure Tests ==="
-    
-    # Root files
-    test_file_exists "$SCRIPT_DIR/shell.qml" "Main shell.qml exists"
-    if [ -f "$SCRIPT_DIR/.qmlls.ini" ] || [ -L "$SCRIPT_DIR/.qmlls.ini" ]; then
-        echo "✓ PASS: LSP configuration exists"
+echo "=== Structure Tests ==="
+test_dir_exists "$SCRIPT_DIR/src" "Source directory exists"
+test_dir_exists "$SCRIPT_DIR/src/modules/lockscreen" "Lockscreen module directory exists"
+test_file_exists "$SCRIPT_DIR/src/modules/lockscreen/qmldir" "Lockscreen qmldir exists"
+test_file_exists "$SCRIPT_DIR/src/modules/lockscreen/LockScreen.qml" "LockScreen.qml exists"
+test_file_exists "$SCRIPT_DIR/src/modules/lockscreen/LockController.qml" "LockController.qml exists"
+
+echo ""
+echo "--- Components ---"
+test_dir_exists "$SCRIPT_DIR/src/components" "Components directory exists"
+test_file_exists "$SCRIPT_DIR/src/components/qmldir" "Components qmldir exists"
+test_file_exists "$SCRIPT_DIR/src/components/VideoBackground.qml" "VideoBackground.qml exists"
+test_file_exists "$SCRIPT_DIR/src/components/Clock.qml" "Clock.qml exists"
+test_file_exists "$SCRIPT_DIR/src/components/PasswordField.qml" "PasswordField.qml exists"
+test_file_exists "$SCRIPT_DIR/src/components/StatusMessage.qml" "StatusMessage.qml exists"
+test_file_exists "$SCRIPT_DIR/src/components/ActionButton.qml" "ActionButton.qml exists"
+test_file_exists "$SCRIPT_DIR/src/components/AudioController.qml" "AudioController.qml exists"
+test_file_exists "$SCRIPT_DIR/src/components/AudioMetadata.qml" "AudioMetadata.qml exists"
+test_file_exists "$SCRIPT_DIR/src/components/AudioPlayerButton.qml" "AudioPlayerButton.qml exists"
+
+echo ""
+echo "--- Services ---"
+test_dir_exists "$SCRIPT_DIR/src/services" "Services directory exists"
+test_file_exists "$SCRIPT_DIR/src/services/qmldir" "Services qmldir exists"
+test_file_exists "$SCRIPT_DIR/src/services/Theme.qml" "Theme service exists"
+test_file_exists "$SCRIPT_DIR/src/services/VideoConfig.qml" "VideoConfig exists"
+test_file_exists "$SCRIPT_DIR/src/services/PowerManager.qml" "PowerManager exists"
+test_grep "singleton LockController 1.0 ../modules/lockscreen/LockController.qml" \
+    "$SCRIPT_DIR/src/services/qmldir" "LockController re-export in qmldir"
+
+echo ""
+echo "--- Audio Module ---"
+test_dir_exists "$SCRIPT_DIR/src/audio" "Audio module exists"
+test_file_exists "$SCRIPT_DIR/src/audio/qmldir" "Audio qmldir exists"
+test_file_exists "$SCRIPT_DIR/src/audio/AudioService.qml" "AudioService.qml exists"
+
+echo ""
+echo "--- Theme Module ---"
+test_dir_exists "$SCRIPT_DIR/src/theme" "Theme module exists"
+test_file_exists "$SCRIPT_DIR/src/theme/qmldir" "Theme qmldir exists"
+test_file_exists "$SCRIPT_DIR/src/theme/ThemeEngine.qml" "ThemeEngine.qml exists"
+test_file_exists "$SCRIPT_DIR/src/theme/ColorPalette.qml" "ColorPalette.qml exists"
+test_file_exists "$SCRIPT_DIR/src/theme/ColorPaletteGruvbox.qml" "ColorPaletteGruvbox.qml exists"
+test_file_exists "$SCRIPT_DIR/src/theme/Typography.qml" "Typography.qml exists"
+test_file_exists "$SCRIPT_DIR/src/theme/Spacing.qml" "Spacing.qml exists"
+test_file_exists "$SCRIPT_DIR/src/theme/Effects.qml" "Effects.qml exists"
+test_file_exists "$SCRIPT_DIR/src/theme/AnimationTokens.qml" "AnimationTokens.qml exists"
+test_file_exists "$SCRIPT_DIR/src/theme/IconTokens.qml" "IconTokens.qml exists"
+
+echo ""
+echo "--- Shell Entry Point ---"
+test_file_exists "$SCRIPT_DIR/shell.qml" "Main shell.qml exists"
+
+# ============================================================================
+# Video Assets Tests
+# ============================================================================
+
+echo ""
+echo "=== Video Assets Tests ==="
+test_dir_exists "$SCRIPT_DIR/playlists" "Playlists directory exists"
+test_file_exists "$SCRIPT_DIR/playlists/day.m3u" "Day playlist exists"
+test_file_exists "$SCRIPT_DIR/playlists/night.m3u" "Night playlist exists"
+if [ -d "$SCRIPT_DIR/videos" ]; then
+    VIDEO_COUNT=$(find "$SCRIPT_DIR/videos" -maxdepth 1 -type f,l | wc -l)
+    if [ "$VIDEO_COUNT" -gt 0 ]; then
+        echo "PASS: Videos directory contains $VIDEO_COUNT video files"
         PASS=$((PASS + 1))
     else
-        echo "✗ FAIL: LSP configuration exists"
+        echo "FAIL: Videos directory is empty"
         FAIL=$((FAIL + 1))
     fi
-    test_file_exists "$SCRIPT_DIR/README.md" "README exists"
-    test_file_exists "$SCRIPT_DIR/AGENTS.md" "AGENTS.md exists"
-    test_file_not_empty "$SCRIPT_DIR/docs/ROADMAP.md" "ROADMAP.md exists and is not empty"
-    
-    echo ""
-    echo "--- Core Utilities ---"
-    test_dir_exists "$SCRIPT_DIR/src/core" "Core directory exists"
-    test_file_exists "$SCRIPT_DIR/src/core/qmldir" "Core qmldir exists"
-    test_file_exists "$SCRIPT_DIR/src/core/Constants.qml" "Constants.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/core/Logger.qml" "Logger.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/core/Utils.qml" "Utils.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/core/Errors.qml" "Errors.qml exists"
-    
-    echo ""
-    echo "--- Theme System ---"
-    test_dir_exists "$SCRIPT_DIR/src/theme" "Theme directory exists"
-    test_file_exists "$SCRIPT_DIR/src/theme/qmldir" "Theme qmldir exists"
-    test_file_exists "$SCRIPT_DIR/src/theme/ThemeEngine.qml" "ThemeEngine.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/theme/ColorPalette.qml" "ColorPalette.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/theme/Typography.qml" "Typography.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/theme/Spacing.qml" "Spacing.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/theme/Effects.qml" "Effects.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/theme/AnimationTokens.qml" "AnimationTokens.qml exists"
-}
+else
+    echo "FAIL: Videos directory not found"
+    FAIL=$((FAIL + 1))
+fi
 
-test_modules() {
-    echo ""
-    echo "=== Module Tests ==="
-    
-    echo ""
-    echo "--- Module Directories ---"
-    test_dir_exists "$SCRIPT_DIR/src/modules/lockscreen" "Lockscreen module directory exists"
-    test_dir_exists "$SCRIPT_DIR/src/modules/statusbar" "Statusbar module directory exists"
-    test_dir_exists "$SCRIPT_DIR/src/modules/launcher" "Launcher module directory exists"
-    test_dir_exists "$SCRIPT_DIR/src/modules/notifications" "Notifications module directory exists"
-    test_dir_exists "$SCRIPT_DIR/src/modules/controlcenter" "Control center module directory exists"
-    
-    echo ""
-    echo "--- Lockscreen Module ---"
-    test_file_exists "$SCRIPT_DIR/src/modules/lockscreen/qmldir" "Lockscreen qmldir exists"
-    test_file_exists "$SCRIPT_DIR/src/modules/lockscreen/LockScreen.qml" "LockScreen.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/modules/lockscreen/LockController.qml" "LockController.qml exists"
-    
-    echo ""
-    echo "--- Status Bar Module ---"
-    test_file_exists "$SCRIPT_DIR/src/modules/statusbar/qmldir" "Statusbar qmldir exists"
-    
-    echo ""
-    echo "--- Launcher Module ---"
-    test_file_exists "$SCRIPT_DIR/src/modules/launcher/qmldir" "Launcher qmldir exists"
-    
-    echo ""
-    echo "--- Notifications Module ---"
-    test_file_exists "$SCRIPT_DIR/src/modules/notifications/qmldir" "Notifications qmldir exists"
-    
-    echo ""
-    echo "--- Control Center Module ---"
-    test_file_exists "$SCRIPT_DIR/src/modules/controlcenter/qmldir" "Control center qmldir exists"
+# ============================================================================
+# QML Syntax Tests
+# ============================================================================
 
-    echo ""
-    echo "--- Standalone Locker Entry Point ---"
-    test_dir_exists "$SCRIPT_DIR/locker" "Standalone locker directory exists"
-    test_file_exists "$SCRIPT_DIR/locker/shell.qml" "Standalone locker shell.qml exists"
-    test_file_exists "$SCRIPT_DIR/locker/qmldir" "Standalone locker qmldir exists"
-    test_file_exists "$SCRIPT_DIR/scripts/locker.sh" "Standalone locker launch script exists"
-}
-
-test_components() {
-    echo ""
-    echo "=== Component Tests ==="
-    
-    echo ""
-    echo "--- Components Directory ---"
-    test_dir_exists "$SCRIPT_DIR/src/components" "Components directory exists"
-    test_file_exists "$SCRIPT_DIR/src/components/qmldir" "Components qmldir exists"
-    test_file_exists "$SCRIPT_DIR/src/components/ActionButton.qml" "ActionButton.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/components/AudioController.qml" "AudioController.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/components/AudioMetadata.qml" "AudioMetadata.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/components/AudioPlayerButton.qml" "AudioPlayerButton.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/components/Clock.qml" "Clock.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/components/PasswordField.qml" "PasswordField.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/components/StatusMessage.qml" "StatusMessage.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/components/VideoBackground.qml" "VideoBackground.qml exists"
-    
-    echo ""
-    echo "--- Atomic Components ---"
-    test_dir_exists "$SCRIPT_DIR/src/atoms" "Atoms directory exists"
-    test_file_exists "$SCRIPT_DIR/src/atoms/qmldir" "Atoms qmldir exists"
-
-    echo ""
-    echo "--- Phase 2: Button Atoms ---"
-    test_file_exists "$SCRIPT_DIR/src/atoms/Button.qml" "Button.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/atoms/IconButton.qml" "IconButton.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/atoms/TextButton.qml" "TextButton.qml exists"
-
-    echo ""
-    echo "--- Phase 2: Content Atoms ---"
-    test_file_exists "$SCRIPT_DIR/src/atoms/Icon.qml" "Icon.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/atoms/Label.qml" "Label.qml exists"
-
-    echo ""
-    echo "--- Phase 2: Form Atoms ---"
-    test_file_exists "$SCRIPT_DIR/src/atoms/Input.qml" "Input.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/atoms/Slider.qml" "Slider.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/atoms/ProgressBar.qml" "ProgressBar.qml exists"
-
-    echo ""
-    echo "--- Phase 2: Layout Atoms ---"
-    test_file_exists "$SCRIPT_DIR/src/atoms/Card.qml" "Card.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/atoms/Divider.qml" "Divider.qml exists"
-
-    echo ""
-    echo "--- Phase 2: Feedback Atoms ---"
-    test_file_exists "$SCRIPT_DIR/src/atoms/Badge.qml" "Badge.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/atoms/Tooltip.qml" "Tooltip.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/atoms/Spinner.qml" "Spinner.qml exists"
-    
-    echo ""
-    echo "--- Molecular Components ---"
-    test_dir_exists "$SCRIPT_DIR/src/molecules" "Molecules directory exists"
-    test_file_exists "$SCRIPT_DIR/src/molecules/qmldir" "Molecules qmldir exists"
-
-    echo ""
-    echo "--- Phase 2.2: System Indicators ---"
-    test_file_exists "$SCRIPT_DIR/src/molecules/Clock.qml" "Clock.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/molecules/VolumeControl.qml" "VolumeControl.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/molecules/BrightnessControl.qml" "BrightnessControl.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/molecules/NetworkIndicator.qml" "NetworkIndicator.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/molecules/BatteryIndicator.qml" "BatteryIndicator.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/molecules/WorkspaceIndicator.qml" "WorkspaceIndicator.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/molecules/WindowPreview.qml" "WindowPreview.qml exists"
-
-    echo ""
-    echo "--- Phase 2.2: Content Display ---"
-    test_file_exists "$SCRIPT_DIR/src/molecules/NotificationItem.qml" "NotificationItem.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/molecules/MediaWidget.qml" "MediaWidget.qml exists"
-
-    echo ""
-    echo "--- Phase 2.2: Input/List Components ---"
-    test_file_exists "$SCRIPT_DIR/src/molecules/SearchInput.qml" "SearchInput.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/molecules/ListItem.qml" "ListItem.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/molecules/AppGridItem.qml" "AppGridItem.qml exists"
-
-    echo ""
-    echo "--- Phase 2.2: Menu Components ---"
-    test_file_exists "$SCRIPT_DIR/src/molecules/PowerMenu.qml" "PowerMenu.qml exists"
-    test_file_exists "$SCRIPT_DIR/src/molecules/UserMenu.qml" "UserMenu.qml exists"
-}
-
-test_services() {
-    echo ""
-    echo "=== Service Tests ==="
-    
-    test_dir_exists "$SCRIPT_DIR/src/services" "Services directory exists"
-    test_file_exists "$SCRIPT_DIR/src/services/qmldir" "Services qmldir exists"
-    
-    echo ""
-    echo "--- Phase 1: Core Services ---"
-    if grep -q "singleton LockController 1.0 ../modules/lockscreen/LockController.qml" "$SCRIPT_DIR/src/services/qmldir"; then
-        echo "✓ PASS: LockController re-export in services qmldir"
-        PASS=$((PASS + 1))
-    else
-        echo "✗ FAIL: LockController re-export in services qmldir"
-        FAIL=$((FAIL + 1))
-    fi
-    test_file_exists "$SCRIPT_DIR/src/services/PowerManager.qml" "PowerManager service exists"
-    test_file_exists "$SCRIPT_DIR/src/services/Theme.qml" "Theme service exists (legacy)"
-    test_file_exists "$SCRIPT_DIR/src/services/VideoConfig.qml" "VideoConfig service exists"
-    
-    echo ""
-    echo "--- Phase 1: Configuration Service ---"
-    test_file_exists "$SCRIPT_DIR/src/services/ConfigService.qml" "ConfigService singleton exists"
-    
-    echo ""
-    echo "--- Phase 1: Audio & Media Services ---"
-    test_file_exists "$SCRIPT_DIR/src/services/AudioService.qml" "AudioService singleton exists"
-    test_dir_exists "$SCRIPT_DIR/src/audio" "Audio module directory exists"
-    test_file_exists "$SCRIPT_DIR/src/audio/AudioService.qml" "Full AudioService implementation exists"
-    
-    echo ""
-    echo "--- Phase 1: Network & Connectivity ---"
-    test_file_exists "$SCRIPT_DIR/src/services/NetworkService.qml" "NetworkService singleton exists"
-    test_file_exists "$SCRIPT_DIR/src/services/BluetoothService.qml" "BluetoothService singleton exists"
-    
-    echo ""
-    echo "--- Phase 1: Power & Display ---"
-    test_file_exists "$SCRIPT_DIR/src/services/BatteryService.qml" "BatteryService singleton exists"
-    test_file_exists "$SCRIPT_DIR/src/services/BrightnessService.qml" "BrightnessService singleton exists"
-    
-    echo ""
-    echo "--- Phase 1: System Integration ---"
-    test_file_exists "$SCRIPT_DIR/src/services/HyprlandService.qml" "HyprlandService singleton exists"
-    test_file_exists "$SCRIPT_DIR/src/services/SystemTrayService.qml" "SystemTrayService singleton exists"
-    test_file_exists "$SCRIPT_DIR/src/services/NotificationService.qml" "NotificationService singleton exists"
-    test_file_exists "$SCRIPT_DIR/src/services/SessionService.qml" "SessionService singleton exists"
-}
-
-test_models() {
-    echo ""
-    echo "=== Model Tests ==="
-    
-    test_dir_exists "$SCRIPT_DIR/src/models" "Models directory exists"
-    test_file_exists "$SCRIPT_DIR/src/models/qmldir" "Models qmldir exists"
-}
-
-test_themes() {
-    echo ""
-    echo "=== Theme Tests ==="
-    
-    test_dir_exists "$SCRIPT_DIR/themes" "Themes directory exists"
-    test_dir_exists "$SCRIPT_DIR/themes/default" "Default theme directory exists"
-    test_file_exists "$SCRIPT_DIR/themes/default/theme.json" "Default theme.json exists"
-    test_dir_exists "$SCRIPT_DIR/themes/catppuccin-latte" "Catppuccin Latte theme directory exists"
-    test_file_exists "$SCRIPT_DIR/themes/catppuccin-latte/theme.json" "Catppuccin Latte theme.json exists"
-}
-
-test_scripts() {
-    echo ""
-    echo "=== Script Tests ==="
-    
-    test_dir_exists "$SCRIPT_DIR/scripts" "Scripts directory exists"
-    test_file_exists "$SCRIPT_DIR/scripts/run.sh" "Run script exists"
-    test_file_exists "$SCRIPT_DIR/scripts/lock.sh" "Lock script exists"
-    test_file_exists "$SCRIPT_DIR/scripts/bar.sh" "Bar script exists"
-    test_file_exists "$SCRIPT_DIR/scripts/launcher.sh" "Launcher script exists"
-    
-    # Check backward compatibility wrappers
-    test_file_exists "$SCRIPT_DIR/run.sh" "Root run.sh wrapper exists"
-    test_file_exists "$SCRIPT_DIR/lock.sh" "Root lock.sh wrapper exists"
-    
-    # Check scripts are executable
-    if [ -x "$SCRIPT_DIR/scripts/run.sh" ]; then
-        echo "✓ PASS: Scripts are executable"
-        PASS=$((PASS + 1))
-    else
-        echo "✗ FAIL: Scripts are not executable"
-        FAIL=$((FAIL + 1))
-    fi
-}
-
-test_assets() {
-    echo ""
-    echo "=== Asset Tests ==="
-    
-    test_dir_exists "$SCRIPT_DIR/assets" "Assets directory exists"
-    test_dir_exists "$SCRIPT_DIR/assets/icons" "Icons directory exists"
-    test_dir_exists "$SCRIPT_DIR/assets/icons/actions" "Action icons directory exists"
-    test_dir_exists "$SCRIPT_DIR/assets/icons/apps" "App icons directory exists"
-    test_dir_exists "$SCRIPT_DIR/assets/icons/categories" "Category icons directory exists"
-    test_dir_exists "$SCRIPT_DIR/assets/icons/status" "Status icons directory exists"
-    test_dir_exists "$SCRIPT_DIR/assets/icons/system" "System icons directory exists"
-    test_dir_exists "$SCRIPT_DIR/assets/videos" "Videos directory exists"
-    test_dir_exists "$SCRIPT_DIR/assets/sounds" "Sounds directory exists"
-    test_dir_exists "$SCRIPT_DIR/assets/fonts" "Fonts directory exists"
-    test_dir_exists "$SCRIPT_DIR/assets/wallpapers" "Wallpapers directory exists"
-    
-    echo ""
-    echo "--- Playlists ---"
-    test_file_exists "$SCRIPT_DIR/playlists/day.m3u" "Day playlist exists"
-    test_file_exists "$SCRIPT_DIR/playlists/night.m3u" "Night playlist exists"
-}
-
-test_layouts() {
-    echo ""
-    echo "=== Layout Tests ==="
-    
-    test_dir_exists "$SCRIPT_DIR/src/layouts" "Layouts directory exists"
-    test_file_exists "$SCRIPT_DIR/src/layouts/qmldir" "Layouts qmldir exists"
-}
-
-test_popups() {
-    echo ""
-    echo "=== Popup Tests ==="
-    
-    test_dir_exists "$SCRIPT_DIR/src/popups" "Popups directory exists"
-    test_file_exists "$SCRIPT_DIR/src/popups/qmldir" "Popups qmldir exists"
-}
-
-test_animations() {
-    echo ""
-    echo "=== Animation Tests ==="
-    
-    test_dir_exists "$SCRIPT_DIR/src/animations" "Animations directory exists"
-    test_file_exists "$SCRIPT_DIR/src/animations/qmldir" "Animations qmldir exists"
-}
-
-test_dependencies() {
-    echo ""
-    echo "=== Dependency Tests ==="
-    
-    test_dependency "qs" "qs CLI is installed"
-    test_dependency "systemctl" "systemctl is available for power management"
-    test_dependency "qmllint" "qmllint is available for QML linting"
-}
-
-test_qml_quality() {
-    echo ""
-    echo "=== QML Quality Tests ==="
-    
-    local lint_errors=0
-    
-    # Find all QML files and run qmllint
-    while IFS= read -r -d '' file; do
-        if ! qmllint "$file" 2>&1 | grep -q "^$"; then
-            echo "✓ PASS: $file passes qmllint"
+echo ""
+echo "=== QML Lint Tests ==="
+if command -v qmllint &> /dev/null; then
+    find "$SCRIPT_DIR/src" -name "*.qml" | while read -r file; do
+        if qmllint "$file" &> /dev/null; then
+            echo "PASS: $file passes qmllint"
             PASS=$((PASS + 1))
         else
-            if qmllint "$file" 2>&1 | grep -qi "error"; then
-                echo "✗ FAIL: $file has lint errors"
-                qmllint "$file" 2>&1 | head -5
-                FAIL=$((FAIL + 1))
-                lint_errors=$((lint_errors + 1))
-            else
-                echo "⚠ WARN: $file has lint warnings"
-                WARN=$((WARN + 1))
-            fi
+            echo "FAIL: $file fails qmllint"
+            FAIL=$((FAIL + 1))
         fi
-    done < <(find "$SCRIPT_DIR/src" -name "*.qml" -print0 2>/dev/null)
-    
-    if [ $lint_errors -gt 0 ]; then
-        return 1
-    fi
-}
+    done
+else
+    echo "SKIP: qmllint not available"
+fi
 
 # ============================================================================
-# Main Test Runner
+# Summary
 # ============================================================================
 
-echo "╔══════════════════════════════════════════════════╗"
-echo "║              Qypr Test Suite                     ║"
-echo "╚══════════════════════════════════════════════════╝"
-
-# Check for specific test suite
-TEST_SUITE="${1:-all}"
-
-case "$TEST_SUITE" in
-    --structure|-s)
-        test_structure
-        ;;
-    --modules|-m)
-        test_modules
-        test_services
-        test_models
-        ;;
-    --components|-c)
-        test_components
-        test_layouts
-        test_popups
-        test_animations
-        ;;
-    --themes|-t)
-        test_themes
-        ;;
-    --scripts|-sc)
-        test_scripts
-        ;;
-    --assets|-a)
-        test_assets
-        ;;
-    --quality|-q)
-        test_qml_quality
-        ;;
-    --all|all|"")
-        test_structure
-        test_modules
-        test_components
-        test_services
-        test_models
-        test_themes
-        test_scripts
-        test_assets
-        test_layouts
-        test_popups
-        test_animations
-        test_qml_quality
-        ;;
-    --help|-h)
-        echo "Usage: $0 [--structure|--modules|--components|--themes|--scripts|--assets|--quality|--all]"
-        exit 0
-        ;;
-    *)
-        echo "Unknown test suite: $TEST_SUITE"
-        echo "Use --help for usage information"
-        exit 1
-        ;;
-esac
-
-test_dependencies
-
 echo ""
-echo "╔══════════════════════════════════════════════════╗"
-echo "║                  Test Summary                    ║"
-echo "╠══════════════════════════════════════════════════╣"
-echo "║  Passed: $PASS"
-echo "║  Failed: $FAIL"
-echo "║  Warnings: $WARN"
-echo "╚══════════════════════════════════════════════════╝"
-echo ""
+echo "========================================"
+echo " Test Summary"
+echo "========================================"
+echo " Passed: $PASS"
+echo " Failed: $FAIL"
+echo "========================================"
 
 if [ "$FAIL" -eq 0 ]; then
-    echo "✓ All tests passed!"
+    echo "All tests passed!"
     exit 0
 else
-    echo "✗ Some tests failed."
+    echo "Some tests failed."
     exit 1
 fi

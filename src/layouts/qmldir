@@ -1,7 +1,0 @@
-module Layouts
-
-PanelLayout 1.0 PanelLayout.qml
-PopupLayout 1.0 PopupLayout.qml
-DrawerLayout 1.0 DrawerLayout.qml
-GridLayout 1.0 GridLayout.qml
-LayerLayout 1.0 LayerLayout.qml
