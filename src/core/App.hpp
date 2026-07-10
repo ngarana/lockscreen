@@ -12,6 +12,7 @@
 #include "power/PowerManager.hpp"
 #include "ui/AudioController.hpp"
 #include "ui/LockScreen.hpp"
+#include "video/VideoPlayer.hpp"
 #include "wayland/LockSession.hpp"
 #include "wayland/WaylandDisplay.hpp"
 
@@ -27,6 +28,10 @@ public:
     // verification and previewing. Writes <path> and <path>-idle.png.
     int preview(const std::string& path, int width = 1920, int height = 1080);
 
+    // Exercise the video pipeline (EGL + mpv) offscreen without locking the
+    // session. Runs for `seconds` and reports whether frames were produced.
+    int videoTest(int seconds = 6);
+
     // RenderHost
     void invalidate() override;
     void requestUnlock() override;
@@ -39,6 +44,7 @@ private:
     PowerManager power_;
     MprisController mpris_;
     AudioController audio_;
+    VideoPlayer video_;
     LockScreen lockScreen_;
 };
 

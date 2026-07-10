@@ -27,6 +27,7 @@ pkg_check_modules(XKB      REQUIRED IMPORTED_TARGET xkbcommon)
 pkg_check_modules(CAIRO    REQUIRED IMPORTED_TARGET cairo)
 pkg_check_modules(PANGO    REQUIRED IMPORTED_TARGET pangocairo)
 pkg_check_modules(SDBUS    REQUIRED IMPORTED_TARGET sdbus-c++)
+pkg_check_modules(MPV      REQUIRED IMPORTED_TARGET mpv)
 
 find_library(PAM_LIBRARY pam REQUIRED)
 find_path(PAM_INCLUDE_DIR security/pam_appl.h REQUIRED)
@@ -80,6 +81,7 @@ target_link_libraries(qypr-lock PRIVATE
     PkgConfig::CAIRO
     PkgConfig::PANGO
     PkgConfig::SDBUS
+    PkgConfig::MPV
     "${PAM_LIBRARY}"
     Threads::Threads)
 

@@ -6,7 +6,7 @@ native C++ to cut memory use and remove the QML/QtQuick runtime.
 
 Software-rendered with **cairo + wl_shm** (no EGL/GL pipeline needed for this
 UI), authenticated with **PAM**, with an optional **MPRIS** now-playing panel
-over **sdbus-c++**.
+over **sdbus-c++** and an optional **video wallpaper** via **libmpv**.
 
 ## Features
 
@@ -16,12 +16,27 @@ over **sdbus-c++**.
   mouse movement reveals the password field, power menu, and audio panel.
 - Power menu: suspend / hibernate / reboot / shutdown (via `systemctl`).
 - MPRIS audio panel: metadata, progress/LIVE, transport, volume slider.
-- Compositor-throttled repaint (frame callbacks) — idle CPU ≈ one repaint/sec.
+- Video wallpaper: a shuffled, time-of-day playlist decoded by libmpv (falls
+  back to the gradient if unavailable).
+- Compositor-throttled repaint (frame callbacks) — idle CPU ≈ one repaint/sec
+  (without video).
+
+### Video wallpaper cost
+
+The video background is decoded by libmpv into a CPU buffer (mpv's software
+render API, `vo=libmpv`) and composited with cairo. It is a **heavy** feature:
+software-decoding 1080p at ~30 fps costs on the order of **200 MB+ RSS and most
+of a CPU core** while locked — far above the ~34 MB, near-idle cost of the lock
+screen itself. Playlists live in `playlists/` (`day.m3u` / `night.m3u`); entries
+are resolved relative to the playlist file. Tuning knobs live in
+`src/video/VideoPlayer.cpp` (frame interval, `hwdec`, `sw-fast`). Verify the
+pipeline without locking via `qypr-lock --video-test [seconds]`.
 
 ## Build
 
 Requires: a C++20 compiler, CMake, Ninja, `wayland-scanner`, and dev headers
-for `wayland-client`, `xkbcommon`, `cairo`, `pangocairo`, `sdbus-c++`, `libpam`.
+for `wayland-client`, `wayland-cursor`, `xkbcommon`, `cairo`, `pangocairo`,
+`sdbus-c++`, `libpam`, and `mpv` (libmpv, for the video wallpaper).
 
 ```sh
 ./scripts/build.sh            # → ./build/qypr-lock
@@ -56,6 +71,7 @@ src/
   auth/       PamAuthenticator (PAM on a worker thread)
   power/      PowerManager (systemctl)
   mpris/      MprisController (sdbus-c++)
+  video/      VideoPlayer (libmpv software render → cairo)
 ```
 
 - **KISS** — software cairo rendering instead of a bespoke GL/shader stack;

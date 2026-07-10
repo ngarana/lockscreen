@@ -7,6 +7,7 @@
 #include "core/EventLoop.hpp"
 #include "power/PowerManager.hpp"
 #include "render/Painter.hpp"
+#include "video/VideoPlayer.hpp"
 #include "ui/AudioController.hpp"
 #include "ui/Theme.hpp"
 #include "wayland/Seat.hpp"  // Mod flags
@@ -250,9 +251,13 @@ void LockScreen::draw(cairo_t* cr, int width, int height, int) {
     const double r = clamp01(revealAnim_.value(now));
     const double cx = width / 2.0;
 
-    // Background gradient + reveal-reactive dark overlay.
-    p.verticalGradient(width, height, Color::fromHex("#1e1e2e"), Color::fromHex("#181825"),
-                       Color::fromHex("#11111b"));
+    // Video background (or fallback gradient if no video).
+    if (video_ && video_->hasFrame()) {
+        video_->draw(cr, width, height);
+    } else {
+        p.verticalGradient(width, height, Color::fromHex("#1e1e2e"),
+                           Color::fromHex("#181825"), Color::fromHex("#11111b"));
+    }
     p.fillRect({0, 0, static_cast<double>(width), static_cast<double>(height)},
                Color::rgba(0, 0, 0, lerp(0.15, 0.35, r)));
 

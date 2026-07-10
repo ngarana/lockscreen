@@ -21,6 +21,7 @@ namespace qypr {
 class EventLoop;
 class PowerManager;
 class AudioController;
+class VideoPlayer;
 
 class LockScreen : public InputSink {
 public:
@@ -28,6 +29,9 @@ public:
 
     // Optional audio panel, injected once MPRIS is available.
     void setAudioController(AudioController* audio) { audio_ = audio; }
+
+    // Optional video background player.
+    void setVideoPlayer(VideoPlayer* video) { video_ = video; }
 
     // Render the whole UI at a given output size.
     void draw(cairo_t* cr, int width, int height, int scale);
@@ -57,6 +61,7 @@ private:
     PamAuthenticator& pam_;
     PowerManager& power_;
     AudioController* audio_ = nullptr;
+    VideoPlayer* video_ = nullptr;
 
     // State
     bool revealed_ = false;

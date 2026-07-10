@@ -24,8 +24,10 @@ App::App()
       lock_(display_),
       pam_(loop_),
       audio_(mpris_),
+      video_(loop_, *this),
       lockScreen_(loop_, *this, pam_, power_) {
     lockScreen_.setAudioController(&audio_);
+    lockScreen_.setVideoPlayer(&video_);
 }
 
 int App::run() {
@@ -49,6 +51,13 @@ int App::run() {
         return 1;
     }
 
+    // Start video playback (non-fatal if it fails).
+    if (video_.init()) {
+        video_.start();
+    } else {
+        std::fprintf(stderr, "qypr-lock: video background unavailable\n");
+    }
+
     loop_.run();
     return 0;
 }
@@ -65,6 +74,39 @@ int App::preview(const std::string& path, int width, int height) {
 
     std::fprintf(stderr, "qypr-lock: wrote preview frames near %s\n", path.c_str());
     return 0;
+}
+
+int App::videoTest(int seconds) {
+    if (!display_.connect()) {
+        std::fprintf(stderr, "video-test: no Wayland display\n");
+        return 1;
+    }
+    if (!video_.init()) {
+        std::fprintf(stderr, "video-test: init FAILED\n");
+        return 1;
+    }
+    video_.start();
+
+    // Heartbeat: report frame status once a second.
+    loop_.addTimer(1000, true, [this] {
+        std::fprintf(stderr, "video-test: hasFrame=%d\n", video_.hasFrame() ? 1 : 0);
+    });
+    loop_.addTimer(seconds * 1000, false, [this] { loop_.quit(); });
+
+    loop_.run();
+    std::fprintf(stderr, "video-test: DONE hasFrame=%d\n", video_.hasFrame() ? 1 : 0);
+
+    // Dump one composited frame so orientation/colour can be eyeballed.
+    if (video_.hasFrame()) {
+        cairo_surface_t* s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1920, 1080);
+        cairo_t* cr = cairo_create(s);
+        video_.draw(cr, 1920, 1080);
+        cairo_destroy(cr);
+        cairo_surface_write_to_png(s, "/tmp/qypr-videoframe.png");
+        cairo_surface_destroy(s);
+        std::fprintf(stderr, "video-test: wrote /tmp/qypr-videoframe.png\n");
+    }
+    return video_.hasFrame() ? 0 : 2;
 }
 
 void App::invalidate() { display_.invalidateAll(); }
