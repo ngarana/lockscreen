@@ -8,6 +8,7 @@
 
 #include "core/EventLoop.hpp"
 #include "core/Interfaces.hpp"
+#include "wayland/Cursor.hpp"
 #include "wayland/Output.hpp"
 
 namespace qypr {
@@ -60,7 +61,8 @@ bool isSpecial(xkb_keysym_t sym) {
 }
 }  // namespace
 
-Seat::Seat(wl_seat* seat, EventLoop& loop) : seat_(seat), loop_(loop) {
+Seat::Seat(wl_seat* seat, EventLoop& loop, const OutputEnv* env)
+    : seat_(seat), loop_(loop), env_(env) {
     xkbContext_ = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     wl_seat_add_listener(seat_, &kSeatListener, this);
 }
@@ -202,12 +204,22 @@ void Seat::stopRepeat() {
 // -----------------------------------------------------------------------------
 // Pointer
 // -----------------------------------------------------------------------------
-void Seat::onPtrEnter(void* data, wl_pointer*, uint32_t, wl_surface* surface, wl_fixed_t sx,
-                      wl_fixed_t sy) {
+void Seat::applyCursor(wl_pointer* pointer, uint32_t serial) {
+    if (!cursorInit_) {  // build once, lazily — globals are ready by first enter
+        cursorInit_ = true;
+        if (env_ && env_->compositor && env_->shm)
+            cursor_ = std::make_unique<Cursor>(env_->compositor, env_->shm);
+    }
+    if (cursor_) cursor_->apply(pointer, serial);
+}
+
+void Seat::onPtrEnter(void* data, wl_pointer* pointer, uint32_t serial, wl_surface* surface,
+                      wl_fixed_t sx, wl_fixed_t sy) {
     auto* self = static_cast<Seat*>(data);
     self->pointerOutput_ = self->outputForSurface_ ? self->outputForSurface_(surface) : nullptr;
     self->ptrX_ = wl_fixed_to_double(sx);
     self->ptrY_ = wl_fixed_to_double(sy);
+    self->applyCursor(pointer, serial);
 }
 
 void Seat::onPtrLeave(void* data, wl_pointer*, uint32_t, wl_surface*) {

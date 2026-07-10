@@ -22,6 +22,7 @@ find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
 
 pkg_check_modules(WAYLAND REQUIRED IMPORTED_TARGET wayland-client)
+pkg_check_modules(WLCURSOR REQUIRED IMPORTED_TARGET wayland-cursor)
 pkg_check_modules(XKB      REQUIRED IMPORTED_TARGET xkbcommon)
 pkg_check_modules(CAIRO    REQUIRED IMPORTED_TARGET cairo)
 pkg_check_modules(PANGO    REQUIRED IMPORTED_TARGET pangocairo)
@@ -74,6 +75,7 @@ target_include_directories(qypr-lock PRIVATE
 
 target_link_libraries(qypr-lock PRIVATE
     PkgConfig::WAYLAND
+    PkgConfig::WLCURSOR
     PkgConfig::XKB
     PkgConfig::CAIRO
     PkgConfig::PANGO

@@ -10,19 +10,22 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 
 namespace qypr {
 
 class EventLoop;
 class InputSink;
 class Output;
+struct OutputEnv;
+class Cursor;
 
 // Modifier bitmask passed with special keys.
 enum Mod : uint32_t { MOD_SHIFT = 1u << 0, MOD_CTRL = 1u << 1, MOD_ALT = 1u << 2 };
 
 class Seat {
 public:
-    Seat(wl_seat* seat, EventLoop& loop);
+    Seat(wl_seat* seat, EventLoop& loop, const OutputEnv* env);
     ~Seat();
 
     void setSink(InputSink* sink) { sink_ = sink; }
@@ -61,11 +64,17 @@ private:
     void handleKey(uint32_t keycode);
     void startRepeat(uint32_t keycode);
     void stopRepeat();
+    // Give the pointer a visible cursor (lazily built on first enter, once the
+    // compositor and shm globals are available).
+    void applyCursor(wl_pointer* pointer, uint32_t serial);
 
     wl_seat* seat_ = nullptr;
     EventLoop& loop_;
+    const OutputEnv* env_ = nullptr;
     InputSink* sink_ = nullptr;
     std::function<Output*(wl_surface*)> outputForSurface_;
+    std::unique_ptr<Cursor> cursor_;
+    bool cursorInit_ = false;
 
     wl_keyboard* keyboard_ = nullptr;
     wl_pointer* pointer_ = nullptr;

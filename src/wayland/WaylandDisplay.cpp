@@ -95,7 +95,7 @@ void WaylandDisplay::onGlobal(void* data, wl_registry* registry, uint32_t name,
     } else if (std::strcmp(interface, wl_seat_interface.name) == 0) {
         auto* seat = static_cast<wl_seat*>(
             wl_registry_bind(registry, name, &wl_seat_interface, std::min(version, 7u)));
-        self->seat_ = std::make_unique<Seat>(seat, self->loop_);
+        self->seat_ = std::make_unique<Seat>(seat, self->loop_, &self->env_);
         self->seat_->setSink(self->sink_);
         self->seat_->setOutputResolver(
             [self](wl_surface* s) { return self->outputForSurface(s); });
