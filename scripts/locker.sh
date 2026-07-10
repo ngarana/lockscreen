@@ -1,20 +1,16 @@
 #!/usr/bin/env bash
-# locker.sh - Standalone Locker Launcher for Qypr
+# locker.sh - Standalone locker launcher (kept for backward compatibility).
 #
-# Launches the locker as a standalone module without the full shell.
+# Identical to lock.sh: builds if needed, then locks the session.
 #
 # Usage:
-#   ./locker.sh                    # Lock the screen (standalone)
+#   ./locker.sh
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_PATH="$(dirname "$SCRIPT_DIR")"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN="$ROOT/build/qypr-lock"
 
-export QUICKSHELL_LOCKSCREEN_AUTO_LOCK=1
+[ -x "$BIN" ] || "$ROOT/scripts/build.sh"
 
-echo "Starting Qypr locker..."
-echo "Config: $CONFIG_PATH"
-echo ""
-
-exec qs -d -p "$CONFIG_PATH" "$@"
+exec "$BIN" "$@"

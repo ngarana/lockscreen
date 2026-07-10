@@ -1,6 +1,0 @@
-module Services
-
-singleton LockController 1.0 ../modules/lockscreen/LockController.qml
-singleton PowerManager 1.0 PowerManager.qml
-singleton Theme 1.0 Theme.qml
-singleton VideoConfig 1.0 VideoConfig.qml

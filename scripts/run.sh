@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
-# run.sh - Development Locker Launcher for Qypr
+# run.sh - Development preview.
 #
-# Starts the locker in development mode with auto-lock disabled.
+# Renders the lock screen to PNG WITHOUT locking the session, so you can
+# iterate on the look safely. Writes <out> and <out>-idle.png.
 #
 # Usage:
-#   ./run.sh              # Start with defaults
+#   ./run.sh [out.png]
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_PATH="$(dirname "$SCRIPT_DIR")"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+OUT="${1:-/tmp/qypr-preview.png}"
 
-export QUICKSHELL_LOCKSCREEN_AUTO_LOCK=0
+"$ROOT/scripts/build.sh" >/dev/null
+"$ROOT/build/qypr-lock" --preview "$OUT"
 
-echo "Starting Qypr locker (development)..."
-echo "Config: $CONFIG_PATH"
-echo ""
-
-exec qs -p "$CONFIG_PATH" "$@"
+echo "Preview written: $OUT  (idle: ${OUT%.png}-idle.png)"
+command -v xdg-open >/dev/null 2>&1 && xdg-open "$OUT" >/dev/null 2>&1 || true

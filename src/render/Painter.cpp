@@ -1,0 +1,133 @@
+#include "render/Painter.hpp"
+
+#include <cmath>
+
+namespace qypr {
+
+namespace {
+void setSource(cairo_t* cr, const Color& c) {
+    cairo_set_source_rgba(cr, c.r, c.g, c.b, c.a);
+}
+
+// Append a rounded-rectangle sub-path (radius clamped to half the shorter side).
+void roundedPath(cairo_t* cr, const Rect& r, double radius) {
+    double rad = std::min(radius, std::min(r.w, r.h) / 2.0);
+    const double deg = M_PI / 180.0;
+    cairo_new_sub_path(cr);
+    cairo_arc(cr, r.x + r.w - rad, r.y + rad, rad, -90 * deg, 0);
+    cairo_arc(cr, r.x + r.w - rad, r.y + r.h - rad, rad, 0, 90 * deg);
+    cairo_arc(cr, r.x + rad, r.y + r.h - rad, rad, 90 * deg, 180 * deg);
+    cairo_arc(cr, r.x + rad, r.y + rad, rad, 180 * deg, 270 * deg);
+    cairo_close_path(cr);
+}
+}  // namespace
+
+void Painter::fillRect(const Rect& r, const Color& c) {
+    setSource(cr_, c);
+    cairo_rectangle(cr_, r.x, r.y, r.w, r.h);
+    cairo_fill(cr_);
+}
+
+void Painter::fillRoundedRect(const Rect& r, double radius, const Color& c) {
+    roundedPath(cr_, r, radius);
+    setSource(cr_, c);
+    cairo_fill(cr_);
+}
+
+void Painter::strokeRoundedRect(const Rect& r, double radius, const Color& c, double lineWidth) {
+    // Inset by half the line width so the stroke stays inside the bounds.
+    Rect inset{r.x + lineWidth / 2, r.y + lineWidth / 2, r.w - lineWidth, r.h - lineWidth};
+    roundedPath(cr_, inset, radius);
+    setSource(cr_, c);
+    cairo_set_line_width(cr_, lineWidth);
+    cairo_stroke(cr_);
+}
+
+void Painter::fillCircle(double cx, double cy, double radius, const Color& c) {
+    setSource(cr_, c);
+    cairo_arc(cr_, cx, cy, radius, 0, 2 * M_PI);
+    cairo_fill(cr_);
+}
+
+void Painter::strokeCircle(double cx, double cy, double radius, const Color& c, double lineWidth) {
+    setSource(cr_, c);
+    cairo_set_line_width(cr_, lineWidth);
+    cairo_arc(cr_, cx, cy, radius - lineWidth / 2, 0, 2 * M_PI);
+    cairo_stroke(cr_);
+}
+
+void Painter::verticalGradient(int w, int h, const Color& top, const Color& mid,
+                               const Color& bottom) {
+    cairo_pattern_t* g = cairo_pattern_create_linear(0, 0, 0, h);
+    cairo_pattern_add_color_stop_rgba(g, 0.0, top.r, top.g, top.b, top.a);
+    cairo_pattern_add_color_stop_rgba(g, 0.5, mid.r, mid.g, mid.b, mid.a);
+    cairo_pattern_add_color_stop_rgba(g, 1.0, bottom.r, bottom.g, bottom.b, bottom.a);
+    cairo_rectangle(cr_, 0, 0, w, h);
+    cairo_set_source(cr_, g);
+    cairo_fill(cr_);
+    cairo_pattern_destroy(g);
+}
+
+PangoLayout* Painter::makeLayout(const std::string& text, const TextStyle& style, double maxWidth) {
+    PangoLayout* layout = pango_cairo_create_layout(cr_);
+    PangoFontDescription* desc = pango_font_description_new();
+    pango_font_description_set_family(desc, style.family.c_str());
+    pango_font_description_set_absolute_size(desc, style.size * PANGO_SCALE);
+    pango_font_description_set_weight(desc, style.weight);
+    pango_layout_set_font_description(layout, desc);
+    pango_font_description_free(desc);
+
+    pango_layout_set_text(layout, text.c_str(), -1);
+    if (maxWidth > 0) {
+        pango_layout_set_width(layout, static_cast<int>(maxWidth) * PANGO_SCALE);
+        pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_END);
+    }
+    return layout;
+}
+
+double Painter::anchorX(double x, double layoutW, HAlign align) {
+    switch (align) {
+        case HAlign::Center: return x - layoutW / 2.0;
+        case HAlign::Right: return x - layoutW;
+        case HAlign::Left:
+        default: return x;
+    }
+}
+
+Size Painter::measureText(const std::string& text, const TextStyle& style, double maxWidth) {
+    PangoLayout* layout = makeLayout(text, style, maxWidth);
+    int w, h;
+    pango_layout_get_pixel_size(layout, &w, &h);
+    g_object_unref(layout);
+    return {static_cast<double>(w), static_cast<double>(h)};
+}
+
+void Painter::drawText(double x, double y, const std::string& text, const TextStyle& style,
+                       HAlign align, double maxWidth) {
+    PangoLayout* layout = makeLayout(text, style, maxWidth);
+    int w, h;
+    pango_layout_get_pixel_size(layout, &w, &h);
+    cairo_move_to(cr_, anchorX(x, w, align), y);
+    setSource(cr_, style.color);
+    pango_cairo_show_layout(cr_, layout);
+    g_object_unref(layout);
+}
+
+void Painter::drawTextShadowed(double x, double y, const std::string& text, const TextStyle& style,
+                               HAlign align, double shadowAlpha, double shadowOffset) {
+    PangoLayout* layout = makeLayout(text, style, -1);
+    int w, h;
+    pango_layout_get_pixel_size(layout, &w, &h);
+    double ax = anchorX(x, w, align);
+
+    cairo_move_to(cr_, ax + shadowOffset, y + shadowOffset);
+    cairo_set_source_rgba(cr_, 0, 0, 0, shadowAlpha);
+    pango_cairo_show_layout(cr_, layout);
+
+    cairo_move_to(cr_, ax, y);
+    setSource(cr_, style.color);
+    pango_cairo_show_layout(cr_, layout);
+    g_object_unref(layout);
+}
+
+}  // namespace qypr

@@ -1,22 +1,17 @@
 #!/usr/bin/env bash
-# lock.sh - Production Lock Screen Launcher for Qypr
+# lock.sh - Lock the session with qypr-lock.
 #
-# Activates the lock screen in production mode with:
-# - Auto-lock enabled
-# - Daemon mode (-d) for background operation
+# Builds on first use, then runs the binary. Running it locks the session;
+# successful PAM authentication unlocks and the process exits.
 #
 # Usage:
-#   ./lock.sh           # Lock the screen
+#   ./lock.sh
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_PATH="$(dirname "$SCRIPT_DIR")"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN="$ROOT/build/qypr-lock"
 
-export QUICKSHELL_LOCKSCREEN_AUTO_LOCK=1
+[ -x "$BIN" ] || "$ROOT/scripts/build.sh"
 
-echo "Starting Qypr lock screen..."
-echo "Config: $CONFIG_PATH"
-echo ""
-
-exec qs -d -p "$CONFIG_PATH" "$@"
+exec "$BIN" "$@"

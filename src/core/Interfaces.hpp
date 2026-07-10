@@ -1,0 +1,47 @@
+// Interfaces.hpp - Boundaries between the Wayland/platform layer and the UI.
+//
+// The platform layer depends only on these abstractions, never on concrete
+// UI classes, and vice-versa (Dependency Inversion). LockScreen implements
+// InputSink; App implements RenderHost.
+
+#pragma once
+
+#include <cstdint>
+#include <functional>
+#include <string>
+
+#include <cairo/cairo.h>
+
+namespace qypr {
+
+// Draws the whole UI into a surface of the given pixel size / scale.
+using RenderFn = std::function<void(cairo_t*, int width, int height, int scale)>;
+
+// Reports whether any animation is in flight, so outputs know to keep
+// requesting frames instead of idling.
+using AnimatingFn = std::function<bool()>;
+
+// Receives translated input events. surfaceW/H are the focused output's
+// logical size so the sink can hit-test against its own layout.
+class InputSink {
+public:
+    virtual ~InputSink() = default;
+
+    virtual void onTextInput(const std::string& utf8) = 0;
+    virtual void onSpecialKey(uint32_t keysym, uint32_t modifiers) = 0;
+
+    virtual void onPointerMotion(int surfaceW, int surfaceH, double x, double y) = 0;
+    virtual void onPointerButton(int surfaceW, int surfaceH, double x, double y,
+                                 uint32_t button, bool pressed) = 0;
+    virtual void onPointerLeave() = 0;
+};
+
+// The UI drives the session through this: ask for a repaint, or unlock.
+class RenderHost {
+public:
+    virtual ~RenderHost() = default;
+    virtual void invalidate() = 0;      // repaint every output soon
+    virtual void requestUnlock() = 0;   // authentication succeeded
+};
+
+}  // namespace qypr

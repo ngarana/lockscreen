@@ -1,6 +1,0 @@
-module LockscreenModule
-
-LockScreen 1.0 LockScreen.qml
-# VideoBackground and VideoConfig are resolved from services/components
-
-singleton LockController 1.0 LockController.qml
