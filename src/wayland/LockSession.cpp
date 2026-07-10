@@ -45,6 +45,10 @@ void LockSession::unlock() {
     lock_ = nullptr;
     locked_ = false;
     display_.setActiveLock(nullptr);
+    // The unlock request is only queued in libwayland's output buffer; without
+    // a roundtrip the process would exit before the compositor receives it,
+    // leaving the session locked on a frozen screen. Block until it lands.
+    display_.roundtrip();
 }
 
 void LockSession::onLocked(void* data, ext_session_lock_v1*) {

@@ -51,6 +51,11 @@ public:
 
     wl_display* display() const { return display_; }
 
+    // Block until the compositor has processed all pending requests. Needed on
+    // unlock so ext_session_lock_v1::unlock_and_destroy is delivered before we
+    // exit; otherwise the compositor never unlocks and the screen stays frozen.
+    void roundtrip();
+
     // Wayland C callbacks (public so the registry listener table can bind them).
     static void onGlobal(void*, wl_registry*, uint32_t, const char*, uint32_t);
     static void onGlobalRemove(void*, wl_registry*, uint32_t);

@@ -53,6 +53,10 @@ void WaylandDisplay::flush() {
     wl_display_flush(display_);
 }
 
+void WaylandDisplay::roundtrip() {
+    if (display_) wl_display_roundtrip(display_);
+}
+
 void WaylandDisplay::setInputSink(InputSink* sink) {
     sink_ = sink;
     if (seat_) seat_->setSink(sink);
