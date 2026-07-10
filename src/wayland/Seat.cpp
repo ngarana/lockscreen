@@ -28,6 +28,10 @@ const wl_pointer_listener kPointerListener = {
     .motion = Seat::onPtrMotion,
     .button = Seat::onPtrButton,
     .axis = Seat::onPtrAxis,
+    .frame = Seat::onPtrFrame,
+    .axis_source = Seat::onPtrAxisSource,
+    .axis_stop = Seat::onPtrAxisStop,
+    .axis_discrete = Seat::onPtrAxisDiscrete,
 };
 
 const wl_seat_listener kSeatListener = {
@@ -233,5 +237,11 @@ void Seat::onPtrButton(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t but
 }
 
 void Seat::onPtrAxis(void*, wl_pointer*, uint32_t, uint32_t, wl_fixed_t) {}
+
+// Scroll-frame grouping events: unused, but must be handled (see header).
+void Seat::onPtrFrame(void*, wl_pointer*) {}
+void Seat::onPtrAxisSource(void*, wl_pointer*, uint32_t) {}
+void Seat::onPtrAxisStop(void*, wl_pointer*, uint32_t, uint32_t) {}
+void Seat::onPtrAxisDiscrete(void*, wl_pointer*, uint32_t, int32_t) {}
 
 }  // namespace qypr

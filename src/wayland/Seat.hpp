@@ -50,6 +50,12 @@ public:
     static void onPtrMotion(void*, wl_pointer*, uint32_t, wl_fixed_t, wl_fixed_t);
     static void onPtrButton(void*, wl_pointer*, uint32_t, uint32_t, uint32_t, uint32_t);
     static void onPtrAxis(void*, wl_pointer*, uint32_t, uint32_t, wl_fixed_t);
+    // No-op handlers required by wl_pointer >= v5 (bound at v7): every event of
+    // the bound version must have a non-NULL listener slot or libwayland aborts.
+    static void onPtrFrame(void*, wl_pointer*);
+    static void onPtrAxisSource(void*, wl_pointer*, uint32_t);
+    static void onPtrAxisStop(void*, wl_pointer*, uint32_t, uint32_t);
+    static void onPtrAxisDiscrete(void*, wl_pointer*, uint32_t, int32_t);
 
 private:
     void handleKey(uint32_t keycode);
