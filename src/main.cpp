@@ -19,11 +19,16 @@ int main(int argc, char** argv) {
             std::string path = (i + 1 < argc) ? argv[i + 1] : "qypr-preview.png";
             return app.preview(path);
         }
-        // Offscreen video-pipeline test: exercise EGL + mpv without locking.
+        // Offscreen video-pipeline test: exercise mpv without locking.
         //   qypr-lock --video-test [seconds]
         if (std::strcmp(argv[i], "--video-test") == 0) {
             int secs = (i + 1 < argc) ? std::atoi(argv[i + 1]) : 6;
             return app.videoTest(secs > 0 ? secs : 6);
+        }
+        // Idle seconds before the video pauses and the screen dims.
+        //   qypr-lock --idle-timeout <seconds>
+        if (std::strcmp(argv[i], "--idle-timeout") == 0 && i + 1 < argc) {
+            app.setIdleTimeout(std::atoi(argv[++i]));
         }
     }
 

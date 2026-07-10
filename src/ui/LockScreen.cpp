@@ -18,6 +18,7 @@ namespace {
 constexpr uint32_t kBtnLeft = 0x110;
 constexpr int kHideTimeoutMs = 15000;
 constexpr double kButtonDiameter = 52;
+constexpr int kDimMs = 1500;  // fade-to-black duration on entering/leaving idle
 
 size_t utf8Count(const std::string& s) {
     size_t n = 0;
@@ -64,17 +65,45 @@ LockScreen::LockScreen(EventLoop& loop, RenderHost& host, PamAuthenticator& pam,
         if (audio_) audio_->refresh();
         host_.invalidate();
     });
+
+    // Begin the idle countdown; any input resets it via reveal().
+    restartIdleTimer();
 }
 
 // -----------------------------------------------------------------------------
 // Reveal state machine
 // -----------------------------------------------------------------------------
 void LockScreen::reveal() {
+    // Any activity wakes from deep idle: resume the video and fade the black
+    // dim back out, then restart the idle countdown.
+    if (idle_) {
+        idle_ = false;
+        if (video_) video_->resume();
+        dimAnim_.animateTo(0.0, kDimMs, ease::inOutQuad);
+    }
+    restartIdleTimer();
+
     if (!revealed_) {
         revealed_ = true;
         revealAnim_.animateTo(1.0, theme::anim::reveal, ease::inOutQuad);
     }
     restartHideTimer();
+    host_.invalidate();
+}
+
+void LockScreen::restartIdleTimer() {
+    if (idleTimer_ >= 0) loop_.removeTimer(idleTimer_);
+    idleTimer_ = loop_.addTimer(idleTimeoutMs_, false, [this] {
+        idleTimer_ = -1;
+        enterIdle();
+    });
+}
+
+void LockScreen::enterIdle() {
+    if (idle_) return;
+    idle_ = true;
+    if (video_) video_->pause();  // stop the decode cost; screen-off is the daemon's job
+    dimAnim_.animateTo(1.0, kDimMs, ease::inOutQuad);
     host_.invalidate();
 }
 
@@ -303,11 +332,18 @@ void LockScreen::draw(cairo_t* cr, int width, int height, int) {
         for (auto& b : powerButtons_) b.draw(p, now);
     });
     withAlpha(lerp(0.7, 0.0, r), [&] { alwaysPower_.draw(p, now); });
+
+    // Deep-idle dim: a black veil over everything, on top of all content.
+    const double dim = clamp01(dimAnim_.value(now));
+    if (dim > 0.001)
+        p.fillRect({0, 0, static_cast<double>(width), static_cast<double>(height)},
+                   Color::rgba(0, 0, 0, dim));
 }
 
 bool LockScreen::isAnimating() const {
     const int64_t now = nowMs();
     if (revealAnim_.active(now)) return true;
+    if (dimAnim_.active(now)) return true;
     for (const auto& b : powerButtons_)
         if (b.animating(now)) return true;
     if (alwaysPower_.animating(now)) return true;

@@ -24,6 +24,9 @@ public:
 
     int run();
 
+    // Idle seconds before the video pauses and the screen dims (default 60).
+    void setIdleTimeout(int seconds);
+
     // Render idle + revealed frames to PNGs (no Wayland lock) for visual
     // verification and previewing. Writes <path> and <path>-idle.png.
     int preview(const std::string& path, int width = 1920, int height = 1080);

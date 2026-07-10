@@ -33,6 +33,10 @@ public:
     // Optional video background player.
     void setVideoPlayer(VideoPlayer* video) { video_ = video; }
 
+    // Idle period (ms) with no input before the video pauses and the screen
+    // fades to black. Screen power-off itself is left to the idle daemon.
+    void setIdleTimeout(int64_t ms) { idleTimeoutMs_ = ms; }
+
     // Render the whole UI at a given output size.
     void draw(cairo_t* cr, int width, int height, int scale);
     bool isAnimating() const;
@@ -48,6 +52,8 @@ private:
     void reveal();
     void collapse();
     void restartHideTimer();
+    void restartIdleTimer();
+    void enterIdle();  // pause video + fade to black
     void submitPassword();
     void onAuthResult(PamAuthenticator::Result result, const std::string& message);
     void updateHover(int w, int h, double x, double y);
@@ -70,6 +76,13 @@ private:
     std::string statusMessage_;
     bool hasError_ = false;
     Animated revealAnim_{0};
+
+    // Deep-idle: after idleTimeoutMs_ of no input, pause the video and fade the
+    // whole screen to black (dimAnim_ 0 -> 1). Any input reverses both.
+    bool idle_ = false;
+    int64_t idleTimeoutMs_ = 60000;
+    int idleTimer_ = -1;
+    Animated dimAnim_{0};
 
     // Widgets
     Clock clock_;

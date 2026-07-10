@@ -86,6 +86,23 @@ void VideoPlayer::start() {
     renderTimer_ = loop_.addTimer(kFrameIntervalMs, true, [this] { renderFrame(); });
 }
 
+void VideoPlayer::pause() {
+    if (!mpv_ || paused_) return;
+    paused_ = true;
+    if (renderTimer_ >= 0) { loop_.removeTimer(renderTimer_); renderTimer_ = -1; }
+    int flag = 1;
+    mpv_set_property(mpv_, "pause", MPV_FORMAT_FLAG, &flag);
+}
+
+void VideoPlayer::resume() {
+    if (!mpv_ || !paused_) return;
+    paused_ = false;
+    int flag = 0;
+    mpv_set_property(mpv_, "pause", MPV_FORMAT_FLAG, &flag);
+    if (renderTimer_ < 0)
+        renderTimer_ = loop_.addTimer(kFrameIntervalMs, true, [this] { renderFrame(); });
+}
+
 void VideoPlayer::stop() {
     if (renderTimer_ >= 0) { loop_.removeTimer(renderTimer_); renderTimer_ = -1; }
     if (renderCtx_) { mpv_render_context_free(renderCtx_); renderCtx_ = nullptr; }

@@ -35,6 +35,12 @@ public:
     void start();  // begin sampling frames on a timer
     void stop();
 
+    // Idle control: pause() halts decoding (stops the CPU cost) and freezes the
+    // render timer; resume() undoes both. Safe to call redundantly.
+    void pause();
+    void resume();
+    bool paused() const { return paused_; }
+
     void draw(cairo_t* cr, int outW, int outH);
     bool hasFrame() const { return frameW_ > 0 && frameH_ > 0 && haveContent_; }
 
@@ -56,6 +62,7 @@ private:
     int frameW_ = 0;
     int frameH_ = 0;
     bool haveContent_ = false;
+    bool paused_ = false;
     int renderTimer_ = -1;
 };
 

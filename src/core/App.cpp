@@ -109,6 +109,10 @@ int App::videoTest(int seconds) {
     return video_.hasFrame() ? 0 : 2;
 }
 
+void App::setIdleTimeout(int seconds) {
+    if (seconds > 0) lockScreen_.setIdleTimeout(static_cast<int64_t>(seconds) * 1000);
+}
+
 void App::invalidate() { display_.invalidateAll(); }
 
 void App::requestUnlock() {
