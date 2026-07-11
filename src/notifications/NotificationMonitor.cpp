@@ -279,6 +279,7 @@ void NotificationMonitor::handleNotify(sd_bus_message* m) {
     n.app = app ? app : "";
     n.title = summary ? summary : "";
     n.body = body ? body : "";
+    n.icon = icon ? icon : "";
     n.urgency = urgency;
     n.sensitive = sensitive;
 

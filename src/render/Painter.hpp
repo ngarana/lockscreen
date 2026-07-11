@@ -51,6 +51,9 @@ public:
     // Full-cover vertical 3-stop gradient (the lock background).
     void verticalGradient(int w, int h, const Color& top, const Color& mid, const Color& bottom);
 
+    // Image
+    void drawSurface(cairo_surface_t* surface, const Rect& dest);
+
     // Text
     Size measureText(const std::string& text, const TextStyle& style, double maxWidth = -1);
     // Draws text anchored at (x, y): x is left/center/right per align, y is the top.

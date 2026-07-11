@@ -23,6 +23,8 @@ inline constexpr char kObjectPath[] = "/org/qypr/Notifications";
 inline constexpr char kInterface[] = "org.qypr.Notifications";
 // One record: postedAt(ms), app, title, body, daemon id, urgency, sensitive.
 inline constexpr char kRecord[] = "(xsssuyb)";
+// D-Bus method return type for List(): array of records.
+inline constexpr char kListReturn[] = "a(xsssuyb)";
 }  // namespace notiflog
 
 class NotificationLog {

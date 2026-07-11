@@ -23,7 +23,7 @@ bool NotificationLog::start() {
     }
     static const sd_bus_vtable kVtable[] = {
         SD_BUS_VTABLE_START(0),
-        SD_BUS_METHOD("List", "", "a(xsssuyb)", &NotificationLog::onList,
+        SD_BUS_METHOD("List", "", notiflog::kListReturn, &NotificationLog::onList,
                       SD_BUS_VTABLE_UNPRIVILEGED),
         SD_BUS_VTABLE_END,
     };

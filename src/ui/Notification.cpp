@@ -4,6 +4,7 @@
 #include <numeric>
 
 #include "render/Painter.hpp"
+#include "ui/IconResolver.hpp"
 #include "ui/Theme.hpp"
 
 namespace qypr {
@@ -89,10 +90,16 @@ void NotificationView::drawCard(Card& c, Painter& p, int64_t now, const Rect& r)
         // App tile (coloured square with a glyph).
         Rect tile{r.x + pad, r.y + pad, icon, icon};
         p.fillRoundedRect(tile, theme::radius::medium, c.note.accent.withAlpha(0.9));
-        const std::string glyph = c.note.icon.empty() ? tileGlyph(c.note.app) : c.note.icon;
-        const TextStyle is = iconStyle(icon);
-        const Size gs = p.measureText(glyph, is);
-        p.drawText(tile.cx() - gs.w / 2.0, tile.cy() - gs.h / 2.0, glyph, is, HAlign::Left);
+        cairo_surface_t* iconSurf = IconResolver::instance().get(c.note.icon);
+        if (iconSurf) {
+            Rect iconDest{tile.x + 2, tile.y + 2, tile.w - 4, tile.h - 4};
+            p.drawSurface(iconSurf, iconDest);
+        } else {
+            const std::string glyph = tileGlyph(c.note.app);
+            const TextStyle is = iconStyle(icon);
+            const Size gs = p.measureText(glyph, is);
+            p.drawText(tile.cx() - gs.w / 2.0, tile.cy() - gs.h / 2.0, glyph, is, HAlign::Left);
+        }
 
         // Text block, vertically centred against the tile dynamically based on expandProgress.
         const double titleW = textW - 24; // reserve space for close button
