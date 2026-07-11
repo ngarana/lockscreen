@@ -61,10 +61,15 @@ add_custom_command(
     VERBATIM)
 
 # -----------------------------------------------------------------------------
-# Target
+# Targets
 # -----------------------------------------------------------------------------
 file(GLOB_RECURSE QYPR_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
+list(REMOVE_ITEM QYPR_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/recorder_main.cpp"
+    "${CMAKE_SOURCE_DIR}/src/notifications/NotificationLog.cpp"
+)
 
+# 1. Main Lock Screen target (links all graphics, mpv, PAM, sdbus-c++, etc.)
 add_executable(qypr-lock
     ${QYPR_SOURCES}
     "${PROTO_CODE}"
@@ -87,4 +92,20 @@ target_link_libraries(qypr-lock PRIVATE
     "${PAM_LIBRARY}"
     Threads::Threads)
 
-install(TARGETS qypr-lock RUNTIME DESTINATION bin)
+# 2. Standalone Recorder target (only needs systemd for sd-bus)
+add_executable(qypr-record
+    src/core/EventLoop.cpp
+    src/notifications/NotificationMonitor.cpp
+    src/notifications/NotificationLog.cpp
+    src/recorder_main.cpp
+)
+
+target_include_directories(qypr-record PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+)
+
+target_link_libraries(qypr-record PRIVATE
+    PkgConfig::SYSTEMD
+)
+
+install(TARGETS qypr-lock qypr-record RUNTIME DESTINATION bin)

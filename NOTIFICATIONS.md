@@ -23,13 +23,13 @@ lock screen, fed by the user's **real** notification traffic — daemon-agnostic
                             │  receive-only afterwards)
               ┌─────────────┴───────────────┐
               ▼                             ▼
-   ┌────────────────────────┐   ┌────────────────────────────┐
-   │ qypr-lock --record      │   │ qypr-lock (locked session)  │
-   │ NotificationMonitor     │   │ NotificationMonitor         │
-   │  + NotificationLog      │◀──│  seeds via List() before    │
-   │ serves the mirror as    │   │  its own BecomeMonitor,     │
-   │ org.qypr.Notifications  │   │  then captures live         │
-   └────────────────────────┘   └──────────────┬─────────────┘
+    ┌────────────────────────┐   ┌────────────────────────────┐
+    │ qypr-record            │   │ qypr-lock (locked session)  │
+    │ NotificationMonitor     │   │ NotificationMonitor         │
+    │  + NotificationLog      │◀──│  seeds via List() before    │
+    │ serves the mirror as    │   │  its own BecomeMonitor,     │
+    │ org.qypr.Notifications  │   │  then captures live         │
+    └────────────────────────┘   └──────────────┬─────────────┘
      session-long systemd                       │ onChange push
      --user service                             ▼
                                  ┌────────────────────────────┐
@@ -51,12 +51,12 @@ readable). Everything runs on the UI thread: **no background thread, no lock,
 no 1-second polling** — the monitor pushes into the view only when the set
 actually changes.
 
-## Pre-lock backlog: the `--record` service
+## Pre-lock backlog: the `qypr-record` service
 
 A monitor only sees traffic **after** it starts, and SwayNC exposes no content
 read-back API (its `org.erikreider.swaync.cc` interface carries counts and DND
-state only). So `qypr-lock --record` runs the *same* `NotificationMonitor`
-from login onward, mirroring the daemon's queue in memory:
+state only). So the `qypr-record` service runs the *same* `NotificationMonitor`
+mirroring the daemon's queue in memory:
 
 - captures every non-transient `Notify` (with `replaces_id` folding),
 - **drops entries the user dismisses** (`NotificationClosed` reasons 2/3 — a
@@ -109,13 +109,13 @@ The previous implementation was removed wholesale:
 - **The TSV `NotificationStore` + file-seeded recorder** — a hand-rolled
   persistence format written to disk to patch over the broken capture, with no
   dismissal tracking (cleared notifications would reappear on the lock screen).
-  Replaced by the in-memory `--record` mirror above, handed over via D-Bus.
+  Replaced by the in-memory `qypr-record` mirror above, handed over via D-Bus.
 - **Demo-card fallback on the real lock screen** — fake data in production is
   wrong; sample cards now appear only in `--preview`.
 
 ## Limitations
 
-- The pre-lock backlog needs the `--record` service; without it only
+- The pre-lock backlog needs the `qypr-record` service; without it only
   notifications arriving while locked are shown.
 - Actions (`actions` array) are not rendered; clicking a card dismisses it
   locally only (a monitor connection cannot call `CloseNotification`).

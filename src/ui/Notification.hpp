@@ -32,6 +32,7 @@ struct Notification {
     Color accent = theme::color::primary;
     uint32_t daemonId = 0;  // id assigned by the notification daemon (0 = not yet known)
     uint8_t urgency = 1;    // freedesktop urgency hint: 0 low, 1 normal, 2 critical
+    bool sensitive = false; // true if the notification contains sensitive content
 };
 
 class NotificationView {
@@ -54,11 +55,14 @@ private:
     struct Card {
         Notification note;
         Animated appear{0};
+        Animated expandProgress{0.0};
         bool hovered = false;
+        bool closeHovered = false;
+        bool expanded = false;
     };
 
     // Per-card height at a given width (text may wrap to one line only).
-    double cardHeight(const Notification& n, Painter& p, double w) const;
+    double cardHeight(const Card& c, Painter& p, double w, int64_t now) const;
     void drawCard(Card& c, Painter& p, int64_t now, const Rect& r);
 
     std::vector<Card> cards_;

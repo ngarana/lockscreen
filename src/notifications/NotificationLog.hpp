@@ -21,8 +21,8 @@ namespace notiflog {
 inline constexpr char kBusName[] = "org.qypr.Notifications";
 inline constexpr char kObjectPath[] = "/org/qypr/Notifications";
 inline constexpr char kInterface[] = "org.qypr.Notifications";
-// One record: postedAt(ms), app, title, body, daemon id, urgency.
-inline constexpr char kRecord[] = "(xsssuy)";
+// One record: postedAt(ms), app, title, body, daemon id, urgency, sensitive.
+inline constexpr char kRecord[] = "(xsssuyb)";
 }  // namespace notiflog
 
 class NotificationLog {

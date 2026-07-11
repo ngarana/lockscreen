@@ -7,7 +7,7 @@ After=dbus.socket
 [Service]
 Type=simple
 # Point this at your built binary.
-ExecStart=/home/arch/.config/qypr/build/qypr-lock --record
+ExecStart=/home/arch/.config/qypr/build/qypr-record
 Restart=on-failure
 RestartSec=2
 

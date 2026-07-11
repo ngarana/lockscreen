@@ -71,7 +71,7 @@ systemctl --user daemon-reload
 systemctl --user enable --now qypr-notification-log.service
 ```
 
-It runs `qypr-lock --record`, tracks dismissals (a SwayNC "clear" removes
+It runs `qypr-record`, tracks dismissals (a SwayNC "clear" removes
 entries from the mirror), and hands the queue to the lock screen at startup
 over D-Bus (`org.qypr.Notifications`).
 
@@ -83,7 +83,7 @@ over D-Bus (`org.qypr.Notifications`).
 qypr-lock --preview out.png   # same preview, directly
 qypr-lock --idle-timeout 30   # pause video + dim to black after 30s idle (default 60)
 qypr-lock --video-test 6      # exercise the video pipeline offscreen, no lock
-qypr-lock --record            # notification mirror service (see Notifications)
+qypr-record                  # notification mirror service (see Notifications)
 ```
 
 ### hypridle integration
@@ -120,7 +120,7 @@ src/
   power/      PowerManager (systemctl)
   mpris/      MprisController (sdbus-c++)
   notifications/ NotificationMonitor (sd-bus monitor), NotificationLog
-              (--record backlog service)
+              (qypr-record backlog service)
   video/      VideoPlayer (libmpv software render → cairo)
 ```
 

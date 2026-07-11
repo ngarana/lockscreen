@@ -35,7 +35,7 @@ class EventLoop;
 
 class NotificationMonitor {
 public:
-    explicit NotificationMonitor(EventLoop& loop) : loop_(loop) {}
+    explicit NotificationMonitor(EventLoop& loop);
     ~NotificationMonitor();
 
     NotificationMonitor(const NotificationMonitor&) = delete;
@@ -75,9 +75,12 @@ private:
     std::vector<Notification> notes_;
     uint64_t nextKey_ = 1;  // local card identity (view reconciliation)
 
-    // Notify calls awaiting the daemon's reply, keyed "sender:cookie" → the
-    // card key, so the assigned notification id can be attached when it lands.
-    std::unordered_map<std::string, uint64_t> pending_;
+    struct PendingCall {
+        std::string sender;
+        uint64_t cookie = 0;
+        uint64_t id = 0;
+    };
+    std::vector<PendingCall> pending_;
 
     std::function<void()> onChange_;
 };

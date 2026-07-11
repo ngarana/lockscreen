@@ -2,6 +2,8 @@
 
 #include "notifications/NotificationMonitor.hpp"
 
+#include <fstream>
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -35,40 +37,87 @@ Color accentFor(uint64_t key, uint8_t urgency) {
     return kAccents[key % (sizeof(kAccents) / sizeof(kAccents[0]))];
 }
 
-// D-Bus cookies are unique per sending connection, so pending Notify calls
-// are keyed by the sender's unique name plus the message cookie.
-std::string pendingKey(const char* peer, uint64_t cookie) {
-    return std::string(peer ? peer : "?") + ':' + std::to_string(cookie);
+std::vector<std::string> sensitiveApps_;
+
+void loadSensitiveApps() {
+    if (!sensitiveApps_.empty()) return;
+    
+    std::ifstream f("/home/arch/.config/qypr/sensitive_apps.conf");
+    if (!f.is_open()) {
+        sensitiveApps_ = {
+            "signal", "telegram", "whatsapp", "discord", "thunderbird",
+            "evolution", "messenger", "org.telegram.desktop", "slack", "element"
+        };
+        return;
+    }
+    std::string line;
+    while (std::getline(f, line)) {
+        line.erase(line.begin(), std::find_if(line.begin(), line.end(), [](unsigned char ch) {
+            return !std::isspace(ch);
+        }));
+        line.erase(std::find_if(line.rbegin(), line.rend(), [](unsigned char ch) {
+            return !std::isspace(ch);
+        }).base(), line.end());
+        if (!line.empty() && line[0] != '#') {
+            std::transform(line.begin(), line.end(), line.begin(), ::tolower);
+            sensitiveApps_.push_back(line);
+        }
+    }
 }
 
-// Read a variant holding any integer/boolean type into `out`; consumes the
-// variant either way. Apps are sloppy about hint types (the spec says
-// `urgency` is a byte and `transient` a boolean, but int32 is common), so
-// accept every integral encoding.
-bool readNumericVariant(sd_bus_message* m, uint64_t& out) {
+bool isAppSensitive(const std::string& appName) {
+    loadSensitiveApps();
+    std::string app = appName;
+    std::transform(app.begin(), app.end(), app.begin(), ::tolower);
+    for (const auto& sensitive : sensitiveApps_) {
+        if (app.find(sensitive) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Read a variant holding any integer/boolean type (1) or a string type (2) into out
+// parameters; consumes the variant.
+int readVariant(sd_bus_message* m, uint64_t& numOut, std::string& strOut) {
     const char* contents = nullptr;
-    if (sd_bus_message_peek_type(m, nullptr, &contents) < 0 || !contents ||
-        contents[1] != '\0' || !std::strchr("ybnqiuxt", contents[0])) {
+    if (sd_bus_message_peek_type(m, nullptr, &contents) < 0 || !contents) {
         sd_bus_message_skip(m, "v");
-        return false;
+        return 0;
     }
-    sd_bus_message_enter_container(m, SD_BUS_TYPE_VARIANT, contents);
-    bool ok = true;
-    switch (contents[0]) {
-        case 'y': { uint8_t v = 0;  ok = sd_bus_message_read(m, "y", &v) >= 0; out = v; break; }
-        case 'b': { int v = 0;      ok = sd_bus_message_read(m, "b", &v) >= 0; out = v != 0; break; }
-        case 'n': { int16_t v = 0;  ok = sd_bus_message_read(m, "n", &v) >= 0; out = static_cast<uint64_t>(v); break; }
-        case 'q': { uint16_t v = 0; ok = sd_bus_message_read(m, "q", &v) >= 0; out = v; break; }
-        case 'i': { int32_t v = 0;  ok = sd_bus_message_read(m, "i", &v) >= 0; out = static_cast<uint64_t>(v); break; }
-        case 'u': { uint32_t v = 0; ok = sd_bus_message_read(m, "u", &v) >= 0; out = v; break; }
-        case 'x': { int64_t v = 0;  ok = sd_bus_message_read(m, "x", &v) >= 0; out = static_cast<uint64_t>(v); break; }
-        case 't':                   ok = sd_bus_message_read(m, "t", &out) >= 0; break;
+    if (contents[1] == '\0' && std::strchr("ybnqiuxt", contents[0])) {
+        sd_bus_message_enter_container(m, SD_BUS_TYPE_VARIANT, contents);
+        bool ok = true;
+        switch (contents[0]) {
+            case 'y': { uint8_t v = 0;  ok = sd_bus_message_read(m, "y", &v) >= 0; numOut = v; break; }
+            case 'b': { int v = 0;      ok = sd_bus_message_read(m, "b", &v) >= 0; numOut = v != 0; break; }
+            case 'n': { int16_t v = 0;  ok = sd_bus_message_read(m, "n", &v) >= 0; numOut = static_cast<uint64_t>(v); break; }
+            case 'q': { uint16_t v = 0; ok = sd_bus_message_read(m, "q", &v) >= 0; numOut = v; break; }
+            case 'i': { int32_t v = 0;  ok = sd_bus_message_read(m, "i", &v) >= 0; numOut = static_cast<uint64_t>(v); break; }
+            case 'u': { uint32_t v = 0; ok = sd_bus_message_read(m, "u", &v) >= 0; numOut = v; break; }
+            case 'x': { int64_t v = 0;  ok = sd_bus_message_read(m, "x", &v) >= 0; numOut = static_cast<uint64_t>(v); break; }
+            case 't':                   ok = sd_bus_message_read(m, "t", &numOut) >= 0; break;
+        }
+        sd_bus_message_exit_container(m);
+        return ok ? 1 : 0;
+    } else if (std::strcmp(contents, "s") == 0) {
+        sd_bus_message_enter_container(m, SD_BUS_TYPE_VARIANT, "s");
+        const char* val = nullptr;
+        bool ok = sd_bus_message_read(m, "s", &val) >= 0;
+        if (ok && val) strOut = val;
+        sd_bus_message_exit_container(m);
+        return ok ? 2 : 0;
     }
-    sd_bus_message_exit_container(m);
-    return ok;
+    sd_bus_message_skip(m, "v");
+    return 0;
 }
 
 }  // namespace
+
+NotificationMonitor::NotificationMonitor(EventLoop& loop) : loop_(loop) {
+    notes_.reserve(kMaxHeld);
+    pending_.reserve(kMaxPending);
+}
 
 NotificationMonitor::~NotificationMonitor() { teardown(); }
 
@@ -129,8 +178,9 @@ void NotificationMonitor::fetchBacklog(sd_bus* bus) {
         const char *app = nullptr, *title = nullptr, *body = nullptr;
         uint32_t daemonId = 0;
         uint8_t urgency = 1;
+        int sensitive = 0;
         while (sd_bus_message_read(reply, notiflog::kRecord, &postedAt, &app, &title,
-                                   &body, &daemonId, &urgency) > 0) {
+                                   &body, &daemonId, &urgency, &sensitive) > 0) {
             Notification n;
             n.id = nextKey_++;
             n.postedAt = postedAt;
@@ -139,6 +189,7 @@ void NotificationMonitor::fetchBacklog(sd_bus* bus) {
             n.body = body ? body : "";
             n.daemonId = daemonId;
             n.urgency = urgency;
+            n.sensitive = sensitive != 0;
             n.accent = accentFor(n.id, urgency);
             notes_.push_back(std::move(n));
         }
@@ -189,16 +240,31 @@ void NotificationMonitor::handleNotify(sd_bus_message* m) {
 
     uint8_t urgency = 1;  // normal
     bool transient = false;
+    bool sensitive = isAppSensitive(app ? app : "");
+
     if (sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "{sv}") > 0) {
         while (sd_bus_message_enter_container(m, SD_BUS_TYPE_DICT_ENTRY, "sv") > 0) {
             const char* key = nullptr;
             if (sd_bus_message_read(m, "s", &key) < 0) break;
-            uint64_t value = 0;
-            const bool numeric = readNumericVariant(m, value);
-            if (numeric && key && std::strcmp(key, "urgency") == 0)
-                urgency = static_cast<uint8_t>(value);
-            else if (numeric && key && std::strcmp(key, "transient") == 0)
-                transient = value != 0;
+            
+            uint64_t valNum = 0;
+            std::string valStr;
+            int type = readVariant(m, valNum, valStr);
+            if (type == 1) { // numeric
+                if (key && std::strcmp(key, "urgency") == 0)
+                    urgency = static_cast<uint8_t>(valNum);
+                else if (key && std::strcmp(key, "transient") == 0)
+                    transient = valNum != 0;
+                else if (key && (std::strcmp(key, "sensitive") == 0 || std::strcmp(key, "x-kde-privacy") == 0))
+                    sensitive = sensitive || (valNum != 0);
+                else if (key && std::strcmp(key, "visibility") == 0)
+                    sensitive = sensitive || (valNum < 2);
+            } else if (type == 2) { // string
+                if (key && std::strcmp(key, "visibility") == 0) {
+                    if (valStr == "private" || valStr == "secret")
+                        sensitive = true;
+                }
+            }
             sd_bus_message_exit_container(m);
         }
         sd_bus_message_exit_container(m);
@@ -214,6 +280,7 @@ void NotificationMonitor::handleNotify(sd_bus_message* m) {
     n.title = summary ? summary : "";
     n.body = body ? body : "";
     n.urgency = urgency;
+    n.sensitive = sensitive;
 
     // replaces_id: update the existing card in place (same key, so the view
     // reconciles without re-animating).
@@ -237,7 +304,8 @@ void NotificationMonitor::handleNotify(sd_bus_message* m) {
     uint64_t cookie = 0;
     if (sd_bus_message_get_cookie(m, &cookie) >= 0) {
         if (pending_.size() >= kMaxPending) pending_.clear();  // stale, unanswered
-        pending_.emplace(pendingKey(sd_bus_message_get_sender(m), cookie), n.id);
+        const char* sender = sd_bus_message_get_sender(m);
+        pending_.push_back(PendingCall{sender ? sender : "?", cookie, n.id});
     }
 
     notes_.push_back(std::move(n));
@@ -249,9 +317,14 @@ void NotificationMonitor::handleReturn(sd_bus_message* m) {
     if (pending_.empty()) return;
     uint64_t replyCookie = 0;
     if (sd_bus_message_get_reply_cookie(m, &replyCookie) < 0) return;
-    const auto it = pending_.find(pendingKey(sd_bus_message_get_destination(m), replyCookie));
+    const char* dest = sd_bus_message_get_destination(m);
+    std::string destStr = dest ? dest : "?";
+    
+    auto it = std::find_if(pending_.begin(), pending_.end(), [&](const PendingCall& pc) {
+        return pc.cookie == replyCookie && pc.sender == destStr;
+    });
     if (it == pending_.end()) return;
-    const uint64_t key = it->second;
+    const uint64_t key = it->id;
     pending_.erase(it);
 
     const char* sig = sd_bus_message_get_signature(m, 1);
