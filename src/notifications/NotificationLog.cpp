@@ -52,8 +52,8 @@ int NotificationLog::onList(sd_bus_message* m, void* userdata, sd_bus_error*) {
     sd_bus_message_open_container(reply, 'a', notiflog::kRecord);
     for (const auto& n : self->monitor_.notifications())
         sd_bus_message_append(reply, notiflog::kRecord, n.postedAt, n.app.c_str(),
-                              n.title.c_str(), n.body.c_str(), n.daemonId, n.urgency,
-                              static_cast<int>(n.sensitive));
+                              n.title.c_str(), n.body.c_str(), n.icon.c_str(), n.daemonId,
+                              n.urgency, static_cast<int>(n.sensitive));
     sd_bus_message_close_container(reply);
     sd_bus_send(nullptr, reply, nullptr);
     sd_bus_message_unref(reply);

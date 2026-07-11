@@ -128,9 +128,9 @@ bool NotificationMonitor::start(bool seedFromLog) {
         return false;
     }
 
-    // Pre-lock backlog from a running --record service, if any. Must happen
-    // now: after BecomeMonitor this connection can no longer place calls.
-    if (seedFromLog) fetchBacklog(bus);
+    // Pre-lock backlog from a running --record service, if any. Fetched over
+    // its own connection, so it is independent of this monitor connection.
+    if (seedFromLog) fetchBacklog();
 
     // Spec: the match rules are the *argument* of BecomeMonitor. Once the
     // reply arrives this connection is receive-only.
@@ -162,7 +162,14 @@ bool NotificationMonitor::start(bool seedFromLog) {
     return true;
 }
 
-void NotificationMonitor::fetchBacklog(sd_bus* bus) {
+void NotificationMonitor::fetchBacklog() {
+    // Use a dedicated, short-lived connection for the List() call. A previous
+    // regression showed that a failed/version-skewed deserialization on the
+    // monitor connection could cascade into BecomeMonitor failing and killing
+    // all notifications; isolating the fetch here makes that impossible.
+    sd_bus* bus = nullptr;
+    if (sd_bus_open_user(&bus) < 0) return;
+
     sd_bus_message* reply = nullptr;
     sd_bus_error err = SD_BUS_ERROR_NULL;
     if (sd_bus_call_method(bus, notiflog::kBusName, notiflog::kObjectPath,
@@ -171,22 +178,27 @@ void NotificationMonitor::fetchBacklog(sd_bus* bus) {
                              "pre-lock backlog unavailable\n",
                      err.message ? err.message : "?");
         sd_bus_error_free(&err);
+        sd_bus_unref(bus);
         return;
     }
+    // enter_container only succeeds when the element type matches exactly, so an
+    // older record service (7-field records without an icon) is skipped cleanly
+    // rather than mis-parsed.
     if (sd_bus_message_enter_container(reply, SD_BUS_TYPE_ARRAY, notiflog::kRecord) > 0) {
         int64_t postedAt = 0;
-        const char *app = nullptr, *title = nullptr, *body = nullptr;
+        const char *app = nullptr, *title = nullptr, *body = nullptr, *icon = nullptr;
         uint32_t daemonId = 0;
         uint8_t urgency = 1;
         int sensitive = 0;
         while (sd_bus_message_read(reply, notiflog::kRecord, &postedAt, &app, &title,
-                                   &body, &daemonId, &urgency, &sensitive) > 0) {
+                                   &body, &icon, &daemonId, &urgency, &sensitive) > 0) {
             Notification n;
             n.id = nextKey_++;
             n.postedAt = postedAt;
             n.app = app ? app : "";
             n.title = title ? title : "";
             n.body = body ? body : "";
+            n.icon = icon ? icon : "";
             n.daemonId = daemonId;
             n.urgency = urgency;
             n.sensitive = sensitive != 0;
@@ -198,6 +210,7 @@ void NotificationMonitor::fetchBacklog(sd_bus* bus) {
         if (!notes_.empty()) changed();
     }
     sd_bus_message_unref(reply);
+    sd_bus_unref(bus);
 }
 
 void NotificationMonitor::drain() {

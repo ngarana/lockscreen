@@ -90,7 +90,16 @@ void NotificationView::drawCard(Card& c, Painter& p, int64_t now, const Rect& r)
         // App tile (coloured square with a glyph).
         Rect tile{r.x + pad, r.y + pad, icon, icon};
         p.fillRoundedRect(tile, theme::radius::medium, c.note.accent.withAlpha(0.9));
-        cairo_surface_t* iconSurf = IconResolver::instance().get(c.note.icon);
+        // Never reveal the real app icon for a sensitive notification — the
+        // icon alone would disclose which app it came from. Otherwise try the
+        // notification's own icon hint first, then fall back to the app name
+        // (e.g. blueman sends "audio-card" as its hint, which isn't a shipped
+        // PNG, but "blueman" resolves to blueman.png).
+        cairo_surface_t* iconSurf = nullptr;
+        if (!c.note.sensitive) {
+            iconSurf = IconResolver::instance().get(c.note.icon);
+            if (!iconSurf) iconSurf = IconResolver::instance().get(c.note.app);
+        }
         if (iconSurf) {
             Rect iconDest{tile.x + 2, tile.y + 2, tile.w - 4, tile.h - 4};
             p.drawSurface(iconSurf, iconDest);

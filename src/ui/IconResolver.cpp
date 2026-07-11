@@ -133,15 +133,14 @@ std::string IconResolver::findFile(const std::string& name) {
         }
     }
 
-    static const char* kSizes[] = {"16x16", "22x22", "24x24", "32x32",
-                                   "48x48", "64x64", "96x96", "128x128"};
+    // Notification tiles are ~48px, so prefer sizes near that for a crisp
+    // result. Scalable/SVG icons are intentionally skipped: loadPng() only
+    // decodes PNG, and returning an SVG path here would make resolveName()
+    // give up before trying a PNG that does exist.
+    static const char* kSizes[] = {"48x48", "64x64", "32x32", "96x96",
+                                   "128x128", "24x24", "22x22", "16x16"};
 
     auto tryDir = [&](const std::string& base) -> std::string {
-        {
-            std::string p = base + "/scalable/apps/" + name + ".svg";
-            FILE* f = std::fopen(p.c_str(), "r");
-            if (f) { std::fclose(f); return p; }
-        }
         for (const char* sz : kSizes) {
             std::string p = base + "/" + sz + "/apps/" + name + ".png";
             FILE* f = std::fopen(p.c_str(), "r");
@@ -179,6 +178,16 @@ cairo_surface_t* IconResolver::resolveName(const std::string& name) {
         path = findFile(simple);
         if (!path.empty()) return loadPng(path);
 
+        // Reverse-DNS app IDs (e.g. "org.chromium.Chromium") commonly map to a
+        // lowercase icon file ("chromium.png"); try the last component lowered.
+        std::string simpleLower = simple;
+        std::transform(simpleLower.begin(), simpleLower.end(), simpleLower.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        if (simpleLower != simple) {
+            path = findFile(simpleLower);
+            if (!path.empty()) return loadPng(path);
+        }
+
         auto dot2 = name.find('.');
         if (dot2 != std::string::npos && dot2 < pos) {
             std::string kde = name.substr(dot2 + 1);
@@ -213,6 +222,11 @@ cairo_surface_t* IconResolver::get(const std::string& icon) {
         s = loadDataUri(icon);
     } else if (icon.rfind("file://", 0) == 0) {
         s = loadPng(icon.substr(7));
+    } else if (icon[0] == '/') {
+        // The freedesktop app_icon may be a full path rather than a themed
+        // name (e.g. "/usr/lib/kitty/logo/kitty.png"). Load it directly;
+        // resolveName() would only look it up as a theme name and miss it.
+        s = loadPng(icon);
     } else {
         s = resolveName(icon);
     }

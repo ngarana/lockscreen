@@ -666,6 +666,28 @@ TEST(LockSessionFinished) {
     }  // ~LockSession runs here with lock_ still held
 }
 
+// The notification tile icon resolver: a base64 data: URI must decode to a real
+// surface, repeated lookups must hit the cache, and empty/unknown names must
+// resolve to nothing so the caller falls back to a letter glyph.
+TEST(IconResolver) {
+    qypr::IconResolver r;
+
+    const std::string duri =
+        "data:image/png;base64,"
+        "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAABmJLR0QA/wD/AP+gvaeT"
+        "AAAAEElEQVQImWP8z4AATAxEcQAz0QEH1mUzKgAAAABJRU5ErkJggg==";
+    cairo_surface_t* s = r.get(duri);
+    EXPECT_TRUE(s != nullptr);
+    EXPECT_EQ(cairo_image_surface_get_width(s), 4);
+
+    // Same key returns the identical, cache-owned surface (no reload).
+    EXPECT_TRUE(r.get(duri) == s);
+
+    // Empty and unknown names resolve to nothing -> glyph fallback.
+    EXPECT_TRUE(r.get("") == nullptr);
+    EXPECT_TRUE(r.get("qypr-no-such-icon-xyz") == nullptr);
+}
+
 // -----------------------------------------------------------------------------
 // Main Runner
 // -----------------------------------------------------------------------------

@@ -61,7 +61,7 @@ private:
     void handleNotify(sd_bus_message* m);
     void handleReturn(sd_bus_message* m);
     void handleClosed(sd_bus_message* m);
-    void fetchBacklog(sd_bus* bus);
+    void fetchBacklog();
 
     void drain();     // process all queued bus messages; tears down on error
     void teardown();  // drop the connection (deferred out of fd callbacks)

@@ -21,10 +21,10 @@ namespace notiflog {
 inline constexpr char kBusName[] = "org.qypr.Notifications";
 inline constexpr char kObjectPath[] = "/org/qypr/Notifications";
 inline constexpr char kInterface[] = "org.qypr.Notifications";
-// One record: postedAt(ms), app, title, body, daemon id, urgency, sensitive.
-inline constexpr char kRecord[] = "(xsssuyb)";
+// One record: postedAt(ms), app, title, body, icon, daemon id, urgency, sensitive.
+inline constexpr char kRecord[] = "(xssssuyb)";
 // D-Bus method return type for List(): array of records.
-inline constexpr char kListReturn[] = "a(xsssuyb)";
+inline constexpr char kListReturn[] = "a(xssssuyb)";
 }  // namespace notiflog
 
 class NotificationLog {
