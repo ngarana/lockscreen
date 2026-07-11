@@ -8,10 +8,10 @@ namespace qypr {
 
 namespace {
 TextStyle timeStyle() {
-    return {theme::font::family, theme::font::sizeClock, PANGO_WEIGHT_THIN, theme::color::text};
+    return {theme::font::family, theme::font::sizeClock, PANGO_WEIGHT_BOLD, theme::color::text};
 }
 TextStyle dateStyle() {
-    return {theme::font::family, theme::font::sizeDate, PANGO_WEIGHT_LIGHT, theme::color::textSubtle};
+    return {theme::font::family, theme::font::sizeDate, PANGO_WEIGHT_BOLD, theme::color::textSubtle};
 }
 
 std::string formatNow(const char* fmt) {
