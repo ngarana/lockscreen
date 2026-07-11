@@ -13,6 +13,7 @@
 #include "core/Interfaces.hpp"
 #include "ui/ActionButton.hpp"
 #include "ui/Clock.hpp"
+#include "ui/Notification.hpp"
 #include "ui/PasswordField.hpp"
 #include "ui/StatusMessage.hpp"
 
@@ -32,6 +33,12 @@ public:
 
     // Optional video background player.
     void setVideoPlayer(VideoPlayer* video) { video_ = video; }
+
+    // Windows 11-style notification cards (bottom-left). The owner pushes the
+    // current set whenever it changes; the view reconciles by id.
+    void setNotifications(std::vector<Notification> notes) {
+        notifications_.update(std::move(notes));
+    }
 
     // Idle period (ms) with no input before the video pauses and the screen
     // fades to black. Screen power-off itself is left to the idle daemon.
@@ -88,6 +95,7 @@ private:
     Clock clock_;
     PasswordField passwordField_;
     StatusMessage status_;
+    NotificationView notifications_;
     std::array<ActionButton, 4> powerButtons_;
     ActionButton alwaysPower_;
 

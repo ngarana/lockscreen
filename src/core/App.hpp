@@ -9,6 +9,7 @@
 #include "core/EventLoop.hpp"
 #include "core/Interfaces.hpp"
 #include "mpris/MprisController.hpp"
+#include "notifications/NotificationMonitor.hpp"
 #include "power/PowerManager.hpp"
 #include "ui/AudioController.hpp"
 #include "ui/LockScreen.hpp"
@@ -48,6 +49,7 @@ private:
     MprisController mpris_;
     AudioController audio_;
     VideoPlayer video_;
+    NotificationMonitor notifications_{loop_};
     LockScreen lockScreen_;
 };
 

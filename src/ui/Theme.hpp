@@ -28,6 +28,19 @@ inline const Color textMuted = Color::fromHex("#6c7086");
 inline const Color error = Color::fromHex("#f38ba8");
 inline const Color success = Color::fromHex("#a6e3a1");
 inline const Color warning = Color::fromHex("#f9e2af");
+
+// Catppuccin Mocha accents (app tiles, status dots, etc.).
+inline const Color blue = Color::fromHex("#89b4fa");
+inline const Color lavender = Color::fromHex("#b4befe");
+inline const Color mauve = Color::fromHex("#cba6f7");
+inline const Color pink = Color::fromHex("#f5c2e7");
+inline const Color red = Color::fromHex("#f38ba8");
+inline const Color peach = Color::fromHex("#fab387");
+inline const Color yellow = Color::fromHex("#f9e2af");
+inline const Color green = Color::fromHex("#a6e3a1");
+inline const Color teal = Color::fromHex("#94e2d5");
+inline const Color sky = Color::fromHex("#89dceb");
+inline const Color maroon = Color::fromHex("#eba0ac");
 }  // namespace color
 
 namespace font {
@@ -77,5 +90,16 @@ inline constexpr int volumeSliderWidth = 150;
 inline constexpr int spacing = 12;
 inline constexpr int panelPadding = 16;
 }  // namespace audio
+
+namespace notification {
+inline constexpr int cardWidth = 360;
+inline constexpr int iconSize = 36;
+inline constexpr int padding = 16;
+inline constexpr int gap = 12;       // vertical space between stacked cards
+inline constexpr int titleSize = 14;
+inline constexpr int bodySize = 13;
+inline constexpr int maxVisible = 4;  // most recent cards shown
+inline constexpr int radius = 12;
+}  // namespace notification
 
 }  // namespace qypr::theme

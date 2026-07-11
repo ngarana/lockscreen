@@ -16,6 +16,12 @@ over **sdbus-c++** and an optional **video wallpaper** via **libmpv**.
   mouse movement reveals the password field, power menu, and audio panel.
 - Power menu: suspend / hibernate / reboot / shutdown (via `systemctl`).
 - MPRIS audio panel: metadata, progress/LIVE, transport, volume slider.
+- Windows 11-style lock-screen notifications: a stack of glass cards (app tile,
+  title, body) bottom-left that fade in and dismiss on click, fed by the real
+  `org.freedesktop.Notifications` traffic of whatever daemon is running (SwayNC,
+  dunst, mako, …) via a spec-correct D-Bus monitor connection. Honours
+  `replaces_id`, the `urgency`/`transient` hints, and `NotificationClosed` —
+  see `NOTIFICATIONS.md`.
 - Video wallpaper: a shuffled, time-of-day playlist decoded by libmpv (falls
   back to the gradient if unavailable).
 - Idle dim: after a configurable idle period the video **pauses** (drops the
@@ -39,11 +45,35 @@ pipeline without locking via `qypr-lock --video-test [seconds]`.
 
 Requires: a C++20 compiler, CMake, Ninja, `wayland-scanner`, and dev headers
 for `wayland-client`, `wayland-cursor`, `xkbcommon`, `cairo`, `pangocairo`,
-`sdbus-c++`, `libpam`, and `mpv` (libmpv, for the video wallpaper).
+`sdbus-c++`, `libsystemd` (sd-bus, for the notification monitor), `libpam`,
+and `mpv` (libmpv, for the video wallpaper).
 
 ```sh
 ./scripts/build.sh            # → ./build/qypr-lock
 ```
+
+## Notifications
+
+Real notifications are shown by observing `org.freedesktop.Notifications`
+traffic on the session bus the same way `busctl monitor` does: a dedicated
+sd-bus connection calls `org.freedesktop.DBus.Monitoring.BecomeMonitor` with
+the match rules passed in the call (the D-Bus spec's sanctioned mechanism),
+so it works with any daemon and needs no policy changes. Sample cards appear
+only in `--preview`. Design details in `NOTIFICATIONS.md`.
+
+To also carry the **pre-lock backlog** (undismissed notifications from before
+the screen locked), enable the session-long mirror service:
+
+```sh
+install -Dm644 systemd/qypr-notification-log.service \
+    ~/.config/systemd/user/qypr-notification-log.service
+systemctl --user daemon-reload
+systemctl --user enable --now qypr-notification-log.service
+```
+
+It runs `qypr-lock --record`, tracks dismissals (a SwayNC "clear" removes
+entries from the mirror), and hands the queue to the lock screen at startup
+over D-Bus (`org.qypr.Notifications`).
 
 ## Use
 
@@ -53,6 +83,7 @@ for `wayland-client`, `wayland-cursor`, `xkbcommon`, `cairo`, `pangocairo`,
 qypr-lock --preview out.png   # same preview, directly
 qypr-lock --idle-timeout 30   # pause video + dim to black after 30s idle (default 60)
 qypr-lock --video-test 6      # exercise the video pipeline offscreen, no lock
+qypr-lock --record            # notification mirror service (see Notifications)
 ```
 
 ### hypridle integration
@@ -84,10 +115,12 @@ src/
   wayland/    WaylandDisplay, LockSession, Output, Seat, ShmBuffer
   render/     Painter (cairo + pango helpers)
   ui/         Theme, Widget, LockScreen, Clock, PasswordField,
-              StatusMessage, ActionButton, AudioController
+              StatusMessage, ActionButton, AudioController, Notification
   auth/       PamAuthenticator (PAM on a worker thread)
   power/      PowerManager (systemctl)
   mpris/      MprisController (sdbus-c++)
+  notifications/ NotificationMonitor (sd-bus monitor), NotificationLog
+              (--record backlog service)
   video/      VideoPlayer (libmpv software render → cairo)
 ```
 

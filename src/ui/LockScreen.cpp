@@ -61,6 +61,7 @@ LockScreen::LockScreen(EventLoop& loop, RenderHost& host, PamAuthenticator& pam,
     alwaysPower_.onClick = [this] { reveal(); };
 
     // Repaint once a second so the clock stays current; also re-poll MPRIS.
+    // (Notifications are pushed via setNotifications, not polled.)
     clockTimer_ = loop_.addTimer(1000, true, [this] {
         if (audio_) audio_->refresh();
         host_.invalidate();
@@ -199,6 +200,7 @@ void LockScreen::onSpecialKey(uint32_t sym, uint32_t modifiers) {
 void LockScreen::onPointerMotion(int w, int h, double x, double y) {
     reveal();
     if (pointerDown_ && audio_) audio_->handleDrag(x, y);
+    if (notifications_.active()) notifications_.updateHover(x, y, nowMs());
     updateHover(w, h, x, y);
 }
 
@@ -214,6 +216,13 @@ void LockScreen::onPointerButton(int w, int h, double x, double y, uint32_t butt
     pointerDown_ = true;
     bool wasRevealed = revealed_;
     reveal();
+
+    // Notification cards are a foreground overlay; dismiss on click.
+    if (notifications_.active() && notifications_.handlePress(x, y, nowMs())) {
+        host_.invalidate();
+        return;
+    }
+
     if (!wasRevealed) return;  // first interaction only reveals
 
     // Audio panel sits above the power row; give it first refusal.
@@ -236,6 +245,7 @@ void LockScreen::onPointerLeave() {
     for (auto& b : powerButtons_) b.setHovered(false, now);
     alwaysPower_.setHovered(false, now);
     if (audio_) audio_->clearHover(now);
+    notifications_.clearHover(now);
     host_.invalidate();
 }
 
@@ -333,6 +343,16 @@ void LockScreen::draw(cairo_t* cr, int width, int height, int) {
     });
     withAlpha(lerp(0.7, 0.0, r), [&] { alwaysPower_.draw(p, now); });
 
+    // Windows 11-style notification cards, always visible on the lock screen
+    // (bottom-left), below the idle dim veil.
+    {
+        const double left = theme::spacing::xlarge;
+        const double bottom = height - theme::spacing::xlarge;
+        const double maxW = std::min(static_cast<double>(width) - 2 * theme::spacing::xlarge,
+                                     static_cast<double>(theme::notification::cardWidth));
+        notifications_.draw(p, now, left, bottom, maxW);
+    }
+
     // Deep-idle dim: a black veil over everything, on top of all content.
     const double dim = clamp01(dimAnim_.value(now));
     if (dim > 0.001)
@@ -347,6 +367,7 @@ bool LockScreen::isAnimating() const {
     for (const auto& b : powerButtons_)
         if (b.animating(now)) return true;
     if (alwaysPower_.animating(now)) return true;
+    if (notifications_.active() && notifications_.animating(now)) return true;
     return audio_ && audio_->animating(now);
 }
 

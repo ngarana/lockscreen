@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <string>
 
+#include "ui/Notification.hpp"
+
 namespace qypr {
 
 namespace {
@@ -28,6 +30,13 @@ App::App()
       lockScreen_(loop_, *this, pam_, power_) {
     lockScreen_.setAudioController(&audio_);
     lockScreen_.setVideoPlayer(&video_);
+
+    // Live notifications are pushed into the UI as the monitor sees them.
+    // No fallback data on the real lock screen — samples are preview-only.
+    notifications_.setOnChange([this] {
+        lockScreen_.setNotifications(notifications_.notifications());
+        invalidate();
+    });
 }
 
 int App::run() {
@@ -51,6 +60,10 @@ int App::run() {
         return 1;
     }
 
+    // Start the notification monitor, seeded with the pre-lock backlog from a
+    // running --record service (non-fatal: it logs when unavailable).
+    notifications_.start(/*seedFromLog=*/true);
+
     // Start video playback (non-fatal if it fails).
     if (video_.init()) {
         video_.start();
@@ -63,6 +76,8 @@ int App::run() {
 }
 
 int App::preview(const std::string& path, int width, int height) {
+    lockScreen_.setNotifications(demoNotifications());  // sample cards, preview only
+
     // Idle state (before any interaction).
     renderToPng(lockScreen_, path.substr(0, path.rfind('.')) + "-idle.png", width, height);
 

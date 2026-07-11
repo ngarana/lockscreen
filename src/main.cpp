@@ -8,8 +8,34 @@
 #include <string>
 
 #include "core/App.hpp"
+#include "core/EventLoop.hpp"
+#include "notifications/NotificationLog.hpp"
+#include "notifications/NotificationMonitor.hpp"
+
+namespace qypr {
+
+// Session-long recorder: mirror the notification daemon's queue (captures
+// minus dismissals) and serve it as org.qypr.Notifications, so a lock screen
+// starting later can seed itself with the pre-lock backlog. Meant to run for
+// the whole session (systemd --user service).
+int runRecorder() {
+    EventLoop loop;
+    NotificationMonitor monitor(loop);
+    NotificationLog log(loop, monitor);
+    if (!monitor.start() || !log.start()) return 1;
+    loop.run();
+    return 0;
+}
+
+}  // namespace qypr
 
 int main(int argc, char** argv) {
+    // Recorder mode never needs the App (Wayland, PAM, video, ...): keep the
+    // session service tiny.
+    //   qypr-lock --record
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--record") == 0) return qypr::runRecorder();
+
     qypr::App app;
 
     // Offline preview: render frames to PNG without locking the session.
