@@ -1,8 +1,7 @@
 # qypr-lock
 
-A lean, GPU-free **C++ Wayland lock screen** for Hyprland (and any compositor
-implementing `ext-session-lock-v1`). Migrated from a Quickshell/QML shell to
-native C++ to cut memory use and remove the QML/QtQuick runtime.
+A lean memory efficient, GPU-free **C++ Wayland lock screen** for Hyprland (and any compositor
+implementing `ext-session-lock-v1`). 
 
 Software-rendered with **cairo + wl_shm** (no EGL/GL pipeline needed for this
 UI), authenticated with **PAM**, with an optional **MPRIS** now-playing panel
@@ -16,12 +15,11 @@ over **sdbus-c++** and an optional **video wallpaper** via **libmpv**.
   mouse movement reveals the password field, power menu, and audio panel.
 - Power menu: suspend / hibernate / reboot / shutdown (via `systemctl`).
 - MPRIS audio panel: metadata, progress/LIVE, transport, volume slider.
-- Windows 11-style lock-screen notifications: a stack of glass cards (app tile,
+- Lock-screen notifications: a stack of glass cards (app tile,
   title, body) bottom-left that fade in and dismiss on click, fed by the real
   `org.freedesktop.Notifications` traffic of whatever daemon is running (SwayNC,
   dunst, mako, …) via a spec-correct D-Bus monitor connection. Honours
-  `replaces_id`, the `urgency`/`transient` hints, and `NotificationClosed` —
-  see `NOTIFICATIONS.md`.
+  `replaces_id`, the `urgency`/`transient` hints, and `NotificationClosed`.
 - Video wallpaper: a shuffled, time-of-day playlist decoded by libmpv (falls
   back to the gradient if unavailable).
 - Idle dim: after a configurable idle period the video **pauses** (drops the
@@ -59,7 +57,7 @@ traffic on the session bus the same way `busctl monitor` does: a dedicated
 sd-bus connection calls `org.freedesktop.DBus.Monitoring.BecomeMonitor` with
 the match rules passed in the call (the D-Bus spec's sanctioned mechanism),
 so it works with any daemon and needs no policy changes. Sample cards appear
-only in `--preview`. Design details in `NOTIFICATIONS.md`.
+only in `--preview`.
 
 To also carry the **pre-lock backlog** (undismissed notifications from before
 the screen locked), enable the session-long mirror service:
