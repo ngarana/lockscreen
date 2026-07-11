@@ -1,9 +1,10 @@
 // IconResolver.hpp - Memory-efficient app icon loader for notification tiles.
 //
 // Resolves freedesktop icon names (e.g. "firefox", "org.gnome.Calendar") to
-// PNG files via XDG icon theme directories, loads them with cairo's built-in
-// PNG support (no extra dependencies), and caches surfaces with bounded memory
-// usage. Also handles file:// and data: URIs from the D-Bus app_icon field.
+// icon files via XDG icon theme directories. PNGs load through cairo's built-in
+// decoder; scalable/SVG icons are rasterized with librsvg. Surfaces are cached
+// with bounded memory usage. Also handles absolute paths, file:// and data:
+// URIs from the D-Bus app_icon field.
 
 #pragma once
 
@@ -35,6 +36,8 @@ private:
     static constexpr size_t kMaxCached = 32;
 
     cairo_surface_t* loadPng(const std::string& path);
+    cairo_surface_t* loadSvg(const std::string& path);
+    cairo_surface_t* loadFile(const std::string& path);  // dispatch by extension
     cairo_surface_t* loadDataUri(const std::string& uri);
     cairo_surface_t* resolveName(const std::string& name);
     std::string findFile(const std::string& name);
