@@ -150,3 +150,7 @@ target_link_libraries(qypr-test PRIVATE
 
 # qypr-test is a headless, mock-linked binary — build it, but never install it.
 install(TARGETS qypr-lock qypr-record RUNTIME DESTINATION bin)
+
+# Man pages.
+install(FILES man/man1/qypr-lock.1 man/man1/qypr-record.1
+        DESTINATION share/man/man1)
