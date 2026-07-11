@@ -2,3 +2,8 @@ assets/*
 .qmlls.ini
 build/
 *.png
+
+# Coverage artifacts
+*.gcov
+*.gcda
+*.gcno

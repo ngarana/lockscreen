@@ -25,6 +25,10 @@ int runRecorder() {
 }
 } // namespace qypr
 
+#ifdef TESTING
+int qypr_record_main(int argc, char** argv) {
+#else
 int main(int argc, char** argv) {
+#endif
     return qypr::runRecorder();
 }

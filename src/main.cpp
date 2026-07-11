@@ -11,7 +11,11 @@
 #include "core/EventLoop.hpp"
 #include "notifications/NotificationMonitor.hpp"
 
+#ifdef TESTING
+int qypr_main(int argc, char** argv) {
+#else
 int main(int argc, char** argv) {
+#endif
     qypr::App app;
 
     // Offline preview: render frames to PNG without locking the session.

@@ -8,6 +8,7 @@
 
 namespace qypr {
 
+#ifndef TESTING
 namespace {
 constexpr const char* kObjectPath = "/org/mpris/MediaPlayer2";
 constexpr const char* kPlayerIface = "org.mpris.MediaPlayer2.Player";
@@ -41,8 +42,12 @@ std::optional<T> getProp(sdbus::IProxy& proxy, const char* iface, const char* na
     }
 }
 }  // namespace
+#endif
 
 MprisController::MprisController() {
+#ifdef TESTING
+    // Mock connection setup: does nothing, just lets available() return true
+#else
     try {
         conn_ = sdbus::createSessionBusConnection();
         dbusProxy_ = sdbus::createProxy(*conn_, sdbus::ServiceName{"org.freedesktop.DBus"},
@@ -50,10 +55,12 @@ MprisController::MprisController() {
     } catch (...) {
         conn_.reset();  // no session bus: controller stays inert
     }
+#endif
 }
 
 MprisController::~MprisController() = default;
 
+#ifndef TESTING
 std::unique_ptr<sdbus::IProxy> MprisController::playerProxy(const std::string& name) {
     return sdbus::createProxy(*conn_, sdbus::ServiceName{name}, sdbus::ObjectPath{kObjectPath});
 }
@@ -134,35 +141,74 @@ MprisController::Snapshot MprisController::readSnapshot(const std::string& name)
     s.valid = true;
     return s;
 }
+#endif
 
 void MprisController::refresh() {
+#ifdef TESTING
+    // Populate fake snapshot data
+    snap_.valid = true;
+    snap_.dbusName = "org.mpris.MediaPlayer2.mock";
+    snap_.identity = "Mock Player";
+    snap_.title = "Mock Song";
+    snap_.artist = "Mock Artist";
+    snap_.album = "Mock Album";
+    if (snap_.status.empty()) snap_.status = "Playing";
+    snap_.volume = 0.8;
+    snap_.positionUs = 60 * 1000000;
+    snap_.lengthUs = 180 * 1000000;
+    snap_.canControl = true;
+    snap_.canGoNext = true;
+    snap_.canGoPrevious = true;
+    snap_.volumeSupported = true;
+#else
     if (!conn_) {
         snap_ = Snapshot{};
         return;
     }
     std::string name = pickActive(listPlayers());
     snap_ = name.empty() ? Snapshot{} : readSnapshot(name);
+#endif
 }
 
 void MprisController::togglePlaying() {
+#ifdef TESTING
+    if (!snap_.valid || !snap_.canControl) return;
+    if (snap_.status == "Playing") {
+        snap_.status = "Paused";
+    } else {
+        snap_.status = "Playing";
+    }
+#else
     if (!snap_.valid || !snap_.canControl) return;
     try {
         playerProxy(snap_.dbusName)->callMethod("PlayPause").onInterface(kPlayerIface).dontExpectReply();
     } catch (...) {
     }
     refresh();
+#endif
 }
 
 void MprisController::next() {
+#ifdef TESTING
+    if (!snap_.valid || !snap_.canGoNext) return;
+    snap_.title = "Next Song";
+    snap_.positionUs = 0;
+#else
     if (!snap_.valid || !snap_.canGoNext) return;
     try {
         playerProxy(snap_.dbusName)->callMethod("Next").onInterface(kPlayerIface).dontExpectReply();
     } catch (...) {
     }
     refresh();
+#endif
 }
 
 void MprisController::previous() {
+#ifdef TESTING
+    if (!snap_.valid || !snap_.canGoPrevious) return;
+    snap_.title = "Previous Song";
+    snap_.positionUs = 0;
+#else
     if (!snap_.valid || !snap_.canGoPrevious) return;
     try {
         playerProxy(snap_.dbusName)
@@ -172,9 +218,14 @@ void MprisController::previous() {
     } catch (...) {
     }
     refresh();
+#endif
 }
 
 void MprisController::setVolume(double level) {
+#ifdef TESTING
+    if (!snap_.valid || !snap_.volumeSupported) return;
+    snap_.volume = std::clamp(level, 0.0, 1.0);
+#else
     if (!snap_.valid || !snap_.volumeSupported) return;
     double clamped = std::clamp(level, 0.0, 1.0);
     try {
@@ -182,6 +233,7 @@ void MprisController::setVolume(double level) {
         snap_.volume = clamped;
     } catch (...) {
     }
+#endif
 }
 
 }  // namespace qypr

@@ -12,6 +12,11 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
+# Coverage is a test-only opt-in (configure with -DENABLE_COVERAGE=ON). It is
+# scoped to the qypr-test target below, so the shipped qypr-lock / qypr-record
+# binaries are never instrumented (no -O0, no .gcda writes at runtime).
+option(ENABLE_COVERAGE "Instrument the qypr-test target for coverage" OFF)
+
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
 
@@ -108,4 +113,37 @@ target_link_libraries(qypr-record PRIVATE
     PkgConfig::SYSTEMD
 )
 
+# 3. Unit Test suite target (mock/headless environment)
+add_executable(qypr-test
+    tests/unit_tests.cpp
+    tests/mocks.cpp
+    ${QYPR_SOURCES}
+    src/notifications/NotificationLog.cpp
+    src/recorder_main.cpp
+    "${PROTO_CODE}"
+    "${PROTO_HEADER}")
+
+target_compile_definitions(qypr-test PRIVATE TESTING)
+
+if(ENABLE_COVERAGE)
+    target_compile_options(qypr-test PRIVATE --coverage -O0 -g)
+    target_link_options(qypr-test PRIVATE --coverage)
+endif()
+
+target_include_directories(qypr-test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${GEN_DIR}"
+    "${PAM_INCLUDE_DIR}")
+
+target_link_libraries(qypr-test PRIVATE
+    PkgConfig::WAYLAND
+    PkgConfig::WLCURSOR
+    PkgConfig::XKB
+    PkgConfig::CAIRO
+    PkgConfig::PANGO
+    PkgConfig::SYSTEMD
+    PkgConfig::MPV
+    Threads::Threads)
+
+# qypr-test is a headless, mock-linked binary — build it, but never install it.
 install(TARGETS qypr-lock qypr-record RUNTIME DESTINATION bin)

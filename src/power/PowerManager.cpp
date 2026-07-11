@@ -11,12 +11,16 @@ PowerManager::PowerManager() {
 }
 
 void PowerManager::run(const char* verb) {
+#ifdef TESTING
+    (void)verb;
+#else
     pid_t pid = fork();
     if (pid == 0) {
         execlp("systemctl", "systemctl", verb, static_cast<char*>(nullptr));
         _exit(127);  // exec failed
     }
     // Parent: do not block; the action either takes over or fails silently.
+#endif
 }
 
 }  // namespace qypr

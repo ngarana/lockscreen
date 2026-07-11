@@ -26,7 +26,11 @@ public:
     void refresh();
 
     // Snapshot accessors (mirror AudioService's read-only properties).
+#ifdef TESTING
+    bool available() const { return true; }
+#else
     bool available() const { return conn_ != nullptr; }
+#endif
     bool active() const { return snap_.valid && snap_.status != "Stopped"; }
     bool playing() const { return snap_.status == "Playing"; }
     const std::string& title() const { return snap_.title; }
