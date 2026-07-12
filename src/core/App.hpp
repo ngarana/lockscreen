@@ -12,6 +12,7 @@
 #include "notifications/NotificationMonitor.hpp"
 #include "power/PowerManager.hpp"
 #include "system/BatteryBackend.hpp"
+#include "system/BrightnessBackend.hpp"
 #include "system/SystemBus.hpp"
 #include "ui/AudioController.hpp"
 #include "ui/Shell.hpp"
@@ -57,7 +58,8 @@ private:
     // is handed to Shell → StatusBar (indicators consume snapshots only).
     SystemBus systemBus_{loop_};
     BatteryBackend battery_{systemBus_};
-    SystemBackends backends_{&battery_};
+    BrightnessBackend brightness_{loop_, systemBus_};
+    SystemBackends backends_{.battery = &battery_, .brightness = &brightness_};
 
     Shell shell_;
 };

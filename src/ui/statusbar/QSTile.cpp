@@ -146,7 +146,6 @@ void QSInfoTile::draw(Painter& p, int64_t now) {
 
     // Title (top-right of icon)
     TextStyle titleStyle{theme::font::family, 13.0, PANGO_WEIGHT_BOLD, theme::color::text};
-    Size titleSz = p.measureText(title_, titleStyle);
     p.drawText(iconX + iconSz.w + 10.0, iconY, title_, titleStyle);
 
     // Progress bar
@@ -165,7 +164,6 @@ void QSInfoTile::draw(Painter& p, int64_t now) {
     // Info text below bar
     if (!info.empty()) {
         TextStyle infoStyle{theme::font::family, 11.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
-        Size infoSz = p.measureText(info, infoStyle);
         p.drawText(bounds.x + pad, barY + barH + 6.0, info, infoStyle);
     }
 }

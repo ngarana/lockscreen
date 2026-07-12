@@ -248,7 +248,16 @@ void Seat::onPtrButton(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t but
                                  button, state == WL_POINTER_BUTTON_STATE_PRESSED);
 }
 
-void Seat::onPtrAxis(void*, wl_pointer*, uint32_t, uint32_t, wl_fixed_t) {}
+void Seat::onPtrAxis(void* data, wl_pointer*, uint32_t, uint32_t axis, wl_fixed_t value) {
+    auto* self = static_cast<Seat*>(data);
+    if (!self->sink_ || !self->pointerOutput_) return;
+    const double v = wl_fixed_to_double(value);
+    const double dx = axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL ? v : 0.0;
+    const double dy = axis == WL_POINTER_AXIS_VERTICAL_SCROLL ? v : 0.0;
+    self->sink_->onPointerScroll(self->pointerOutput_->logicalWidth(),
+                                 self->pointerOutput_->logicalHeight(), self->ptrX_,
+                                 self->ptrY_, dx, dy);
+}
 
 // Scroll-frame grouping events: unused, but must be handled (see header).
 void Seat::onPtrFrame(void*, wl_pointer*) {}

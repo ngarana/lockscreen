@@ -104,7 +104,9 @@ int g_tests_failed = 0;
 #include "ui/indicators/ClockIndicator.hpp"
 #include "ui/indicators/BatteryIndicator.hpp"
 #include "system/BatteryBackend.hpp"
+#include "system/BrightnessBackend.hpp"
 #include "system/SystemBus.hpp"
+#include "ui/indicators/BrightnessIndicator.hpp"
 #include "core/App.hpp"
 
 #undef private
@@ -1097,6 +1099,69 @@ TEST(BatteryBackendConstruction) {
         EXPECT_TRUE(s.percentage >= 0 && s.percentage <= 100);
     } else {
         EXPECT_FALSE(s.present);
+    }
+}
+
+// =============================================================================
+// Phase 3a: Brightness Indicator Tests
+// =============================================================================
+
+TEST(BrightnessIndicatorConstruction) {
+    qypr::SystemBackends backends{};
+    qypr::BrightnessIndicator bright(backends);
+
+    EXPECT_EQ(bright.id(), std::string("brightness"));
+    EXPECT_TRUE(static_cast<int>(bright.zone()) == static_cast<int>(qypr::Zone::Right));
+    EXPECT_EQ(bright.priority(), 100);
+    EXPECT_FALSE(bright.hasDetailedView());
+
+    // Icon levels track the snapshot fraction
+    bright.lastSnap_.max = 100;
+    bright.lastSnap_.current = 80;
+    EXPECT_EQ(bright.icon(), std::string("󰃠"));
+    bright.lastSnap_.current = 50;
+    EXPECT_EQ(bright.icon(), std::string("󰃟"));
+    bright.lastSnap_.current = 10;
+    EXPECT_EQ(bright.icon(), std::string("󰃞"));
+
+    // Scroll without a backend must be a no-op, not a crash
+    EXPECT_FALSE(bright.onScroll(0, -1.0));
+}
+
+TEST(BrightnessIndicatorCreatesSliderTile) {
+    qypr::SystemBackends backends{};
+    qypr::BrightnessIndicator bright(backends);
+    bright.lastSnap_.max = 100;
+    bright.lastSnap_.current = 75;
+
+    auto tile = bright.createTile();
+    EXPECT_TRUE(tile != nullptr);
+    EXPECT_TRUE(tile->type() == qypr::QSTile::Type::Slider);
+
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 400, 60);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    tile->bounds = {0, 0, 348, 40};
+    tile->draw(p, qypr::nowMs());
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+TEST(BrightnessBackendConstruction) {
+    qypr::EventLoop loop;
+    qypr::SystemBus bus(loop);
+    qypr::BrightnessBackend backend(loop, bus);
+
+    // start() must not crash whether or not a backlight exists; on failure
+    // the snapshot stays unavailable so the indicator hides.
+    bool started = backend.start();
+    const auto& s = backend.snapshot();
+    if (started) {
+        EXPECT_TRUE(s.available);
+        EXPECT_TRUE(s.max > 0);
+        EXPECT_TRUE(s.current >= 0 && s.current <= s.max);
+    } else {
+        EXPECT_FALSE(s.available);
     }
 }
 

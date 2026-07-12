@@ -123,6 +123,14 @@ void Shell::onPointerButton(int w, int h, double x, double y, uint32_t button, b
     lockScreen_.handlePointerButton(w, h, x, y, button, pressed);
 }
 
+void Shell::onPointerScroll(int w, int h, double x, double y, double dx, double dy) {
+    (void)w;
+    (void)h;
+    wakeFromIdle();
+    // Only the status bar scrolls (volume/brightness adjust, popover lists).
+    statusBar_.handleScroll(x, y, dx, dy);
+}
+
 void Shell::onPointerLeave() {
     statusBar_.handlePointerLeave(nowMs());
     lockScreen_.handlePointerLeave();

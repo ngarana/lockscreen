@@ -43,6 +43,7 @@ public:
     void onSpecialKey(uint32_t keysym, uint32_t modifiers) override;
     void onPointerMotion(int w, int h, double x, double y) override;
     void onPointerButton(int w, int h, double x, double y, uint32_t button, bool pressed) override;
+    void onPointerScroll(int w, int h, double x, double y, double dx, double dy) override;
     void onPointerLeave() override;
 
     // Access for App wiring.

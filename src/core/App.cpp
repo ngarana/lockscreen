@@ -67,6 +67,7 @@ int App::run() {
     // Status bar backends: one startup fetch, push-only afterwards
     // (non-fatal: the affected indicator stays hidden).
     battery_.start();
+    brightness_.start();
 
     // Start video playback (non-fatal if it fails).
     if (video_.init()) {
@@ -81,7 +82,8 @@ int App::run() {
 
 int App::preview(const std::string& path, int width, int height) {
     shell_.setNotifications(demoNotifications());  // sample cards, preview only
-    battery_.start();  // live battery state for the status bar
+    battery_.start();     // live battery state for the status bar
+    brightness_.start();  // live backlight state for the status bar
 
     // Idle state (before any interaction).
     renderToPng(shell_, path.substr(0, path.rfind('.')) + "-idle.png", width, height);

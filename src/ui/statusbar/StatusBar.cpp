@@ -8,6 +8,7 @@
 #include "core/Types.hpp"
 #include "render/Painter.hpp"
 #include "system/BatteryBackend.hpp"
+#include "system/BrightnessBackend.hpp"
 #include "ui/Theme.hpp"
 #include "ui/statusbar/IndicatorRegistry.hpp"
 
@@ -47,6 +48,9 @@ StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& b
     // their own backend pointer) and triggers a repaint.
     if (backends.battery) {
         backends.battery->setOnChange([this] { notifyBackendUpdate(); });
+    }
+    if (backends.brightness) {
+        backends.brightness->setOnChange([this] { notifyBackendUpdate(); });
     }
 
     // The bar's own 1s tick: drives poll() (clock text, animations that

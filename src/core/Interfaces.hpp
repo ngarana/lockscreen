@@ -33,6 +33,9 @@ public:
     virtual void onPointerMotion(int surfaceW, int surfaceH, double x, double y) = 0;
     virtual void onPointerButton(int surfaceW, int surfaceH, double x, double y,
                                  uint32_t button, bool pressed) = 0;
+    // Scroll wheel/axis. Default no-op: most sinks don't scroll.
+    virtual void onPointerScroll(int surfaceW, int surfaceH, double x, double y,
+                                 double dx, double dy) {}
     virtual void onPointerLeave() = 0;
 };
 
