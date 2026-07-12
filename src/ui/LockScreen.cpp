@@ -39,10 +39,10 @@ LockScreen::LockScreen(EventLoop& loop, RenderHost& host, PamAuthenticator& pam,
     : loop_(loop), host_(host), pam_(pam), power_(power) {
     struct Cfg { const char* icon; const char* label; };
     const Cfg cfg[4] = {
-        {"⏾", "Suspend"},    // ⏾
-        {"⏻", "Hibernate"},  // ⏻
-        {"↻", "Reboot"},     // ↻
-        {"⏼", "Shutdown"},   // ⏼
+        {"⏾", "Suspend"},    // ⏾ moon/sleep
+        {"󰒲", "Hibernate"},  // nerd font hibernate
+        {"↻", "Reboot"},     // ↻ reload
+        {"⏼", "Shutdown"},   // ⏼ power-off
     };
     for (int i = 0; i < 4; ++i) {
         auto& b = powerButtons_[i];
@@ -50,15 +50,20 @@ LockScreen::LockScreen(EventLoop& loop, RenderHost& host, PamAuthenticator& pam,
         b.label = cfg[i].label;
         b.diameter = kButtonDiameter;
     }
-    powerButtons_[0].onClick = [this] { power_.suspend(); };
-    powerButtons_[1].onClick = [this] { power_.hibernate(); };
-    powerButtons_[2].onClick = [this] { power_.reboot(); };
-    powerButtons_[3].onClick = [this] { power_.shutdown(); };
+    powerButtons_[0].onClick = [this] { showPowerConfirm(0, lastW_, lastH_); };
+    powerButtons_[1].onClick = [this] { showPowerConfirm(1, lastW_, lastH_); };
+    powerButtons_[2].onClick = [this] { showPowerConfirm(2, lastW_, lastH_); };
+    powerButtons_[3].onClick = [this] { showPowerConfirm(3, lastW_, lastH_); };
 
     alwaysPower_.icon = "⏻";  // ⏻
     alwaysPower_.label = "Power";
     alwaysPower_.diameter = kButtonDiameter;
-    alwaysPower_.onClick = [this] { reveal(); };
+    // Anchor toggles the pill open/closed; also reveals the UI if not yet shown.
+    alwaysPower_.onClick = [this] {
+        reveal();
+        if (powerExpanded_) collapsePower();
+        else                expandPower();
+    };
 
     // Repaint once a second so the clock stays current; also re-poll MPRIS.
     // (Notifications are pushed via setNotifications, not polled.)
@@ -111,10 +116,56 @@ void LockScreen::enterIdle() {
 void LockScreen::collapse() {
     revealed_ = false;
     revealAnim_.animateTo(0.0, theme::anim::reveal, ease::inOutQuad);
+    collapsePower();  // closing the UI always collapses the pill too
     if (hideTimer_ >= 0) {
         loop_.removeTimer(hideTimer_);
         hideTimer_ = -1;
     }
+    host_.invalidate();
+}
+
+void LockScreen::expandPower() {
+    if (powerExpanded_) return;
+    powerExpanded_ = true;
+    powerExpandAnim_.animateTo(1.0, theme::anim::medium, ease::inOutQuad);
+    host_.invalidate();
+}
+
+void LockScreen::collapsePower() {
+    if (!powerExpanded_) return;
+    powerExpanded_ = false;
+    powerExpandAnim_.animateTo(0.0, theme::anim::medium, ease::inOutQuad);
+    host_.invalidate();
+}
+
+void LockScreen::showPowerConfirm(int index, int w, int h) {
+    struct Cfg { const char* icon; const char* label; const char* confirmLabel; };
+    static const Cfg cfg[4] = {
+        {"⏾", "Suspend",   "Suspend"},
+        {"󰒲", "Hibernate", "Hibernate"},
+        {"↻", "Reboot",    "Reboot"},
+        {"⏼", "Shut down", "Shut down"},
+    };
+
+    std::function<void()> action;
+    switch (index) {
+        case 0: action = [this] { power_.suspend();   }; break;
+        case 1: action = [this] { power_.hibernate(); }; break;
+        case 2: action = [this] { power_.reboot();    }; break;
+        case 3: action = [this] { power_.shutdown();  }; break;
+        default: return;
+    }
+
+    // Anchor the popover to the left edge of the pill, vertically centred
+    // on the anchor (trigger) button — which stays visible after the pill collapses.
+    Rect anchor  = powerAnchorRect(w, h);
+    Rect fullCol = powerRowRect(w, h);
+    double pillLeft = fullCol.x;
+
+    powerDialog_.show(cfg[index].icon, cfg[index].label,
+                      cfg[index].confirmLabel, std::move(action),
+                      anchor, pillLeft);
+    collapsePower();
     host_.invalidate();
 }
 
@@ -165,11 +216,24 @@ void LockScreen::onAuthResult(PamAuthenticator::Result result, const std::string
 // Keyboard
 // -----------------------------------------------------------------------------
 void LockScreen::onTextInput(const std::string& utf8) {
+    if (powerDialog_.active()) return;  // ignore typing while confirm dialog is up
     password_ += utf8;
     reveal();
 }
 
 void LockScreen::onSpecialKey(uint32_t sym, uint32_t modifiers) {
+    // If the confirmation dialog is up, only Escape and Enter are meaningful.
+    if (powerDialog_.active()) {
+        if (sym == XKB_KEY_Escape) {
+            powerDialog_.dismiss();
+            host_.invalidate();
+        } else if (sym == XKB_KEY_Return || sym == XKB_KEY_KP_Enter) {
+            powerDialog_.confirm();
+            host_.invalidate();
+        }
+        return;  // block all other keystrokes while dialog is shown
+    }
+
     switch (sym) {
         case XKB_KEY_Escape:
             password_.clear();
@@ -198,6 +262,11 @@ void LockScreen::onSpecialKey(uint32_t sym, uint32_t modifiers) {
 // Pointer
 // -----------------------------------------------------------------------------
 void LockScreen::onPointerMotion(int w, int h, double x, double y) {
+    if (powerDialog_.active()) {
+        powerDialog_.updateHover(x, y, nowMs());
+        host_.invalidate();
+        return;
+    }
     reveal();
     if (pointerDown_ && audio_) audio_->handleDrag(x, y);
     if (notifications_.active()) notifications_.updateHover(x, y, nowMs());
@@ -210,6 +279,13 @@ void LockScreen::onPointerButton(int w, int h, double x, double y, uint32_t butt
     if (!pressed) {  // release ends any volume drag
         pointerDown_ = false;
         if (audio_) audio_->handleRelease();
+        return;
+    }
+
+    // While the confirmation dialog is showing, let it consume the click.
+    if (powerDialog_.active()) {
+        powerDialog_.handlePress(x, y, nowMs());
+        host_.invalidate();
         return;
     }
 
@@ -233,10 +309,16 @@ void LockScreen::onPointerButton(int w, int h, double x, double y, uint32_t butt
 
     for (int i = 0; i < 4; ++i) {
         powerButtons_[i].bounds = powerButtonRect(i, w, h);
-        if (powerButtons_[i].contains(x, y)) {
+        if (powerExpanded_ && powerButtons_[i].contains(x, y)) {
             powerButtons_[i].click();
             return;
         }
+    }
+    // Also test the anchor button (it's always interactive).
+    alwaysPower_.bounds = powerAnchorRect(w, h);
+    if (alwaysPower_.contains(x, y)) {
+        alwaysPower_.click();
+        return;
     }
 }
 
@@ -251,12 +333,14 @@ void LockScreen::onPointerLeave() {
 
 void LockScreen::updateHover(int w, int h, double x, double y) {
     int64_t now = nowMs();
+    // Action buttons are only interactive when the pill is expanded.
     for (int i = 0; i < 4; ++i) {
         powerButtons_[i].bounds = powerButtonRect(i, w, h);
-        powerButtons_[i].setHovered(revealed_ && powerButtons_[i].contains(x, y), now);
+        powerButtons_[i].setHovered(powerExpanded_ && powerButtons_[i].contains(x, y), now);
     }
-    alwaysPower_.bounds = alwaysPowerRect(w, h);
-    alwaysPower_.setHovered(!revealed_ && alwaysPower_.contains(x, y), now);
+    // Anchor button is always interactive.
+    alwaysPower_.bounds = powerAnchorRect(w, h);
+    alwaysPower_.setHovered(alwaysPower_.contains(x, y), now);
     if (audio_ && revealed_ && audio_->active())
         audio_->updateHover(x, y, now);
     else if (audio_)
@@ -267,24 +351,67 @@ void LockScreen::updateHover(int w, int h, double x, double y) {
 // -----------------------------------------------------------------------------
 // Layout geometry
 // -----------------------------------------------------------------------------
-Rect LockScreen::powerButtonRect(int index, int w, int h) const {
-    const double d = kButtonDiameter;
-    const double sp = theme::spacing::large;
-    const double total = 4 * d + 3 * sp;
-    const double startX = w / 2.0 - total / 2.0;
-    const double rowY = h - theme::spacing::xxlarge - d;
-    return {startX + index * (d + sp), rowY, d, d};
+//
+// The power controls live in a pill anchored to the bottom-right corner.
+// The anchor (⏻) is always visible. On reveal the pill grows upward,
+// exposing the action buttons stacked above it.
+//
+//  ┌────┐                 ┌────┐
+//  │[Sus]│                │    │  ← collapsed (idle): just the anchor
+//  │[Hib]│  expanded  →   │ ⏻ │
+//  │[Reb]│                └────┘
+//  │[Sdn]│
+//  │ ⏻  │  ← anchor always at the bottom
+//  └────┘
+//
+// The bottom edge is fixed; the top edge slides upward as revealAnim_ → 1.
+// Action button 0 = topmost, kNumAction-1 = directly above the anchor.
+//
+namespace {
+constexpr int    kNumAction = 4;
+constexpr double kPillPad   = 8.0;    // padding inside pill between edge and button centres
+constexpr double kPillRadius = 9999.0; // fully rounded pill (capsule)
 }
 
-Rect LockScreen::alwaysPowerRect(int w, int h) const {
-    const double d = kButtonDiameter;
-    return {w - theme::spacing::xlarge - d, h - theme::spacing::xlarge - d, d, d};
+// Full expanded column rect (all kNumAction action buttons + anchor).
+Rect LockScreen::powerRowRect(int w, int h) const {
+    const double d      = kButtonDiameter;
+    const double sp     = theme::spacing::medium;   // tighter vertical gap
+    const double fullH  = (kNumAction + 1) * d + kNumAction * sp + kPillPad * 2.0;
+    const double pillW  = d + kPillPad * 2.0;
+    const double right  = w - theme::spacing::xlarge;
+    const double bottom = h - theme::spacing::xlarge;
+    return {right - pillW, bottom - fullH, pillW, fullH};
+}
+
+// Rect for action button i inside the expanded pill.
+// i=0 is topmost; i=kNumAction-1 is directly above the anchor.
+Rect LockScreen::powerButtonRect(int index, int w, int h) const {
+    const double d  = kButtonDiameter;
+    const double sp = theme::spacing::medium;
+    Rect col        = powerRowRect(w, h);
+    double cx       = col.cx();
+    // Top of the first button: col.y + kPillPad + d/2
+    double cy       = col.y + kPillPad + d / 2.0 + index * (d + sp);
+    return {cx - d / 2.0, cy - d / 2.0, d, d};
+}
+
+// The anchor button: always the bottommost slot in the pill.
+Rect LockScreen::powerAnchorRect(int w, int h) const {
+    const double d  = kButtonDiameter;
+    const double sp = theme::spacing::medium;
+    Rect col        = powerRowRect(w, h);
+    double cx       = col.cx();
+    double cy       = col.y + kPillPad + d / 2.0 + kNumAction * (d + sp);
+    return {cx - d / 2.0, cy - d / 2.0, d, d};
 }
 
 // -----------------------------------------------------------------------------
 // Render
 // -----------------------------------------------------------------------------
 void LockScreen::draw(cairo_t* cr, int width, int height, int) {
+    lastW_ = width;
+    lastH_ = height;
     Painter p(cr);
     const int64_t now = nowMs();
     const double r = clamp01(revealAnim_.value(now));
@@ -300,28 +427,37 @@ void LockScreen::draw(cairo_t* cr, int width, int height, int) {
     p.fillRect({0, 0, static_cast<double>(width), static_cast<double>(height)},
                Color::rgba(0, 0, 0, lerp(0.15, 0.35, r)));
 
-    // Clock (always visible) at 22% down.
-    const double clockTop = height * 0.22;
+    // Clock — pushed up slightly to give the form more breathing room below.
+    const double clockTop = height * 0.18;
     Size cs = clock_.measure(p);
     clock_.draw(p, cx, clockTop);
     const double clockBottom = clockTop + cs.h;
 
-    // Password field.
-    const double pwWidth = std::min(width * 0.35, 420.0);
-    passwordField_.bounds = {cx - pwWidth / 2.0, clockBottom + theme::spacing::xxlarge, pwWidth,
-                             PasswordField::kHeight};
+    // Centre column width — shared by the password field, status text, and audio
+    // panel so all three elements align on the same left/right edges.
+    const double colWidth = std::min(width - theme::spacing::xlarge * 2.0,
+                                     static_cast<double>(theme::audio::maxWidth));
+
+    // Password field — same width as the audio panel, centred.
+    const double pwTop = clockBottom + theme::spacing::xlarge;  // tighter than xxlarge
+    passwordField_.bounds = {cx - colWidth / 2.0, pwTop, colWidth, PasswordField::kHeight};
     passwordField_.charCount = static_cast<int>(utf8Count(password_));
 
     const double statusTop =
-        passwordField_.bounds.y + passwordField_.bounds.h + theme::spacing::medium;
+        passwordField_.bounds.y + passwordField_.bounds.h + theme::spacing::small;
     status_.message = statusMessage_;
     status_.isError = hasError_;
     Size statusSize = status_.measure(p);
 
-    for (int i = 0; i < 4; ++i) powerButtons_[i].bounds = powerButtonRect(i, width, height);
-    alwaysPower_.bounds = alwaysPowerRect(width, height);
+    // Position all power buttons at their expanded-state positions.
+    for (int i = 0; i < 4; ++i)
+        powerButtons_[i].bounds = powerButtonRect(i, width, height);
+    alwaysPower_.bounds = powerAnchorRect(width, height);
+    // Switch the anchor icon so it doesn't duplicate any action button:
+    // shows ✕ (close) while expanded, ⏻ (power) while collapsed.
+    alwaysPower_.icon = powerExpanded_ ? "✕" : "⏻";
 
-    // Fade the revealed group in/out as one, and cross-fade the standby power button.
+    // Fade the revealed group in/out as one.
     auto withAlpha = [&](double a, auto&& fn) {
         if (a <= 0.01) return;
         if (a >= 0.999) { fn(); return; }
@@ -333,15 +469,67 @@ void LockScreen::draw(cairo_t* cr, int width, int height, int) {
     withAlpha(r, [&] { passwordField_.draw(p, now); });
     withAlpha(r, [&] { status_.draw(p, cx, statusTop); });
     if (audio_ && audio_->active()) {
-        double audioTop = statusTop + statusSize.h + theme::spacing::medium;
-        double audioWidth = std::min(width - theme::spacing::xlarge * 2.0,
-                                     static_cast<double>(theme::audio::maxWidth));
-        withAlpha(r, [&] { audio_->draw(p, now, cx, audioTop, audioWidth); });
+        double audioTop = statusTop + statusSize.h + theme::spacing::small;
+        withAlpha(r, [&] { audio_->draw(p, now, cx, audioTop, colWidth); });
     }
-    withAlpha(r, [&] {
-        for (auto& b : powerButtons_) b.draw(p, now);
-    });
-    withAlpha(lerp(0.7, 0.0, r), [&] { alwaysPower_.draw(p, now); });
+
+    // --- Power pill (bottom-right, expands upward on reveal) ---
+    {
+        const double pe     = clamp01(powerExpandAnim_.value(now));
+        const Rect fullCol  = powerRowRect(width, height);
+        const Rect anchorR  = powerAnchorRect(width, height);
+
+        // Collapsed pill: just tall enough for the anchor button + padding.
+        // Expanded pill: full column height covering all 4 action buttons + anchor.
+        const double collapsedH = anchorR.h + kPillPad * 2.0;
+        const double expandedH  = fullCol.h;
+        const double pillH      = lerp(collapsedH, expandedH, pe);
+        // Bottom edge is fixed; top edge rises as the pill grows.
+        const double pillBottom = fullCol.y + fullCol.h;
+        const double pillX      = fullCol.x;
+        const double pillW      = fullCol.w;
+        const Rect   pillRect{pillX, pillBottom - pillH, pillW, pillH};
+        const double pillCorner = pillW / 2.0;  // fully rounded ends (capsule)
+
+        // The pill is always visible at 0.7 opacity; revealed UI bumps it to 1.0.
+        const double pillAlpha = lerp(0.7, 1.0, r);
+
+        p.pushGroup();
+
+        // Clip everything inside the animated pill shape so nothing bleeds out.
+        cairo_t* cr_ctx = p.cr();
+        cairo_save(cr_ctx);
+        {
+            cairo_new_path(cr_ctx);
+            cairo_arc(cr_ctx, pillRect.x + pillCorner,              pillRect.y + pillCorner,
+                      pillCorner, M_PI, 3.0 * M_PI / 2.0);
+            cairo_arc(cr_ctx, pillRect.x + pillRect.w - pillCorner, pillRect.y + pillCorner,
+                      pillCorner, 3.0 * M_PI / 2.0, 0.0);
+            cairo_arc(cr_ctx, pillRect.x + pillRect.w - pillCorner, pillRect.y + pillRect.h - pillCorner,
+                      pillCorner, 0.0, M_PI / 2.0);
+            cairo_arc(cr_ctx, pillRect.x + pillCorner,              pillRect.y + pillRect.h - pillCorner,
+                      pillCorner, M_PI / 2.0, M_PI);
+            cairo_close_path(cr_ctx);
+            cairo_clip(cr_ctx);
+        }
+
+        // Pill background.
+        p.fillRoundedRect(pillRect, pillCorner, theme::color::glass);
+        p.strokeRoundedRect(pillRect, pillCorner, theme::color::glassBorder, 1.0);
+
+        // Action buttons — fade in as the pill expands (gated on pe, not r).
+        if (pe > 0.01) {
+            p.pushGroup();
+            for (auto& b : powerButtons_) b.draw(p, now);
+            p.popGroupWithAlpha(clamp01(pe));
+        }
+
+        // Anchor (trigger) button — always rendered inside the pill.
+        alwaysPower_.draw(p, now);
+
+        cairo_restore(cr_ctx);  // remove clip
+        p.popGroupWithAlpha(pillAlpha);
+    }
 
     // Windows 11-style notification cards, always visible on the lock screen
     // (bottom-left), below the idle dim veil.
@@ -352,6 +540,10 @@ void LockScreen::draw(cairo_t* cr, int width, int height, int) {
                                      static_cast<double>(theme::notification::cardWidth));
         notifications_.draw(p, now, left, bottom, maxW);
     }
+
+    // Power confirmation dialog — drawn above all UI, below the idle dim.
+    if (powerDialog_.active())
+        powerDialog_.draw(p, width, height, now);
 
     // Deep-idle dim: a black veil over everything, on top of all content.
     const double dim = clamp01(dimAnim_.value(now));
@@ -364,9 +556,11 @@ bool LockScreen::isAnimating() const {
     const int64_t now = nowMs();
     if (revealAnim_.active(now)) return true;
     if (dimAnim_.active(now)) return true;
+    if (powerExpandAnim_.active(now)) return true;
     for (const auto& b : powerButtons_)
         if (b.animating(now)) return true;
     if (alwaysPower_.animating(now)) return true;
+    if (powerDialog_.animating(now)) return true;
     if (notifications_.active() && notifications_.animating(now)) return true;
     return audio_ && audio_->animating(now);
 }

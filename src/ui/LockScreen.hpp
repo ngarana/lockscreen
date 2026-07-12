@@ -15,6 +15,7 @@
 #include "ui/Clock.hpp"
 #include "ui/Notification.hpp"
 #include "ui/PasswordField.hpp"
+#include "ui/PowerDialog.hpp"
 #include "ui/StatusMessage.hpp"
 
 namespace qypr {
@@ -64,10 +65,19 @@ private:
     void submitPassword();
     void onAuthResult(PamAuthenticator::Result result, const std::string& message);
     void updateHover(int w, int h, double x, double y);
+    void expandPower();   // open the pill (anchor clicked)
+    void collapsePower(); // close the pill
+    // Show the power confirmation popover for button index i, anchored to the pill.
+    void showPowerConfirm(int index, int w, int h);
 
     // Pure geometry shared by draw() and hit-testing.
+    // powerRowRect: the full expanded pill rect (all 5 buttons worth of space).
+    // powerButtonRect(i): centre rect for action button i (0-3, left-to-right)
+    //   inside the row — valid only when revealed.
+    // powerAnchorRect: the single trigger/power button, always bottom-right.
+    Rect powerRowRect(int w, int h) const;
     Rect powerButtonRect(int index, int w, int h) const;
-    Rect alwaysPowerRect(int w, int h) const;
+    Rect powerAnchorRect(int w, int h) const;
 
     EventLoop& loop_;
     RenderHost& host_;
@@ -84,6 +94,11 @@ private:
     bool hasError_ = false;
     Animated revealAnim_{0};
 
+    // Power pill expand state — driven exclusively by clicking the anchor button,
+    // independent of the general reveal state machine.
+    bool powerExpanded_ = false;
+    Animated powerExpandAnim_{0};
+
     // Deep-idle: after idleTimeoutMs_ of no input, pause the video and fade the
     // whole screen to black (dimAnim_ 0 -> 1). Any input reverses both.
     bool idle_ = false;
@@ -98,10 +113,13 @@ private:
     NotificationView notifications_;
     std::array<ActionButton, 4> powerButtons_;
     ActionButton alwaysPower_;
+    PowerDialog powerDialog_;
 
     bool pointerDown_ = false;
     int hideTimer_ = -1;
     int clockTimer_ = -1;
+    int lastW_ = 1920;  // last known output width  (updated every draw)
+    int lastH_ = 1080;  // last known output height
 };
 
 }  // namespace qypr

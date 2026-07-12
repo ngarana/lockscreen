@@ -87,6 +87,33 @@ int App::preview(const std::string& path, int width, int height) {
     usleep(700 * 1000);
     renderToPng(lockScreen_, path, width, height);
 
+    // Expanded power pill: simulate a click on the anchor button (bottom-right).
+    lockScreen_.onPointerButton(width, height,
+        width  - 48.0 - 26.0,   // xlarge=48, button radius=26
+        height - 48.0 - 26.0,
+        0x110, true);
+    usleep(400 * 1000);
+    renderToPng(lockScreen_, path.substr(0, path.rfind('.')) + "-power.png", width, height);
+
+    // Power confirmation popover: click the topmost action button (Suspend).
+    // Its centre is at pillar centre X, and one button-height from the top of the pill.
+    // pill width = 52+8*2=68, right edge = width-48, so centre X = width-48-34 = width-82
+    // button 0 centre Y: bottom - 48 - (4*(52+16)+52+8) - 8 + 26 ... easier to just
+    // click near where it should be after the expand animation settles.
+    {
+        const double pillCx = width - 48.0 - 34.0;          // pill horizontal centre
+        const double pillBottom = height - 48.0;
+        // button 0 is topmost: col.y + pad + d/2
+        // fullH = 5*52 + 4*16 + 8*2 = 260+64+16 = 340
+        // col.y = bottom - fullH = pillBottom - 340
+        const double colY = pillBottom - 340.0;
+        const double btn0cy = colY + 8.0 + 26.0;            // kPillPad + d/2
+        lockScreen_.onPointerButton(width, height,
+            pillCx, btn0cy, 0x110, true);
+    }
+    usleep(400 * 1000);
+    renderToPng(lockScreen_, path.substr(0, path.rfind('.')) + "-confirm.png", width, height);
+
     std::fprintf(stderr, "qypr-lock: wrote preview frames near %s\n", path.c_str());
     return 0;
 }
