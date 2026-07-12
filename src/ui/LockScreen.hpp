@@ -1,8 +1,8 @@
-// LockScreen.hpp - Root UI: layout, reveal state machine, input, power menu.
+// LockScreen.hpp - Lock UI: layout, reveal state machine, input, power menu.
 //
-// Port of LockScreen.qml. Implements InputSink (keyboard + pointer) and owns
-// the shared lock state (revealed, password, status). It is drawn identically
-// on every output at that output's size.
+// Port of LockScreen.qml. Owns the lock-specific UI (clock, password, status,
+// audio, notifications, power pill). Input is delegated from Shell via the
+// handle*() methods. Idle/dim and video background are managed by Shell.
 
 #pragma once
 
@@ -23,17 +23,13 @@ namespace qypr {
 class EventLoop;
 class PowerManager;
 class AudioController;
-class VideoPlayer;
 
-class LockScreen : public InputSink {
+class LockScreen {
 public:
     LockScreen(EventLoop& loop, RenderHost& host, PamAuthenticator& pam, PowerManager& power);
 
     // Optional audio panel, injected once MPRIS is available.
     void setAudioController(AudioController* audio) { audio_ = audio; }
-
-    // Optional video background player.
-    void setVideoPlayer(VideoPlayer* video) { video_ = video; }
 
     // Windows 11-style notification cards (bottom-left). The owner pushes the
     // current set whenever it changes; the view reconciles by id.
@@ -41,27 +37,27 @@ public:
         notifications_.update(std::move(notes));
     }
 
-    // Idle period (ms) with no input before the video pauses and the screen
-    // fades to black. Screen power-off itself is left to the idle daemon.
-    void setIdleTimeout(int64_t ms) { idleTimeoutMs_ = ms; }
-
     // Render the whole UI at a given output size.
     void draw(cairo_t* cr, int width, int height, int scale);
     bool isAnimating() const;
 
-    // InputSink
-    void onTextInput(const std::string& utf8) override;
-    void onSpecialKey(uint32_t keysym, uint32_t modifiers) override;
-    void onPointerMotion(int w, int h, double x, double y) override;
-    void onPointerButton(int w, int h, double x, double y, uint32_t button, bool pressed) override;
-    void onPointerLeave() override;
+    // Input handlers delegated by Shell
+    void handleTextInput(const std::string& utf8);
+    void handleSpecialKey(uint32_t keysym, uint32_t modifiers);
+    void handlePointerMotion(int w, int h, double x, double y);
+    void handlePointerButton(int w, int h, double x, double y, uint32_t button, bool pressed);
+    void handlePointerLeave();
+
+    double getReveal(int64_t now) const { return revealAnim_.value(now); }
+
+    // Called by Shell when any input arrives to drive the reveal state machine
+    // (without touching idle state, which Shell manages).
+    void wake();
 
 private:
     void reveal();
     void collapse();
     void restartHideTimer();
-    void restartIdleTimer();
-    void enterIdle();  // pause video + fade to black
     void submitPassword();
     void onAuthResult(PamAuthenticator::Result result, const std::string& message);
     void updateHover(int w, int h, double x, double y);
@@ -84,7 +80,6 @@ private:
     PamAuthenticator& pam_;
     PowerManager& power_;
     AudioController* audio_ = nullptr;
-    VideoPlayer* video_ = nullptr;
 
     // State
     bool revealed_ = false;
@@ -98,13 +93,6 @@ private:
     // independent of the general reveal state machine.
     bool powerExpanded_ = false;
     Animated powerExpandAnim_{0};
-
-    // Deep-idle: after idleTimeoutMs_ of no input, pause the video and fade the
-    // whole screen to black (dimAnim_ 0 -> 1). Any input reverses both.
-    bool idle_ = false;
-    int64_t idleTimeoutMs_ = 60000;
-    int idleTimer_ = -1;
-    Animated dimAnim_{0};
 
     // Widgets
     Clock clock_;

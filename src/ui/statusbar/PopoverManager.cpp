@@ -1,0 +1,112 @@
+// PopoverManager.cpp - Popover manager implementation
+#include "ui/statusbar/PopoverManager.hpp"
+#include "render/Painter.hpp"
+
+namespace qypr {
+
+void PopoverManager::open(std::unique_ptr<DetailedPopover> popover, double anchorX, double anchorY) {
+    if (borrowed_) {
+        borrowed_ = nullptr;
+    }
+    if (active_) {
+        // Move current to transitioning and start closing it
+        transitioning_ = std::move(active_);
+        transitioning_->close();
+    }
+
+    active_ = std::move(popover);
+    if (active_) {
+        active_->anchorX = anchorX;
+        active_->anchorY = anchorY;
+        active_->open();
+    }
+}
+
+void PopoverManager::openBorrowed(DetailedPopover* popover, double anchorX, double anchorY) {
+    if (active_) {
+        transitioning_ = std::move(active_);
+        transitioning_->close();
+    }
+    borrowed_ = popover;
+    if (borrowed_) {
+        borrowed_->anchorX = anchorX;
+        borrowed_->anchorY = anchorY;
+        borrowed_->open();
+    }
+}
+
+void PopoverManager::closeActive() {
+    if (borrowed_) {
+        borrowed_->close();
+        borrowed_ = nullptr;
+    } else if (active_) {
+        transitioning_ = std::move(active_);
+        transitioning_->close();
+    }
+}
+
+void PopoverManager::draw(Painter& p, int64_t now) {
+    if (transitioning_) {
+        double prog = transitioning_->openProgress_.value(now);
+        if (!transitioning_->openProgress_.active(now) && prog <= 0.01) {
+            transitioning_.reset();
+        } else {
+            p.pushGroup();
+            transitioning_->draw(p, now);
+            p.popGroupWithAlpha(prog);
+        }
+    }
+
+    DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;
+    if (cur) {
+        double prog = cur->openProgress_.value(now);
+        p.pushGroup();
+        cur->draw(p, now);
+        p.popGroupWithAlpha(prog);
+    }
+}
+
+bool PopoverManager::animating(int64_t now) const {
+    if (transitioning_ && transitioning_->openProgress_.active(now)) {
+        return true;
+    }
+    DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;
+    if (cur && cur->openProgress_.active(now)) {
+        return true;
+    }
+    return false;
+}
+
+bool PopoverManager::handleClick(double x, double y) {
+    DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;
+    if (cur && cur->contains(x, y)) {
+        return cur->handleClick(x, y);
+    }
+    return false;
+}
+
+bool PopoverManager::handleDrag(double x, double y) {
+    DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;
+    if (cur && cur->contains(x, y)) {
+        return cur->handleDrag(x, y);
+    }
+    return false;
+}
+
+bool PopoverManager::handleScroll(double dx, double dy) {
+    DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;
+    if (cur) {
+        return cur->handleScroll(dx, dy);
+    }
+    return false;
+}
+
+bool PopoverManager::handleKey(uint32_t keysym) {
+    DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;
+    if (cur) {
+        return cur->handleKey(keysym);
+    }
+    return false;
+}
+
+}  // namespace qypr

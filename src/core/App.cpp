@@ -11,10 +11,10 @@
 namespace qypr {
 
 namespace {
-void renderToPng(qypr::LockScreen& ls, const std::string& path, int w, int h) {
+void renderToPng(qypr::Shell& shell, const std::string& path, int w, int h) {
     cairo_surface_t* surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
     cairo_t* cr = cairo_create(surface);
-    ls.draw(cr, w, h, 1);
+    shell.draw(cr, w, h, 1);
     cairo_destroy(cr);
     cairo_surface_write_to_png(surface, path.c_str());
     cairo_surface_destroy(surface);
@@ -27,14 +27,14 @@ App::App()
       pam_(loop_),
       audio_(mpris_),
       video_(loop_, *this),
-      lockScreen_(loop_, *this, pam_, power_) {
-    lockScreen_.setAudioController(&audio_);
-    lockScreen_.setVideoPlayer(&video_);
+      shell_(loop_, *this, pam_, power_) {
+    shell_.setAudioController(&audio_);
+    shell_.setVideoPlayer(&video_);
 
     // Live notifications are pushed into the UI as the monitor sees them.
     // No fallback data on the real lock screen — samples are preview-only.
     notifications_.setOnChange([this] {
-        lockScreen_.setNotifications(notifications_.notifications());
+        shell_.setNotifications(notifications_.notifications());
         invalidate();
     });
 }
@@ -45,10 +45,10 @@ int App::run() {
         return 1;
     }
 
-    display_.setInputSink(&lockScreen_);
+    display_.setInputSink(&shell_);
     display_.setRenderFn(
-        [this](cairo_t* cr, int w, int h, int s) { lockScreen_.draw(cr, w, h, s); });
-    display_.setAnimatingFn([this] { return lockScreen_.isAnimating(); });
+        [this](cairo_t* cr, int w, int h, int s) { shell_.draw(cr, w, h, s); });
+    display_.setAnimatingFn([this] { return shell_.isAnimating(); });
 
     lock_.setOnFinished([this] {
         std::fprintf(stderr, "qypr-lock: session lock refused or lost\n");
@@ -76,24 +76,24 @@ int App::run() {
 }
 
 int App::preview(const std::string& path, int width, int height) {
-    lockScreen_.setNotifications(demoNotifications());  // sample cards, preview only
+    shell_.setNotifications(demoNotifications());  // sample cards, preview only
 
     // Idle state (before any interaction).
-    renderToPng(lockScreen_, path.substr(0, path.rfind('.')) + "-idle.png", width, height);
+    renderToPng(shell_, path.substr(0, path.rfind('.')) + "-idle.png", width, height);
 
     // Revealed state: simulate typing, then let the reveal animation finish.
     mpris_.refresh();  // surface the audio panel if something is playing
-    lockScreen_.onTextInput("password");
+    shell_.lockScreen().handleTextInput("password");
     usleep(700 * 1000);
-    renderToPng(lockScreen_, path, width, height);
+    renderToPng(shell_, path, width, height);
 
     // Expanded power pill: simulate a click on the anchor button (bottom-right).
-    lockScreen_.onPointerButton(width, height,
+    shell_.lockScreen().handlePointerButton(width, height,
         width  - 48.0 - 26.0,   // xlarge=48, button radius=26
         height - 48.0 - 26.0,
         0x110, true);
     usleep(400 * 1000);
-    renderToPng(lockScreen_, path.substr(0, path.rfind('.')) + "-power.png", width, height);
+    renderToPng(shell_, path.substr(0, path.rfind('.')) + "-power.png", width, height);
 
     // Power confirmation popover: click the topmost action button (Suspend).
     // Its centre is at pillar centre X, and one button-height from the top of the pill.
@@ -108,11 +108,11 @@ int App::preview(const std::string& path, int width, int height) {
         // col.y = bottom - fullH = pillBottom - 340
         const double colY = pillBottom - 340.0;
         const double btn0cy = colY + 8.0 + 26.0;            // kPillPad + d/2
-        lockScreen_.onPointerButton(width, height,
+        shell_.lockScreen().handlePointerButton(width, height,
             pillCx, btn0cy, 0x110, true);
     }
     usleep(400 * 1000);
-    renderToPng(lockScreen_, path.substr(0, path.rfind('.')) + "-confirm.png", width, height);
+    renderToPng(shell_, path.substr(0, path.rfind('.')) + "-confirm.png", width, height);
 
     std::fprintf(stderr, "qypr-lock: wrote preview frames near %s\n", path.c_str());
     return 0;
@@ -152,7 +152,7 @@ int App::videoTest(int seconds) {
 }
 
 void App::setIdleTimeout(int seconds) {
-    if (seconds > 0) lockScreen_.setIdleTimeout(static_cast<int64_t>(seconds) * 1000);
+    if (seconds > 0) shell_.setIdleTimeout(static_cast<int64_t>(seconds) * 1000);
 }
 
 void App::invalidate() { display_.invalidateAll(); }

@@ -1,0 +1,128 @@
+// QSTile.cpp - Quick Settings tile implementations
+#include "ui/statusbar/QSTile.hpp"
+#include "render/Painter.hpp"
+#include "ui/Theme.hpp"
+#include <cmath>
+
+namespace qypr {
+
+// --- QSToggleTile ---
+
+void QSToggleTile::onClick(double, double) {
+    if (onToggle_) {
+        onToggle_();
+    }
+}
+
+void QSToggleTile::draw(Painter& p, int64_t now) {
+    bool active = isActive_ && isActive_();
+    double hAlpha = hoverAnim_.value(now);
+
+    // Dynamic backgrounds
+    Color bg = active ? theme::color::primary : theme::color::glass;
+    if (hAlpha > 0.01) {
+        bg = active ? theme::color::primary.withAlpha(0.85) : theme::color::glassHover;
+    }
+
+    p.fillRoundedRect(bounds, 12.0, bg);
+    p.strokeRoundedRect(bounds, 12.0, theme::color::glassBorder, 1.0);
+
+    // Draw content
+    Color fgColor = active ? Color::fromHex("#1e1e2e") : theme::color::text;
+    Color subColor = active ? Color::fromHex("#313244") : theme::color::textSubtle;
+
+    // Draw icon on the left
+    TextStyle iconStyle{theme::font::iconFamily, 20.0, PANGO_WEIGHT_NORMAL, fgColor};
+    Size iconSz = p.measureText(icon_, iconStyle);
+
+    double contentPad = 12.0;
+    double iconX = bounds.x + contentPad;
+    double iconY = bounds.y + (bounds.h - iconSz.h) / 2.0;
+    p.drawText(iconX, iconY, icon_, iconStyle);
+
+    // Draw text on the right
+    double textX = iconX + iconSz.w + 10.0;
+    std::string sub = subtitle_ ? subtitle_() : "";
+
+    TextStyle titleStyle{theme::font::family, 13.0, PANGO_WEIGHT_BOLD, fgColor};
+    TextStyle subStyle{theme::font::family, 11.0, PANGO_WEIGHT_NORMAL, subColor};
+
+    if (sub.empty()) {
+        Size titleSz = p.measureText(title_, titleStyle);
+        p.drawText(textX, bounds.y + (bounds.h - titleSz.h) / 2.0, title_, titleStyle);
+    } else {
+        Size titleSz = p.measureText(title_, titleStyle);
+        Size subSz = p.measureText(sub, subStyle);
+        double totalTextH = titleSz.h + subSz.h + 2.0;
+
+        double titleY = bounds.y + (bounds.h - totalTextH) / 2.0;
+        p.drawText(textX, titleY, title_, titleStyle);
+        p.drawText(textX, titleY + titleSz.h + 2.0, sub, subStyle);
+    }
+}
+
+// --- QSSliderTile ---
+
+void QSSliderTile::onClick(double x, double) {
+    updateValueFromCoord(x);
+}
+
+void QSSliderTile::onDrag(double x, double) {
+    updateValueFromCoord(x);
+}
+
+void QSSliderTile::updateValueFromCoord(double x) {
+    if (sliderTrackBounds_.w <= 0) return;
+    double val = (x - sliderTrackBounds_.x) / sliderTrackBounds_.w;
+    val = clamp01(val);
+    if (onValueChange_) {
+        onValueChange_(val);
+    }
+}
+
+void QSSliderTile::draw(Painter& p, int64_t now) {
+    double val = getValue_ ? getValue_() : 0.0;
+
+    // Draw icon on the left
+    TextStyle iconStyle{theme::font::iconFamily, 18.0, PANGO_WEIGHT_NORMAL, theme::color::text};
+    Size iconSz = p.measureText(icon_, iconStyle);
+
+    double iconX = bounds.x + 8.0;
+    double iconY = bounds.y + (bounds.h - iconSz.h) / 2.0;
+    p.drawText(iconX, iconY, icon_, iconStyle);
+
+    // Draw percentage text on the right
+    int percent = static_cast<int>(std::round(val * 100.0));
+    std::string pctText = std::to_string(percent) + "%";
+
+    TextStyle pctStyle{theme::font::family, 13.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
+    Size pctSz = p.measureText(pctText, pctStyle);
+
+    double pctX = bounds.x + bounds.w - pctSz.w - 8.0;
+    double pctY = bounds.y + (bounds.h - pctSz.h) / 2.0;
+    p.drawText(pctX, pctY, pctText, pctStyle);
+
+    // Draw track in the middle
+    double trackX = iconX + iconSz.w + 12.0;
+    double trackW = pctX - 12.0 - trackX;
+    double trackH = 4.0;
+    double trackY = bounds.y + (bounds.h - trackH) / 2.0;
+
+    sliderTrackBounds_ = {trackX, trackY, trackW, trackH};
+
+    // Draw track background
+    p.fillRoundedRect(sliderTrackBounds_, trackH / 2.0, theme::color::surface);
+
+    // Draw filled track
+    Rect filledBounds = sliderTrackBounds_;
+    filledBounds.w = trackW * val;
+    p.fillRoundedRect(filledBounds, trackH / 2.0, theme::color::primary);
+
+    // Draw thumb dot
+    double thumbRadius = 6.0;
+    double thumbX = trackX + trackW * val;
+    double thumbY = trackY + trackH / 2.0;
+    p.fillCircle(thumbX, thumbY, thumbRadius, theme::color::primary);
+}
+
+}  // namespace qypr

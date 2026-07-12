@@ -7,7 +7,6 @@
 #include "core/EventLoop.hpp"
 #include "power/PowerManager.hpp"
 #include "render/Painter.hpp"
-#include "video/VideoPlayer.hpp"
 #include "ui/AudioController.hpp"
 #include "ui/Theme.hpp"
 #include "wayland/Seat.hpp"  // Mod flags
@@ -18,7 +17,6 @@ namespace {
 constexpr uint32_t kBtnLeft = 0x110;
 constexpr int kHideTimeoutMs = 15000;
 constexpr double kButtonDiameter = 52;
-constexpr int kDimMs = 1500;  // fade-to-black duration on entering/leaving idle
 
 size_t utf8Count(const std::string& s) {
     size_t n = 0;
@@ -71,24 +69,12 @@ LockScreen::LockScreen(EventLoop& loop, RenderHost& host, PamAuthenticator& pam,
         if (audio_) audio_->refresh();
         host_.invalidate();
     });
-
-    // Begin the idle countdown; any input resets it via reveal().
-    restartIdleTimer();
 }
 
 // -----------------------------------------------------------------------------
 // Reveal state machine
 // -----------------------------------------------------------------------------
-void LockScreen::reveal() {
-    // Any activity wakes from deep idle: resume the video and fade the black
-    // dim back out, then restart the idle countdown.
-    if (idle_) {
-        idle_ = false;
-        if (video_) video_->resume();
-        dimAnim_.animateTo(0.0, kDimMs, ease::inOutQuad);
-    }
-    restartIdleTimer();
-
+void LockScreen::wake() {
     if (!revealed_) {
         revealed_ = true;
         revealAnim_.animateTo(1.0, theme::anim::reveal, ease::inOutQuad);
@@ -97,20 +83,8 @@ void LockScreen::reveal() {
     host_.invalidate();
 }
 
-void LockScreen::restartIdleTimer() {
-    if (idleTimer_ >= 0) loop_.removeTimer(idleTimer_);
-    idleTimer_ = loop_.addTimer(idleTimeoutMs_, false, [this] {
-        idleTimer_ = -1;
-        enterIdle();
-    });
-}
-
-void LockScreen::enterIdle() {
-    if (idle_) return;
-    idle_ = true;
-    if (video_) video_->pause();  // stop the decode cost; screen-off is the daemon's job
-    dimAnim_.animateTo(1.0, kDimMs, ease::inOutQuad);
-    host_.invalidate();
+void LockScreen::reveal() {
+    wake();
 }
 
 void LockScreen::collapse() {
@@ -213,15 +187,15 @@ void LockScreen::onAuthResult(PamAuthenticator::Result result, const std::string
 }
 
 // -----------------------------------------------------------------------------
-// Keyboard
+// Keyboard (delegated from Shell)
 // -----------------------------------------------------------------------------
-void LockScreen::onTextInput(const std::string& utf8) {
+void LockScreen::handleTextInput(const std::string& utf8) {
     if (powerDialog_.active()) return;  // ignore typing while confirm dialog is up
     password_ += utf8;
     reveal();
 }
 
-void LockScreen::onSpecialKey(uint32_t sym, uint32_t modifiers) {
+void LockScreen::handleSpecialKey(uint32_t sym, uint32_t modifiers) {
     // If the confirmation dialog is up, only Escape and Enter are meaningful.
     if (powerDialog_.active()) {
         if (sym == XKB_KEY_Escape) {
@@ -259,9 +233,9 @@ void LockScreen::onSpecialKey(uint32_t sym, uint32_t modifiers) {
 }
 
 // -----------------------------------------------------------------------------
-// Pointer
+// Pointer (delegated from Shell)
 // -----------------------------------------------------------------------------
-void LockScreen::onPointerMotion(int w, int h, double x, double y) {
+void LockScreen::handlePointerMotion(int w, int h, double x, double y) {
     if (powerDialog_.active()) {
         powerDialog_.updateHover(x, y, nowMs());
         host_.invalidate();
@@ -273,7 +247,7 @@ void LockScreen::onPointerMotion(int w, int h, double x, double y) {
     updateHover(w, h, x, y);
 }
 
-void LockScreen::onPointerButton(int w, int h, double x, double y, uint32_t button, bool pressed) {
+void LockScreen::handlePointerButton(int w, int h, double x, double y, uint32_t button, bool pressed) {
     if (button != kBtnLeft) return;
 
     if (!pressed) {  // release ends any volume drag
@@ -322,7 +296,7 @@ void LockScreen::onPointerButton(int w, int h, double x, double y, uint32_t butt
     }
 }
 
-void LockScreen::onPointerLeave() {
+void LockScreen::handlePointerLeave() {
     int64_t now = nowMs();
     for (auto& b : powerButtons_) b.setHovered(false, now);
     alwaysPower_.setHovered(false, now);
@@ -417,13 +391,7 @@ void LockScreen::draw(cairo_t* cr, int width, int height, int) {
     const double r = clamp01(revealAnim_.value(now));
     const double cx = width / 2.0;
 
-    // Video background (or fallback gradient if no video).
-    if (video_ && video_->hasFrame()) {
-        video_->draw(cr, width, height);
-    } else {
-        p.verticalGradient(width, height, Color::fromHex("#1e1e2e"),
-                           Color::fromHex("#181825"), Color::fromHex("#11111b"));
-    }
+    // Background darken overlay — intensity varies with reveal state.
     p.fillRect({0, 0, static_cast<double>(width), static_cast<double>(height)},
                Color::rgba(0, 0, 0, lerp(0.15, 0.35, r)));
 
@@ -544,18 +512,11 @@ void LockScreen::draw(cairo_t* cr, int width, int height, int) {
     // Power confirmation dialog — drawn above all UI, below the idle dim.
     if (powerDialog_.active())
         powerDialog_.draw(p, width, height, now);
-
-    // Deep-idle dim: a black veil over everything, on top of all content.
-    const double dim = clamp01(dimAnim_.value(now));
-    if (dim > 0.001)
-        p.fillRect({0, 0, static_cast<double>(width), static_cast<double>(height)},
-                   Color::rgba(0, 0, 0, dim));
 }
 
 bool LockScreen::isAnimating() const {
     const int64_t now = nowMs();
     if (revealAnim_.active(now)) return true;
-    if (dimAnim_.active(now)) return true;
     if (powerExpandAnim_.active(now)) return true;
     for (const auto& b : powerButtons_)
         if (b.animating(now)) return true;

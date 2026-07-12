@@ -12,7 +12,7 @@
 #include "notifications/NotificationMonitor.hpp"
 #include "power/PowerManager.hpp"
 #include "ui/AudioController.hpp"
-#include "ui/LockScreen.hpp"
+#include "ui/Shell.hpp"
 #include "video/VideoPlayer.hpp"
 #include "wayland/LockSession.hpp"
 #include "wayland/WaylandDisplay.hpp"
@@ -50,7 +50,7 @@ private:
     AudioController audio_;
     VideoPlayer video_;
     NotificationMonitor notifications_{loop_};
-    LockScreen lockScreen_;
+    Shell shell_;
 };
 
 }  // namespace qypr

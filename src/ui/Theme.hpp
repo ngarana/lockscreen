@@ -102,4 +102,26 @@ inline constexpr int maxVisible = 4;  // most recent cards shown
 inline constexpr int radius = 12;
 }  // namespace notification
 
+namespace statusbar {
+inline constexpr double height         = 36.0;
+inline constexpr double topMargin      = 8.0;
+inline constexpr double sideMargin     = 16.0;
+inline constexpr double cornerRadius   = 12.0;
+inline constexpr double iconSize       = 16.0;
+inline constexpr double iconSpacing    = 18.0;
+inline constexpr double padding        = 14.0;
+inline constexpr double separatorWidth = 1.0;
+inline constexpr double qsPanelWidth   = 380.0;
+inline constexpr double qsTileSize     = 110.0;
+inline constexpr double qsTileHeight   = 64.0;
+inline constexpr double qsTileGap      = 8.0;
+inline constexpr double qsSliderHeight = 40.0;
+inline constexpr double qsPadding      = 16.0;
+inline constexpr double qsCornerRadius = 16.0;
+inline constexpr double popoverWidth   = 280.0;
+inline constexpr double popoverPadding = 16.0;
+inline constexpr double popoverRadius  = 12.0;
+inline constexpr double arrowSize      = 8.0;
+}  // namespace statusbar
+
 }  // namespace qypr::theme

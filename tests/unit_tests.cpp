@@ -94,6 +94,13 @@ int g_tests_failed = 0;
 #include "ui/StatusMessage.hpp"
 #include "ui/LockScreen.hpp"
 #include "ui/IconResolver.hpp"
+#include "ui/statusbar/StatusBar.hpp"
+#include "ui/statusbar/StatusIndicator.hpp"
+#include "ui/statusbar/IndicatorRegistry.hpp"
+#include "ui/statusbar/QSTile.hpp"
+#include "ui/statusbar/QuickSettingsPanel.hpp"
+#include "ui/statusbar/PopoverManager.hpp"
+#include "ui/statusbar/DetailedPopover.hpp"
 #include "core/App.hpp"
 
 #undef private
@@ -403,16 +410,16 @@ TEST(LockScreenInputHandling) {
     qypr::LockScreen screen(loop, app, pam, power);
 
     // Test text inputs
-    screen.onTextInput("a");
-    screen.onTextInput("b");
-    screen.onSpecialKey(0xff08, 0); // Backspace keysym
-    screen.onSpecialKey(0xff0d, 0); // Enter keysym (submits pam auth)
+    screen.handleTextInput("a");
+    screen.handleTextInput("b");
+    screen.handleSpecialKey(0xff08, 0); // Backspace keysym
+    screen.handleSpecialKey(0xff0d, 0); // Enter keysym (submits pam auth)
 
     // Test pointer events
-    screen.onPointerMotion(800, 600, 100, 100);
-    screen.onPointerButton(800, 600, 100, 100, 272, true); // left press
-    screen.onPointerButton(800, 600, 100, 100, 272, false); // left release
-    screen.onPointerLeave();
+    screen.handlePointerMotion(800, 600, 100, 100);
+    screen.handlePointerButton(800, 600, 100, 100, 272, true); // left press
+    screen.handlePointerButton(800, 600, 100, 100, 272, false); // left release
+    screen.handlePointerLeave();
 
     // Verify clock layout & icon resolver
     EXPECT_TRUE(screen.isAnimating());
@@ -686,6 +693,293 @@ TEST(IconResolver) {
     // Empty and unknown names resolve to nothing -> glyph fallback.
     EXPECT_TRUE(r.get("") == nullptr);
     EXPECT_TRUE(r.get("qypr-no-such-icon-xyz") == nullptr);
+}
+
+// =============================================================================
+// Phase 1: Status Bar Framework Tests
+// =============================================================================
+
+// A concrete test indicator for exercising the base class interface.
+class TestIndicator : public qypr::StatusIndicator {
+public:
+    TestIndicator(const std::string& id, qypr::Zone zone, int priority)
+        : StatusIndicator(id, zone, priority) {}
+
+    std::string icon() const override { return icon_; }
+    std::string tooltip() const override { return tooltip_; }
+    qypr::Color iconColor() const override { return qypr::theme::color::primary; }
+
+    std::string icon_ = "T";
+    std::string tooltip_ = "Test Indicator";
+};
+
+// Test that the IndicatorRegistry can register and create indicators.
+TEST(IndicatorRegistryRegisterAndCreate) {
+    auto& reg = qypr::IndicatorRegistry::instance();
+    size_t before = reg.entries_.size();
+
+    reg.registerIndicator("test-indicator", qypr::Zone::Right, 999,
+        [](const qypr::SystemBackends&) {
+            return std::make_unique<TestIndicator>("test-indicator", qypr::Zone::Right, 999);
+        });
+
+    EXPECT_EQ(reg.entries_.size(), before + 1);
+
+    qypr::SystemBackends backends{};
+    auto items = reg.createAll(backends);
+    bool found = false;
+    for (auto& item : items) {
+        if (item->id() == "test-indicator") {
+            found = true;
+            EXPECT_TRUE(static_cast<int>(item->zone()) == static_cast<int>(qypr::Zone::Right));
+            EXPECT_EQ(item->priority(), 999);
+        }
+    }
+    EXPECT_TRUE(found);
+}
+
+// Test StatusIndicator base class getters and state.
+TEST(StatusIndicatorBaseClass) {
+    TestIndicator ind("my-ind", qypr::Zone::Left, 100);
+
+    EXPECT_EQ(ind.id(), std::string("my-ind"));
+    EXPECT_EQ(static_cast<int>(ind.zone()), static_cast<int>(qypr::Zone::Left));
+    EXPECT_EQ(ind.priority(), 100);
+    EXPECT_FALSE(ind.hovered);
+    EXPECT_FALSE(ind.focused);
+    EXPECT_FALSE(ind.hasDetailedView());
+    EXPECT_TRUE(ind.createTile() == nullptr);
+    EXPECT_TRUE(ind.createDetailedView() == nullptr);
+}
+
+// Test QSToggleTile renders without crashing on a null Cairo context.
+TEST(QSToggleTileDraw) {
+    qypr::QSToggleTile tile("WiFi", "󰤨",
+        []() { return true; },
+        []() {},
+        []() { return std::string("MyHome"); });
+
+    EXPECT_TRUE(tile.type() == qypr::QSTile::Type::Toggle);
+    EXPECT_TRUE(tile.bounds.valid() == false);  // not yet laid out
+
+    // Draw to a null painter — exercises the code path without a real surface.
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 200, 100);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    tile.bounds = {0, 0, 110, 64};
+    tile.draw(p, 1000);
+
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+// Test QSSliderTile renders and handles drag input.
+TEST(QSSliderTileDrawAndDrag) {
+    double vol = 0.5;
+    qypr::QSSliderTile tile("󰕾",
+        [&]() { return vol; },
+        [&](double v) { vol = v; });
+
+    EXPECT_TRUE(tile.type() == qypr::QSTile::Type::Slider);
+
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 400, 60);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    tile.bounds = {0, 0, 360, 40};
+    tile.draw(p, 2000);
+
+    // Simulate click/drag on the slider track to change value.
+    tile.onClick(tile.bounds.x + tile.bounds.w * 0.75, tile.bounds.y + tile.bounds.h / 2.0);
+    EXPECT_NEAR(vol, 0.75, 0.1);
+
+    tile.onDrag(tile.bounds.x + tile.bounds.w * 0.25, tile.bounds.y + tile.bounds.h / 2.0);
+    EXPECT_NEAR(vol, 0.25, 0.1);
+
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+// Test QuickSettingsPanel layout and tile aggregation.
+TEST(QuickSettingsPanelLayout) {
+    qypr::QuickSettingsPanel panel;
+
+    panel.addTile(std::make_unique<qypr::QSToggleTile>("WiFi", "󰤨",
+        []() { return true; }, []() {}));
+    panel.addTile(std::make_unique<qypr::QSToggleTile>("BT", "󰂯",
+        []() { return false; }, []() {}));
+    panel.addTile(std::make_unique<qypr::QSSliderTile>("󰕾",
+        []() { return 0.6; }, [](double) {}));
+
+    panel.anchorX = 800;
+    panel.anchorY = 50;
+
+    EXPECT_TRUE(!panel.isOpen());
+
+    // Draw the panel to exercise layout logic and populate tile bounds.
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 400, 300);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    panel.draw(p, 3000);
+    double h = panel.contentHeight();
+    EXPECT_TRUE(h > 0);
+
+    // Click inside the first toggle tile (bounds set by draw/layoutTiles).
+    qypr::Rect pb = panel.getBounds();
+    double firstTileX = pb.x + 16.0 + 5.0;  // pad + small offset inside tile
+    double firstTileY = pb.y + 16.0 + 5.0;
+    EXPECT_TRUE(panel.handleClick(firstTileX, firstTileY));
+
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+// Test PopoverManager open/close lifecycle.
+TEST(PopoverManagerLifecycle) {
+    qypr::PopoverManager pm;
+    EXPECT_TRUE(pm.active() == nullptr);
+
+    // DetailedPopover is abstract; use a minimal concrete subclass.
+    struct TestPopover : qypr::DetailedPopover {
+        void draw(qypr::Painter&, int64_t) override {}
+        double contentHeight() const override { return 100.0; }
+    };
+
+    auto pop = std::make_unique<TestPopover>();
+    qypr::DetailedPopover* raw = pop.get();
+
+    pm.open(std::move(pop), 100, 50);
+    EXPECT_TRUE(pm.active() == raw);
+    EXPECT_TRUE(pm.active()->isOpen());
+
+    pm.closeActive();
+    EXPECT_TRUE(pm.active() == nullptr);
+}
+
+// Test that StatusBar constructs, lays out, and draws without crashing.
+TEST(StatusBarConstructionAndDraw) {
+    qypr::EventLoop loop;
+
+    struct DummyHost : qypr::RenderHost {
+        int invalidations = 0;
+        void invalidate() override { ++invalidations; }
+        void requestUnlock() override {}
+    } host;
+
+    qypr::SystemBackends backends{};
+    qypr::StatusBar bar(loop, host, backends);
+
+    // Layout at 1920x1080
+    bar.layout(1920, 1080);
+    EXPECT_TRUE(bar.bounds.w > 0);
+    EXPECT_TRUE(bar.bounds.h > 0);
+
+    // Draw to a real Cairo surface
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1920, 1080);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    bar.draw(p, 4000);
+
+    // Second draw to verify no state corruption
+    bar.draw(p, 5000);
+
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+// Test StatusBar pointer input routing (hover, click, scroll).
+TEST(StatusBarPointerInput) {
+    qypr::EventLoop loop;
+    struct DummyHost : qypr::RenderHost {
+        void invalidate() override {}
+        void requestUnlock() override {}
+    } host;
+
+    qypr::SystemBackends backends{};
+    qypr::StatusBar bar(loop, host, backends);
+    bar.layout(1920, 1080);
+
+    // Motion inside the bar
+    bool handled = bar.handlePointerMotion(bar.bounds.x + 50, bar.bounds.y + 10, 1000);
+    EXPECT_TRUE(handled);
+
+    // Motion outside the bar
+    handled = bar.handlePointerMotion(0, 0, 1001);
+    EXPECT_FALSE(handled);
+
+    // Click on the gear button area
+    double gearX = bar.bounds.x + bar.bounds.w - 30;
+    double gearY = bar.bounds.y + bar.bounds.h / 2.0;
+    handled = bar.handlePointerButton(gearX, gearY, 272, true, 1002);
+    EXPECT_TRUE(handled);
+
+    // Leave clears hover
+    bar.handlePointerLeave(1003);
+    EXPECT_FALSE(bar.qsButtonHovered_);
+}
+
+// Test StatusBar keyboard focus cycling.
+TEST(StatusBarFocusCycling) {
+    qypr::EventLoop loop;
+    struct DummyHost : qypr::RenderHost {
+        void invalidate() override {}
+        void requestUnlock() override {}
+    } host;
+
+    qypr::SystemBackends backends{};
+    qypr::StatusBar bar(loop, host, backends);
+    bar.layout(1920, 1080);
+
+    // cycleFocus on a bar with registered indicators should succeed
+    // (the TestIndicator from IndicatorRegistryRegisterAndCreate persists in the singleton)
+    bool changed = bar.cycleFocus(false);
+    // Focus should have moved to the first indicator
+    EXPECT_TRUE(changed);
+
+    // Clear and verify no crash
+    bar.clearFocus();
+}
+
+// Test StatusBar animating() detects active animations.
+TEST(StatusBarAnimating) {
+    qypr::EventLoop loop;
+    struct DummyHost : qypr::RenderHost {
+        void invalidate() override {}
+        void requestUnlock() override {}
+    } host;
+
+    qypr::SystemBackends backends{};
+    qypr::StatusBar bar(loop, host, backends);
+    bar.layout(1920, 1080);
+
+    // Initially not animating
+    EXPECT_TRUE(!bar.animating(10000));
+
+    // Hover over an indicator and draw to trigger its hover animation
+    if (!bar.rightIndicators_.empty()) {
+        auto& ind = bar.rightIndicators_.front();
+        bar.handlePointerMotion(ind->bounds.x + 5, ind->bounds.y + 5, 10001);
+        cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1920, 1080);
+        cairo_t* cr = cairo_create(surf);
+        qypr::Painter p(cr);
+        bar.draw(p, 10001);  // draw triggers the hover animation on indicators
+        EXPECT_TRUE(bar.animating(10001));
+        cairo_destroy(cr);
+        cairo_surface_destroy(surf);
+    }
+}
+
+// Test theme::statusbar constants are accessible.
+TEST(StatusBarThemeConstants) {
+    using namespace qypr::theme::statusbar;
+    EXPECT_TRUE(height > 0);
+    EXPECT_TRUE(topMargin >= 0);
+    EXPECT_TRUE(sideMargin >= 0);
+    EXPECT_TRUE(cornerRadius > 0);
+    EXPECT_TRUE(iconSize > 0);
+    EXPECT_TRUE(iconSpacing > 0);
+    EXPECT_TRUE(padding > 0);
+    EXPECT_TRUE(qsPanelWidth > 0);
+    EXPECT_TRUE(qsTileHeight > 0);
 }
 
 // -----------------------------------------------------------------------------
