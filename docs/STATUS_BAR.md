@@ -14,13 +14,14 @@ access. The design draws from three mature desktop shell implementations:
 | **ChromeOS Ash** | Shelf + Unified System Tray | Tray View → Default View → Detailed View hierarchy; `UnifiedSystemTrayModel` state machine; Material You tile grid; modular `ash/system/` controllers |
 
 The status bar is always visible and survives the reveal/dim state machine
-(drawn at reduced opacity when idle).
+(drawn at reduced opacity when idle). It draws **no chrome of its own** — no
+background strip, no border: the indicators sit directly on the lockscreen
+background (shadowed text, like the lockscreen clock), so bar and lockscreen
+are one continuous surface rather than two stacked panels.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │  Mon Jul 12   3:45 PM      🔅  🔇  📶  🔋  ⚙                 │  │
-│  └─────────────────────────────────────────────────────────────────┘  │
+│   Mon Jul 12   3:45 PM                          🔅  🔇  📶  🔋  ⚙    │
 │                                                                       │
 │         Lockscreen content (clock, password, media, etc.)             │
 │                                                                       │
@@ -42,30 +43,57 @@ The status bar is always visible and survives the reveal/dim state machine
 
 ## Design Principles
 
-1. **Plugin Architecture** — Every indicator is a self-contained module
+1. **Strict Decoupling (LockScreen ⟂ StatusBar)** — The lockscreen and the
+   status bar are siblings that never reference each other. This is the
+   project's structural non-negotiable:
+   - `Shell` is the **sole composition point**: it owns both, draws both,
+     and routes input between them. Neither child names, includes, or
+     shares state with the other.
+   - StatusBar code (`ui/statusbar/`, `ui/indicators/`, `system/`) may
+     depend only on shared foundations: `EventLoop`, `Painter`, `Theme`,
+     `Widget`, and the narrow `Invalidator` interface. It must never see
+     lock-specific code (PAM, `LockSession`, `RenderHost::requestUnlock`).
+   - Consequence: the bar remains hostable outside the lockscreen (e.g. a
+     future layer-shell `qypr-bar`) without surgery, and either subsystem
+     can be built, tested, and reasoned about alone.
+
+2. **Minimal Footprint** — qypr's founding objective is minimum memory and
+   process count; the status bar must not erode it:
+   - **No new processes.** Backends never shell out (`wpctl`, `pactl`,
+     etc.) — they use in-process, event-driven APIs.
+   - **Push, not poll.** Backends subscribe (D-Bus `PropertiesChanged`,
+     protocol events) and put their fds in the epoll `EventLoop`; a
+     synchronous fetch is allowed once at startup only.
+   - **One bus connection per bus.** All system-bus backends (UPower,
+     NetworkManager, BlueZ, logind) share a single `sd_bus` connection
+     owned by `SystemBackends`; likewise for the session bus.
+   - **Lazy init.** Backends are constructed only when the bar is enabled.
+
+3. **Plugin Architecture** — Every indicator is a self-contained module
    (backend + widget) that registers itself with the bar at startup.
    Adding a new indicator requires zero changes to StatusBar itself.
    *(Inspired by KDE Plasma's Containment/Applet and GNOME's
    `SystemIndicator` pattern.)*
 
-2. **Backend / Frontend Separation** — System state is polled or monitored
-   by backend classes (`*Backend`) that produce immutable snapshot structs.
-   UI indicator classes (`*Indicator`) consume snapshots and render.
-   *(Inspired by KDE DataEngines and ChromeOS `ash/system/` controllers.)*
+4. **Backend / Frontend Separation** — System state is monitored by backend
+   classes (`*Backend`) that produce immutable snapshot structs and notify
+   on change. UI indicator classes (`*Indicator`) consume snapshots and
+   render. *(Inspired by KDE DataEngines and ChromeOS `ash/system/`
+   controllers.)*
 
-3. **Three-Layer View Hierarchy** — Each indicator exposes up to three
+5. **Three-Layer View Hierarchy** — Each indicator exposes up to three
    representations, following ChromeOS Ash conventions:
    - **Tray View** — Compact icon in the status bar strip.
    - **Default View** — Summary shown inside the Quick Settings panel.
    - **Detailed View** — Full interactive popover (sliders, lists, etc.)
 
-4. **Quick Settings Panel** — A single expandable panel (like GNOME 43+
+6. **Quick Settings Panel** — A single expandable panel (like GNOME 43+
    Quick Settings / ChromeOS Unified Tray) that replaces per-indicator
    popovers for toggles. Click the gear icon ⚙ (or any toggle indicator)
    to open the shared Quick Settings panel containing all toggle tiles
    and sliders.
 
-5. **StatusNotifierItem (SNI) Host** — Optional support for the
+7. **StatusNotifierItem (SNI) Host** — Optional support for the
    freedesktop `StatusNotifierItem` D-Bus protocol, allowing third-party
    applications to register tray icons. *(KDE Plasma's standard protocol,
    de facto Linux tray standard.)*
@@ -81,7 +109,7 @@ Shell (Root UI Compositor — coordinates inputs, layouts, and global idle dimmi
 ├── LockScreen (Auth UI: Clock, PasswordField, AudioController, Notifications, PowerDialog)
 └── StatusBar (Status Bar UI: zones, layout, popovers, quick settings)
     ├── LeftZone ─────────────────────────────────────────────
-    │   └── ClockIndicator          POSIX time, reuses Clock logic
+    │   └── ClockIndicator          POSIX time, own formatting (no LockScreen code)
     │
     ├── RightZone ────────────────────────────────────────────
     │   ├── BrightnessIndicator     backlight via sysfs / logind D-Bus
@@ -382,10 +410,12 @@ The CenterZone is reserved for future use (e.g., media now-playing title).
 
 ```cpp
 namespace theme::statusbar {
-    // Bar dimensions
+    // Bar dimensions. Margins align with the lockscreen's content frame
+    // (spacing::xlarge sides — same as the notification stack and power
+    // column) so bar + lockscreen read as one integrated composition.
     inline constexpr double height         = 36.0;
-    inline constexpr double topMargin      = 8.0;
-    inline constexpr double sideMargin     = 16.0;
+    inline constexpr double topMargin      = spacing::large;   // 24
+    inline constexpr double sideMargin     = spacing::xlarge;  // 48
     inline constexpr double cornerRadius   = 12.0;
 
     // Indicator spacing
@@ -461,10 +491,11 @@ void StatusBar::layout(int screenW, int screenH) {
 | Tray view | `"Mon Jul 12   3:45 PM"` text |
 | Quick Settings tile | None |
 | Detailed popover | None |
-| Update interval | Every 1 second (piggyback on existing clock timer) |
+| Update interval | Every 1 second via StatusBar's own tick — never LockScreen's clock timer |
 
 - Font: `theme::font::family` at `theme::statusbar::iconSize`
-- Reuses logic from existing `Clock` class
+- Formats time itself (`localtime_r` + `strftime`); shares no LockScreen
+  widget code (decoupling principle 1)
 
 ---
 
@@ -479,7 +510,8 @@ void StatusBar::layout(int screenW, int screenH) {
 | Quick Settings tile | `Info` — percentage, time remaining, progress bar |
 | Detailed popover | Full battery details + charging animation |
 
-**BatteryBackend** — uses `sd-bus`:
+**BatteryBackend** — uses `sd-bus` on the **system** bus (UPower does not
+live on the session bus), via the shared `SystemBackends` connection:
 
 - Bus: `org.freedesktop.UPower`
 - Path: `/org/freedesktop/UPower/devices/DisplayDevice`
@@ -603,13 +635,16 @@ Inactive state: `theme::color::surface` background
 | Detailed popover | Per-sink/source selection (future) |
 | Scroll action | Scroll on icon adjusts volume ±5% |
 
-**VolumeBackend** — uses `wpctl` CLI:
+**VolumeBackend** — in-process native client. Shelling out to `wpctl`/
+`pactl` is forbidden: forking a process per update violates the
+minimal-footprint objective (principle 2).
 
-- Read: `wpctl get-volume @DEFAULT_AUDIO_SINK@`
-- Parse: `Volume: 0.75` or `Volume: 0.75 [MUTED]`
-- Write: `wpctl set-volume @DEFAULT_AUDIO_SINK@ <level>`
-- Mute: `wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle`
-- Poll every 2 seconds, or reactively via PipeWire D-Bus signals (future)
+- libpulse async API against PipeWire's pulse server (`pipewire-pulse`)
+- The `pa_context` fds integrate into the epoll `EventLoop` — event-driven,
+  zero polling
+- Read: sink-info callback at startup; subscribe with
+  `PA_SUBSCRIPTION_MASK_SINK` for push updates thereafter
+- Write: `pa_context_set_sink_volume_by_index` / `pa_context_set_sink_mute_by_index`
 
 ```cpp
 struct VolumeSnapshot {
@@ -762,15 +797,26 @@ struct BluetoothSnapshot {
 |----------|-------|
 | Zone | Right |
 | Priority | 400 |
-| Backend | None (internal state) |
+| Backend | None — local state, published to Shell |
 | Tray view | Moon icon (visible only when DND active) |
 | Quick Settings tile | `Toggle` — on/off |
 | Detailed popover | None |
 
-When DND is active:
-- `NotificationMonitor` suppresses popup display
-- Notifications are still received and queued; they appear when DND is disabled
-- DND state persists across lock/unlock cycles via `EventLoop` timer or config
+The Desktop Notifications spec defines no DND API; every daemon-side DND
+control interface is proprietary (SwayNC's `org.erikreider.swaync.cc`,
+dunst's `org.dunstproject.cmd0`, ...). qypr depends only on freedesktop
+standards — never on a particular daemon — so DND is **qypr-local state**:
+
+- The indicator owns a plain on/off flag and exposes it (`dndActive()`).
+- `Shell` — the sole composition point (principle 1) — reads that flag and
+  suppresses the notification cards it forwards to the lockscreen while
+  DND is on. Neither child references the other; it also must **not**
+  reach into the lockscreen's `NotificationMonitor`.
+- `NotificationMonitor` keeps observing throughout, so nothing is lost:
+  when DND turns off, Shell pushes the accumulated set and the stack
+  reappears.
+- State lives for the lock session only (a fresh lock starts with DND
+  off); no config file, no daemon round-trips.
 
 ```cpp
 struct DNDSnapshot {
@@ -793,6 +839,11 @@ struct DNDSnapshot {
 
 Support for the freedesktop/KDE **StatusNotifierItem** D-Bus protocol.
 This allows third-party applications to display tray icons in the status bar.
+
+*(The `org.kde.*` bus names are the protocol's historical spelling — SNI is
+the de facto cross-desktop tray standard implemented by waybar, Plasma, etc.
+qypr acts as the **host**; third-party apps register with it. This adds no
+dependency on KDE or any other desktop component.)*
 
 **Architecture** (following KDE's three-component model):
 
@@ -923,7 +974,8 @@ panel skeleton. Pure UI, no system backends yet.
 | `src/ui/statusbar/IndicatorRegistry.cpp` | Factory storage + creation |
 
 **Deliverables:**
-- Status bar renders with glass background strip
+- Status bar indicators render chromeless, directly on the lockscreen
+  background (no strip, no border — one integrated surface)
 - Keyboard focus traversal works (Tab/Shift+Tab/Escape)
 - Quick Settings panel opens/closes with animations
 - Empty indicator slots accept registered indicators
@@ -1001,6 +1053,12 @@ panel skeleton. Pure UI, no system backends yet.
 
 **Shell integration:**
 
+- **Decoupling contract (principle 1):** `LockScreen` and `StatusBar` never
+  reference each other; all coordination flows through `Shell`. Each child's
+  `handle*` method returns whether it consumed the event, so Shell routes by
+  priority without either child knowing what else exists. StatusBar is handed
+  an `Invalidator`, never a `RenderHost` — the compiler enforces that it
+  cannot unlock the session.
 - Owns `LockScreen` and `StatusBar` as peer members.
 - In `draw()`: draws the video/gradient background, darken overlay, calls `lockScreen_.draw()`, calls `statusBar_.draw()`, and then draws the global idle dim overlay.
 - In `onPointerButton()`: routes pointer events to `StatusBar` popovers first, then `StatusBar` indicators, then notifications/power buttons in `LockScreen`.
@@ -1075,7 +1133,7 @@ panel skeleton. Pure UI, no system backends yet.
 | `sdbus-c++` | Yes (MprisController) | Alternative D-Bus binding |
 | Nerd Font glyphs | Yes (ActionButton, PowerDialog) | Status bar icons |
 | Cairo/Pango | Yes (entire UI) | Rendering |
-| `wpctl` CLI | No (new) | Volume read/write via PipeWire |
+| `libpulse` | No (new) | Event-driven volume via pipewire-pulse (no CLI spawning — principle 2) |
 | `sysfs` | No (new) | Backlight brightness fallback |
 | SNI D-Bus protocol | No (new) | Third-party tray icon hosting |
 

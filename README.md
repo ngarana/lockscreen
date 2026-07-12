@@ -69,9 +69,9 @@ systemctl --user daemon-reload
 systemctl --user enable --now qypr-notification-log.service
 ```
 
-It runs `qypr-record`, tracks dismissals (a SwayNC "clear" removes
-entries from the mirror), and hands the queue to the lock screen at startup
-over D-Bus (`org.qypr.Notifications`).
+It runs `qypr-record`, tracks dismissals (any daemon's dismiss/clear emits
+`NotificationClosed`, which removes entries from the mirror), and hands the
+queue to the lock screen at startup over D-Bus (`org.qypr.Notifications`).
 
 ## Use
 
