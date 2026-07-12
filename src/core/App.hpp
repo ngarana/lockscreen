@@ -11,6 +11,8 @@
 #include "mpris/MprisController.hpp"
 #include "notifications/NotificationMonitor.hpp"
 #include "power/PowerManager.hpp"
+#include "system/BatteryBackend.hpp"
+#include "system/SystemBus.hpp"
 #include "ui/AudioController.hpp"
 #include "ui/Shell.hpp"
 #include "video/VideoPlayer.hpp"
@@ -50,6 +52,13 @@ private:
     AudioController audio_;
     VideoPlayer video_;
     NotificationMonitor notifications_{loop_};
+
+    // Status bar backends: one shared system-bus connection; the aggregate
+    // is handed to Shell → StatusBar (indicators consume snapshots only).
+    SystemBus systemBus_{loop_};
+    BatteryBackend battery_{systemBus_};
+    SystemBackends backends_{&battery_};
+
     Shell shell_;
 };
 

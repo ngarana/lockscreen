@@ -32,7 +32,8 @@ public:
 private:
     std::unique_ptr<DetailedPopover> active_;
     DetailedPopover* borrowed_ = nullptr;  // non-owning pointer for stack panels
-    std::unique_ptr<DetailedPopover> transitioning_; // Popover currently fading out
+    std::unique_ptr<DetailedPopover> transitioning_; // owned popover fading out
+    DetailedPopover* borrowedClosing_ = nullptr;     // borrowed popover fading out
 };
 
 }  // namespace qypr

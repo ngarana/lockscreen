@@ -5,24 +5,32 @@
 
 namespace qypr {
 
+namespace {
+constexpr double kContentGap = 8.0;   // between icon and label
+constexpr double kSidePad = 8.0;      // hover-zone padding each side
+}  // namespace
+
 Color StatusIndicator::iconColor() const {
     return theme::color::text;
 }
 
 double StatusIndicator::measureWidth(Painter& p) {
-    TextStyle iconStyle{theme::font::iconFamily, theme::statusbar::iconSize, PANGO_WEIGHT_NORMAL, iconColor()};
-    Size iconSize = p.measureText(icon(), iconStyle);
+    const std::string ic = icon();
+    const std::string lbl = label();
+    double w = 0;
 
-    double w = iconSize.w;
-
-    std::string lbl = label();
-    if (!lbl.empty()) {
-        TextStyle labelStyle{theme::font::family, 14.0, PANGO_WEIGHT_NORMAL, iconColor()};
-        Size labelSize = p.measureText(lbl, labelStyle);
-        w += 8.0 + labelSize.w; // 8px gap
+    if (!ic.empty()) {
+        TextStyle iconStyle{theme::font::iconFamily, theme::statusbar::iconSize,
+                            PANGO_WEIGHT_NORMAL, iconColor()};
+        w += p.measureText(ic, iconStyle).w;
     }
-
-    return w + 16.0; // 8px padding on each side for hover zone
+    if (!lbl.empty()) {
+        TextStyle labelStyle{theme::font::family, labelFontSize(), PANGO_WEIGHT_NORMAL,
+                             iconColor()};
+        if (w > 0) w += kContentGap;
+        w += p.measureText(lbl, labelStyle).w;
+    }
+    return w + 2 * kSidePad;
 }
 
 void StatusIndicator::draw(Painter& p, int64_t now) {
@@ -31,17 +39,16 @@ void StatusIndicator::draw(Painter& p, int64_t now) {
     double alpha = hoverAlpha_.value(now);
     double scale = hoverScale_.value(now);
 
-    // 1. Draw hover/focus background pill
+    // 1. Hover background pill
     if (alpha > 0.01) {
         Color bg = theme::color::glassHover.withAlpha(alpha * theme::color::glassHover.a);
         Rect hoverRect = bounds;
-        // Shrink slightly vertically for a cleaner look
         hoverRect.y += 2.0;
         hoverRect.h -= 4.0;
         p.fillRoundedRect(hoverRect, 8.0, bg);
     }
 
-    // 2. Draw focus ring
+    // 2. Focus ring
     if (focused) {
         Rect focusRect = bounds;
         focusRect.y += 1.0;
@@ -49,44 +56,44 @@ void StatusIndicator::draw(Painter& p, int64_t now) {
         p.strokeRoundedRect(focusRect, 8.0, theme::color::primary, 1.5);
     }
 
-    // 3. Draw content (icon + label)
-    TextStyle iconStyle{theme::font::iconFamily, theme::statusbar::iconSize, PANGO_WEIGHT_NORMAL, iconColor()};
-    Size iconSz = p.measureText(icon(), iconStyle);
+    // 3. Content: optional icon + optional label, centered in bounds
+    const std::string ic = icon();
+    const std::string lbl = label();
 
-    double contentW = iconSz.w;
-    std::string lbl = label();
-    Size labelSz;
-    TextStyle labelStyle{theme::font::family, 14.0, PANGO_WEIGHT_NORMAL, iconColor()};
-
-    if (!lbl.empty()) {
-        labelSz = p.measureText(lbl, labelStyle);
-        contentW += 8.0 + labelSz.w;
-    }
-
-    // Center content inside bounds
-    double startX = bounds.x + (bounds.w - contentW) / 2.0;
-    double centerY = bounds.y + (bounds.h - iconSz.h) / 2.0;
-
-    // Apply hover scale (subtle text shift or size animation)
+    TextStyle iconStyle{theme::font::iconFamily, theme::statusbar::iconSize,
+                        PANGO_WEIGHT_NORMAL, iconColor()};
+    TextStyle labelStyle{theme::font::family, labelFontSize(), PANGO_WEIGHT_NORMAL,
+                         iconColor()};
     if (scale > 1.001) {
         iconStyle.size *= scale;
         labelStyle.size *= scale;
-        // Re-measure centered positions with scaled sizes
-        iconSz = p.measureText(icon(), iconStyle);
-        contentW = iconSz.w;
-        if (!lbl.empty()) {
-            labelSz = p.measureText(lbl, labelStyle);
-            contentW += 8.0 + labelSz.w;
-        }
-        startX = bounds.x + (bounds.w - contentW) / 2.0;
-        centerY = bounds.y + (bounds.h - iconSz.h) / 2.0;
     }
 
-    p.drawText(startX, centerY, icon(), iconStyle);
-
+    Size iconSz{}, labelSz{};
+    double contentW = 0;
+    if (!ic.empty()) {
+        iconSz = p.measureText(ic, iconStyle);
+        contentW += iconSz.w;
+    }
     if (!lbl.empty()) {
-        double labelY = bounds.y + (bounds.h - labelSz.h) / 2.0;
-        p.drawText(startX + iconSz.w + 8.0, labelY, lbl, labelStyle);
+        labelSz = p.measureText(lbl, labelStyle);
+        if (contentW > 0) contentW += kContentGap;
+        contentW += labelSz.w;
+    }
+
+    // Shadowed like the lockscreen clock: the bar has no background of its
+    // own, so text must stay readable straight over the video.
+    const double shadowA = theme::effects::shadowOpacity;
+    const double shadowOff = theme::effects::shadowOffset;
+    double x = bounds.x + (bounds.w - contentW) / 2.0;
+    if (!ic.empty()) {
+        p.drawTextShadowed(x, bounds.y + (bounds.h - iconSz.h) / 2.0, ic, iconStyle,
+                           HAlign::Left, shadowA, shadowOff);
+        x += iconSz.w + (lbl.empty() ? 0.0 : kContentGap);
+    }
+    if (!lbl.empty()) {
+        p.drawTextShadowed(x, bounds.y + (bounds.h - labelSz.h) / 2.0, lbl, labelStyle,
+                           HAlign::Left, shadowA, shadowOff);
     }
 }
 

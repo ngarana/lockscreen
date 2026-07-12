@@ -1,16 +1,22 @@
 // Shell.cpp - Root UI compositor implementation
 #include "ui/Shell.hpp"
+
+#include <xkbcommon/xkbcommon-keysyms.h>
+
 #include "core/EventLoop.hpp"
-#include "video/VideoPlayer.hpp"
 #include "render/Painter.hpp"
 #include "ui/Theme.hpp"
+#include "video/VideoPlayer.hpp"
+#include "wayland/Seat.hpp"  // Mod flags
 
 namespace qypr {
 
-Shell::Shell(EventLoop& loop, RenderHost& host, PamAuthenticator& pam, PowerManager& power)
+Shell::Shell(EventLoop& loop, RenderHost& host, PamAuthenticator& pam, PowerManager& power,
+             const SystemBackends& backends)
     : loop_(loop),
       host_(host),
-      lockScreen_(loop, host, pam, power) {
+      lockScreen_(loop, host, pam, power),
+      statusBar_(loop, host, backends) {
     restartIdleTimer();
 }
 
@@ -36,7 +42,7 @@ void Shell::draw(cairo_t* cr, int width, int height, int scale) {
     const int64_t now = nowMs();
     const double r = lockScreen_.getReveal(now);
 
-    // 1. Draw video background (or fallback gradient if no video).
+    // 1. Video background (or fallback gradient if no video).
     if (video_ && video_->hasFrame()) {
         video_->draw(cr, width, height);
     } else {
@@ -48,10 +54,22 @@ void Shell::draw(cairo_t* cr, int width, int height, int scale) {
     p.fillRect({0, 0, static_cast<double>(width), static_cast<double>(height)},
                Color::rgba(0, 0, 0, lerp(0.15, 0.35, r)));
 
-    // 2. Draw lockscreen
+    // 2. Children (peers): lockscreen first, status bar on top. The bar
+    // follows the lockscreen's reveal state so both read as one UI: dimmed
+    // to 0.4 while idle, full opacity when revealed (STATUS_BAR.md "bar
+    // idle dim"). Shell mediates — the bar itself knows nothing of reveal.
     lockScreen_.draw(cr, width, height, scale);
+    statusBar_.layout(width, height);
+    const double barAlpha = lerp(0.4, 1.0, r);
+    if (barAlpha > 0.999) {
+        statusBar_.draw(p, now);
+    } else {
+        p.pushGroup();
+        statusBar_.draw(p, now);
+        p.popGroupWithAlpha(barAlpha);
+    }
 
-    // 3. Draw deep-idle dim veil
+    // 3. Deep-idle dim veil covers everything.
     const double dim = clamp01(dimAnim_.value(now));
     if (dim > 0.001) {
         p.fillRect({0, 0, static_cast<double>(width), static_cast<double>(height)},
@@ -62,6 +80,7 @@ void Shell::draw(cairo_t* cr, int width, int height, int scale) {
 bool Shell::isAnimating() const {
     const int64_t now = nowMs();
     if (dimAnim_.active(now)) return true;
+    if (statusBar_.animating(now)) return true;
     return lockScreen_.isAnimating();
 }
 
@@ -72,20 +91,40 @@ void Shell::onTextInput(const std::string& utf8) {
 
 void Shell::onSpecialKey(uint32_t keysym, uint32_t modifiers) {
     wakeFromIdle();
+
+    // Tab cycles keyboard focus through status bar indicators.
+    if (keysym == XKB_KEY_Tab || keysym == XKB_KEY_ISO_Left_Tab) {
+        const bool reverse = keysym == XKB_KEY_ISO_Left_Tab || (modifiers & MOD_SHIFT);
+        if (!statusBar_.cycleFocus(reverse)) statusBar_.clearFocus();
+        return;
+    }
+
+    // Escape/Enter/arrows for an open popover or a focused indicator.
+    if (statusBar_.handleKey(keysym)) return;
+
     lockScreen_.handleSpecialKey(keysym, modifiers);
 }
 
 void Shell::onPointerMotion(int w, int h, double x, double y) {
     wakeFromIdle();
+    // Both children track hover; neither consumes motion exclusively.
+    statusBar_.handlePointerMotion(x, y, nowMs());
     lockScreen_.handlePointerMotion(w, h, x, y);
 }
 
 void Shell::onPointerButton(int w, int h, double x, double y, uint32_t button, bool pressed) {
     wakeFromIdle();
+    // Priority (STATUS_BAR.md event routing): a lockscreen modal (power
+    // dialog) consumes everything; otherwise the status bar gets first claim.
+    if (!lockScreen_.modalActive() &&
+        statusBar_.handlePointerButton(x, y, button, pressed, nowMs())) {
+        return;
+    }
     lockScreen_.handlePointerButton(w, h, x, y, button, pressed);
 }
 
 void Shell::onPointerLeave() {
+    statusBar_.handlePointerLeave(nowMs());
     lockScreen_.handlePointerLeave();
 }
 

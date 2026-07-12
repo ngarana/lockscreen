@@ -27,7 +27,7 @@ App::App()
       pam_(loop_),
       audio_(mpris_),
       video_(loop_, *this),
-      shell_(loop_, *this, pam_, power_) {
+      shell_(loop_, *this, pam_, power_, backends_) {
     shell_.setAudioController(&audio_);
     shell_.setVideoPlayer(&video_);
 
@@ -64,6 +64,10 @@ int App::run() {
     // running --record service (non-fatal: it logs when unavailable).
     notifications_.start(/*seedFromLog=*/true);
 
+    // Status bar backends: one startup fetch, push-only afterwards
+    // (non-fatal: the affected indicator stays hidden).
+    battery_.start();
+
     // Start video playback (non-fatal if it fails).
     if (video_.init()) {
         video_.start();
@@ -77,6 +81,7 @@ int App::run() {
 
 int App::preview(const std::string& path, int width, int height) {
     shell_.setNotifications(demoNotifications());  // sample cards, preview only
+    battery_.start();  // live battery state for the status bar
 
     // Idle state (before any interaction).
     renderToPng(shell_, path.substr(0, path.rfind('.')) + "-idle.png", width, height);
@@ -86,6 +91,17 @@ int App::preview(const std::string& path, int width, int height) {
     shell_.lockScreen().handleTextInput("password");
     usleep(700 * 1000);
     renderToPng(shell_, path, width, height);
+
+    // Quick Settings open: click the gear through Shell routing (bar-first).
+    // Gear centre: w - sideMargin(48) - pad(14) - gearW(32)/2 → w-78; y =
+    // topMargin(24) + barH(36)/2 → 42.
+    shell_.onPointerButton(width, height, width - 78.0, 42.0, 0x110, true);
+    usleep(300 * 1000);
+    renderToPng(shell_, path.substr(0, path.rfind('.')) + "-qs.png", width, height);
+
+    // Dismiss the panel by clicking outside it (consumed by the status bar).
+    shell_.onPointerButton(width, height, width / 2.0, height / 2.0, 0x110, true);
+    usleep(250 * 1000);
 
     // Expanded power pill: simulate a click on the anchor button (bottom-right).
     shell_.lockScreen().handlePointerButton(width, height,

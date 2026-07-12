@@ -1,22 +1,27 @@
 // StatusBar.hpp - Container for zones, indicators, popovers, and layout.
 #pragma once
 
+#include <cairo/cairo.h>
+
+#include <memory>
+#include <vector>
+
 #include "ui/Widget.hpp"
-#include "ui/statusbar/StatusIndicator.hpp"
 #include "ui/statusbar/PopoverManager.hpp"
 #include "ui/statusbar/QuickSettingsPanel.hpp"
-#include <vector>
-#include <memory>
+#include "ui/statusbar/StatusIndicator.hpp"
 
 namespace qypr {
 
 class EventLoop;
-class RenderHost;
+class Invalidator;
 
 class StatusBar : public Widget {
 public:
-    StatusBar(EventLoop& loop, RenderHost& host, const SystemBackends& backends);
-    ~StatusBar() override = default;
+    // Deliberately takes Invalidator, not RenderHost: the status bar is
+    // lock-agnostic and must stay hostable outside the lockscreen.
+    StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& backends);
+    ~StatusBar() override;
 
     // Layout the bar based on focused screen width
     void layout(int screenW, int screenH);
@@ -25,7 +30,7 @@ public:
 
     bool animating(int64_t now) const;
 
-    // Event routing
+    // Event routing. Handlers return true when the event was consumed.
     bool handlePointerMotion(double x, double y, int64_t now);
     bool handlePointerButton(double x, double y, uint32_t button, bool pressed, int64_t now);
     void handlePointerLeave(int64_t now);
@@ -42,9 +47,11 @@ public:
 
 private:
     void toggleQuickSettings();
+    void activateIndicator(StatusIndicator& ind);
+    void notifyBackendUpdate();
 
     EventLoop& loop_;
-    RenderHost& host_;
+    Invalidator& host_;
 
     // Indicators split by zone
     std::vector<std::unique_ptr<StatusIndicator>> leftIndicators_;
@@ -58,6 +65,14 @@ private:
     // Popover Management
     QuickSettingsPanel qsPanel_;
     PopoverManager popovers_;
+
+    // 1s tick driving indicator poll() — the bar's own timer, never
+    // LockScreen's (decoupling principle 1).
+    int tickTimer_ = -1;
+
+    // Offscreen 1x1 context so layout() can measure text without a frame.
+    cairo_surface_t* measureSurface_ = nullptr;
+    cairo_t* measureCr_ = nullptr;
 };
 
 }  // namespace qypr

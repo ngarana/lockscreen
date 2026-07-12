@@ -104,6 +104,7 @@ int g_tests_failed = 0;
 #include "ui/indicators/ClockIndicator.hpp"
 #include "ui/indicators/BatteryIndicator.hpp"
 #include "system/BatteryBackend.hpp"
+#include "system/SystemBus.hpp"
 #include "core/App.hpp"
 
 #undef private
@@ -1008,9 +1009,10 @@ TEST(ClockIndicatorRenders) {
     // Poll to populate cached time
     clock.poll(qypr::nowMs());
 
-    // Icon returns formatted time string
-    std::string t = clock.icon();
+    // Text-only indicator: label carries the formatted time, icon is empty
+    std::string t = clock.label();
     EXPECT_TRUE(!t.empty());
+    EXPECT_TRUE(clock.icon().empty());
 
     // Tooltip returns date string
     std::string d = clock.tooltip();
@@ -1068,8 +1070,8 @@ TEST(BatteryIndicatorColorCoding) {
     // Should be red for 0%
     EXPECT_TRUE(c.r > 0.5);  // red channel dominant
 
-    // Poll (backend may not be available in test, but should not crash)
-    batt.poll(qypr::nowMs());
+    // Backend update with no backend attached must be a no-op, not a crash
+    batt.onBackendUpdate();
 
     // Measure should return positive width
     cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 200, 60);
@@ -1082,11 +1084,20 @@ TEST(BatteryIndicatorColorCoding) {
 }
 
 TEST(BatteryBackendConstruction) {
-    qypr::BatteryBackend backend;
-    // Should not crash even if UPower is not available
-    backend.refresh();
-    backend.processEvents();
-    EXPECT_TRUE(backend.dbusFd() >= 0);
+    qypr::EventLoop loop;
+    qypr::SystemBus bus(loop);
+    qypr::BatteryBackend backend(bus);
+
+    // start() must not crash whether or not UPower/a battery is available;
+    // on failure the snapshot stays absent so the indicator hides.
+    bool started = backend.start();
+    const auto& s = backend.snapshot();
+    if (started) {
+        EXPECT_TRUE(s.present);
+        EXPECT_TRUE(s.percentage >= 0 && s.percentage <= 100);
+    } else {
+        EXPECT_FALSE(s.present);
+    }
 }
 
 // -----------------------------------------------------------------------------

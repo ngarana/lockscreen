@@ -1,13 +1,22 @@
-// BatteryBackend.hpp - UPower D-Bus monitor for battery state.
+// BatteryBackend.hpp - UPower battery state over the shared system bus.
+//
+// Spec-correct per docs/STATUS_BAR.md: one synchronous GetAll at start(),
+// push-only afterwards via org.freedesktop.DBus.Properties.PropertiesChanged.
+// UPower lives on the SYSTEM bus and its State property is a uint32 enum.
+
 #pragma once
 
-#include "core/Types.hpp"
+#include <cstdint>
+#include <functional>
 #include <string>
 
-struct sd_bus;
+struct sd_bus_message;
 struct sd_bus_slot;
+struct sd_bus_error;
 
 namespace qypr {
+
+class SystemBus;
 
 struct BatterySnapshot {
     int percentage = 0;
@@ -21,28 +30,32 @@ struct BatterySnapshot {
 
 class BatteryBackend {
 public:
-    BatteryBackend();
+    explicit BatteryBackend(SystemBus& bus);
     ~BatteryBackend();
 
-    // Poll current state (called on timer tick).
-    void refresh();
+    BatteryBackend(const BatteryBackend&) = delete;
+    BatteryBackend& operator=(const BatteryBackend&) = delete;
 
-    // Get latest snapshot.
+    // One startup fetch + PropertiesChanged subscription. Returns false when
+    // the bus, UPower, or a battery is unavailable (indicator stays hidden).
+    bool start();
+
     const BatterySnapshot& snapshot() const { return snap_; }
 
-    // D-Bus file descriptor for polling (returns -1 if unavailable).
-    int dbusFd() const;
-
-    // Process D-Bus events (call after poll).
-    void processEvents();
+    // Fires on every pushed update (and once after the successful start fetch).
+    void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
 
 private:
-    void pollFromDevice();
-    void parseProperties(const char* props);
+    static int onPropertiesChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
+    bool fetchAll(const char* devicePath);
+    bool parseProps(sd_bus_message* m);   // a{sv} at cursor → snapshot fields
+    std::string findBatteryDevice();      // fallback: EnumerateDevices, Type==2
 
-    BatterySnapshot snap_;
-    sd_bus* bus_ = nullptr;
+    SystemBus& bus_;
     sd_bus_slot* slot_ = nullptr;
+    std::string devicePath_;
+    BatterySnapshot snap_;
+    std::function<void()> onChange_;
 };
 
 }  // namespace qypr

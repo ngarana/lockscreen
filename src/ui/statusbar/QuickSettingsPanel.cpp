@@ -40,7 +40,14 @@ double QuickSettingsPanel::contentHeight() const {
         }
     }
 
-    return y + pad;
+    // Info tiles (status summary rows, full width)
+    for (const auto& tile : tiles_) {
+        if (tile->type() == QSTile::Type::Info) {
+            y += 64.0 + gap;
+        }
+    }
+
+    return y + pad - gap;
 }
 
 void QuickSettingsPanel::layoutTiles() {
@@ -75,6 +82,14 @@ void QuickSettingsPanel::layoutTiles() {
         if (tile->type() == QSTile::Type::Slider) {
             tile->bounds = {popBounds.x + pad, y, contentW, 40.0};
             y += 40.0 + gap;
+        }
+    }
+
+    // 3. Layout Info tiles below sliders (status summary, full width)
+    for (const auto& tile : tiles_) {
+        if (tile->type() == QSTile::Type::Info) {
+            tile->bounds = {popBounds.x + pad, y, contentW, 64.0};
+            y += 64.0 + gap;
         }
     }
 }

@@ -1,15 +1,20 @@
 // Shell.hpp - Root UI compositor: coordinates StatusBar and LockScreen.
 //
 // Inspired by ChromeOS ash::Shell and GNOME Shell's ScreenShield.
-// Implements InputSink to receive events from the platform layer,
-// then routes them to the correct child (StatusBar or LockScreen)
-// based on priority. Manages the shared idle/dim state.
+// Implements InputSink to receive events from the platform layer, then routes
+// them to the correct child based on priority. Manages the shared idle/dim
+// state.
+//
+// Decoupling contract (STATUS_BAR.md principle 1): LockScreen and StatusBar
+// are peers that never reference each other; Shell is the sole composition
+// point and all coordination flows through it.
 
 #pragma once
 
 #include "core/Interfaces.hpp"
-#include "ui/LockScreen.hpp"
 #include "core/Types.hpp"
+#include "ui/LockScreen.hpp"
+#include "ui/statusbar/StatusBar.hpp"
 
 namespace qypr {
 
@@ -19,7 +24,8 @@ class VideoPlayer;
 
 class Shell : public InputSink {
 public:
-    Shell(EventLoop& loop, RenderHost& host, PamAuthenticator& pam, PowerManager& power);
+    Shell(EventLoop& loop, RenderHost& host, PamAuthenticator& pam, PowerManager& power,
+          const SystemBackends& backends);
 
     // Inject optional subsystems (same API LockScreen had).
     void setAudioController(AudioController* audio);
@@ -31,7 +37,8 @@ public:
     void draw(cairo_t* cr, int width, int height, int scale);
     bool isAnimating() const;
 
-    // InputSink — routes to StatusBar first, then LockScreen.
+    // InputSink — routes to StatusBar first (unless a lockscreen modal is
+    // active), then LockScreen.
     void onTextInput(const std::string& utf8) override;
     void onSpecialKey(uint32_t keysym, uint32_t modifiers) override;
     void onPointerMotion(int w, int h, double x, double y) override;
@@ -40,6 +47,7 @@ public:
 
     // Access for App wiring.
     LockScreen& lockScreen() { return lockScreen_; }
+    StatusBar& statusBar() { return statusBar_; }
 
 private:
     void wakeFromIdle();
@@ -52,7 +60,7 @@ private:
 
     // Children — peers, not parent-child.
     LockScreen lockScreen_;
-    // StatusBar* statusBar_ = nullptr;  // Phase 2: will be added when StatusBar is implemented
+    StatusBar statusBar_;
 
     // Shared idle state (moved from LockScreen).
     bool idle_ = false;

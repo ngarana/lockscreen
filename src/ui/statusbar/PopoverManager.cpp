@@ -6,6 +6,8 @@ namespace qypr {
 
 void PopoverManager::open(std::unique_ptr<DetailedPopover> popover, double anchorX, double anchorY) {
     if (borrowed_) {
+        borrowed_->close();
+        borrowedClosing_ = borrowed_;
         borrowed_ = nullptr;
     }
     if (active_) {
@@ -23,6 +25,7 @@ void PopoverManager::open(std::unique_ptr<DetailedPopover> popover, double ancho
 }
 
 void PopoverManager::openBorrowed(DetailedPopover* popover, double anchorX, double anchorY) {
+    if (borrowedClosing_ == popover) borrowedClosing_ = nullptr;  // reopened mid-close
     if (active_) {
         transitioning_ = std::move(active_);
         transitioning_->close();
@@ -38,6 +41,7 @@ void PopoverManager::openBorrowed(DetailedPopover* popover, double anchorX, doub
 void PopoverManager::closeActive() {
     if (borrowed_) {
         borrowed_->close();
+        borrowedClosing_ = borrowed_;  // keep drawing it through the fade-out
         borrowed_ = nullptr;
     } else if (active_) {
         transitioning_ = std::move(active_);
@@ -57,6 +61,17 @@ void PopoverManager::draw(Painter& p, int64_t now) {
         }
     }
 
+    if (borrowedClosing_) {
+        double prog = borrowedClosing_->openProgress_.value(now);
+        if (!borrowedClosing_->openProgress_.active(now) && prog <= 0.01) {
+            borrowedClosing_ = nullptr;
+        } else {
+            p.pushGroup();
+            borrowedClosing_->draw(p, now);
+            p.popGroupWithAlpha(prog);
+        }
+    }
+
     DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;
     if (cur) {
         double prog = cur->openProgress_.value(now);
@@ -68,6 +83,9 @@ void PopoverManager::draw(Painter& p, int64_t now) {
 
 bool PopoverManager::animating(int64_t now) const {
     if (transitioning_ && transitioning_->openProgress_.active(now)) {
+        return true;
+    }
+    if (borrowedClosing_ && borrowedClosing_->openProgress_.active(now)) {
         return true;
     }
     DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;

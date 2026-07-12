@@ -37,10 +37,14 @@ public:
     virtual ~StatusIndicator() = default;
 
     // --- Tray View (compact bar representation) ---
+    // icon() may return "" for text-only indicators (e.g. the clock); the
+    // base draw then renders just the label.
     virtual std::string icon() const = 0;
     virtual std::string label() const { return ""; }
     virtual std::string tooltip() const = 0;
     virtual Color iconColor() const;
+    // Point size of the label text; text-only indicators bump this up.
+    virtual double labelFontSize() const { return 13.0; }
 
     // Measure indicator width based on current icon/label/etc.
     virtual double measureWidth(Painter& p);

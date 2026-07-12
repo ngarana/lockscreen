@@ -103,9 +103,12 @@ inline constexpr int radius = 12;
 }  // namespace notification
 
 namespace statusbar {
+// The bar sits inside the lockscreen's content frame (spacing::xlarge side
+// margins, like the notification stack and power column) so the two read as
+// one composition, not a desktop panel bolted on top.
 inline constexpr double height         = 36.0;
-inline constexpr double topMargin      = 8.0;
-inline constexpr double sideMargin     = 16.0;
+inline constexpr double topMargin      = spacing::large;
+inline constexpr double sideMargin     = spacing::xlarge;
 inline constexpr double cornerRadius   = 12.0;
 inline constexpr double iconSize       = 16.0;
 inline constexpr double iconSpacing    = 18.0;

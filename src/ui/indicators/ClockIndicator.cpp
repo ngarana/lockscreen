@@ -2,8 +2,9 @@
 #include "ui/indicators/ClockIndicator.hpp"
 
 #include <ctime>
+
 #include "ui/Theme.hpp"
-#include "render/Painter.hpp"
+#include "ui/statusbar/IndicatorRegistry.hpp"
 
 namespace qypr {
 
@@ -30,31 +31,25 @@ std::string ClockIndicator::dateString() const {
     return buf;
 }
 
-std::string ClockIndicator::icon() const {
-    return cachedTime_.empty() ? timeString() : cachedTime_;
-}
-
 std::string ClockIndicator::label() const {
-    return "";
+    return cachedTime_.empty() ? timeString() : cachedTime_;
 }
 
 std::string ClockIndicator::tooltip() const {
     return dateString();
 }
 
-double ClockIndicator::measureWidth(Painter& p) {
-    TextStyle style{theme::font::family, theme::statusbar::iconSize, PANGO_WEIGHT_NORMAL, theme::color::text};
-    Size sz = p.measureText(timeString(), style);
-    return sz.w + 16.0;  // 8px padding each side
+double ClockIndicator::labelFontSize() const {
+    return theme::statusbar::iconSize;
 }
 
 void ClockIndicator::poll(int64_t now) {
-    // Update once per second
     if (now - lastPoll_ >= 1000) {
         cachedTime_ = timeString();
-        cachedDate_ = dateString();
         lastPoll_ = now;
     }
 }
+
+REGISTER_INDICATOR("clock", Zone::Left, 0, ClockIndicator)
 
 }  // namespace qypr

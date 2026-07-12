@@ -1,4 +1,8 @@
-// BatteryIndicator.hpp - Status bar battery icon + popover.
+// BatteryIndicator.hpp - Status bar battery icon + QS tile + detailed popover.
+//
+// Pure consumer: BatteryBackend pushes snapshots via onBackendUpdate();
+// the indicator never touches D-Bus and stays hidden until real data arrives.
+
 #pragma once
 
 #include "ui/statusbar/StatusIndicator.hpp"
@@ -9,14 +13,13 @@ namespace qypr {
 
 class BatteryIndicator : public StatusIndicator {
 public:
-    BatteryIndicator(const SystemBackends& backends);
+    explicit BatteryIndicator(const SystemBackends& backends);
 
     std::string icon() const override;
+    std::string label() const override;
     std::string tooltip() const override;
     Color iconColor() const override;
-    double measureWidth(Painter& p) override;
 
-    void poll(int64_t now) override;
     void onBackendUpdate() override;
 
     std::unique_ptr<QSTile> createTile() override;
@@ -24,8 +27,6 @@ public:
     std::unique_ptr<DetailedPopover> createDetailedView() override;
 
 private:
-    std::string iconForLevel(bool charging) const;
-
     BatteryBackend* backend_ = nullptr;
     BatterySnapshot lastSnap_;
 };

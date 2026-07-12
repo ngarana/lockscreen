@@ -50,6 +50,11 @@ public:
 
     double getReveal(int64_t now) const { return revealAnim_.value(now); }
 
+    // True while a modal (power confirmation dialog) should consume all
+    // input. Queried by Shell for routing; LockScreen knows nothing about
+    // what else exists.
+    bool modalActive() const { return powerDialog_.active(); }
+
     // Called by Shell when any input arrives to drive the reveal state machine
     // (without touching idle state, which Shell manages).
     void wake();

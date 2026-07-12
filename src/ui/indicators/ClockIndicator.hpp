@@ -1,4 +1,8 @@
 // ClockIndicator.hpp - Status bar clock text indicator.
+//
+// Text-only (icon() is empty); formats its own time — shares no LockScreen
+// widget code and ticks on StatusBar's timer, never LockScreen's.
+
 #pragma once
 
 #include "ui/statusbar/StatusIndicator.hpp"
@@ -8,12 +12,12 @@ namespace qypr {
 
 class ClockIndicator : public StatusIndicator {
 public:
-    ClockIndicator(const SystemBackends& backends);
+    explicit ClockIndicator(const SystemBackends& backends);
 
-    std::string icon() const override;
+    std::string icon() const override { return ""; }
     std::string label() const override;
     std::string tooltip() const override;
-    double measureWidth(Painter& p) override;
+    double labelFontSize() const override;
 
     void poll(int64_t now) override;
 
@@ -21,9 +25,8 @@ private:
     std::string timeString() const;
     std::string dateString() const;
 
-    mutable std::string cachedTime_;
-    mutable std::string cachedDate_;
-    mutable int64_t lastPoll_ = 0;
+    std::string cachedTime_;
+    int64_t lastPoll_ = 0;
 };
 
 }  // namespace qypr
