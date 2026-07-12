@@ -36,11 +36,18 @@ public:
     virtual void onPointerLeave() = 0;
 };
 
-// The UI drives the session through this: ask for a repaint, or unlock.
-class RenderHost {
+// The narrowest capability handed to UI components that only need to trigger
+// repaints. Lock-agnostic components (StatusBar, indicators) take this — never
+// RenderHost — so they cannot reach lock-only powers like requestUnlock().
+class Invalidator {
 public:
-    virtual ~RenderHost() = default;
+    virtual ~Invalidator() = default;
     virtual void invalidate() = 0;      // repaint every output soon
+};
+
+// The lock UI drives the session through this: ask for a repaint, or unlock.
+class RenderHost : public Invalidator {
+public:
     virtual void requestUnlock() = 0;   // authentication succeeded
 };
 
