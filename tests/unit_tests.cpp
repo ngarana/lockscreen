@@ -101,6 +101,9 @@ int g_tests_failed = 0;
 #include "ui/statusbar/QuickSettingsPanel.hpp"
 #include "ui/statusbar/PopoverManager.hpp"
 #include "ui/statusbar/DetailedPopover.hpp"
+#include "ui/indicators/ClockIndicator.hpp"
+#include "ui/indicators/BatteryIndicator.hpp"
+#include "system/BatteryBackend.hpp"
 #include "core/App.hpp"
 
 #undef private
@@ -980,6 +983,110 @@ TEST(StatusBarThemeConstants) {
     EXPECT_TRUE(padding > 0);
     EXPECT_TRUE(qsPanelWidth > 0);
     EXPECT_TRUE(qsTileHeight > 0);
+}
+
+// =============================================================================
+// Phase 2: Clock + Battery Indicator Tests
+// =============================================================================
+
+TEST(ClockIndicatorConstruction) {
+    qypr::SystemBackends backends{};
+    qypr::ClockIndicator clock(backends);
+
+    EXPECT_EQ(clock.id(), std::string("clock"));
+    EXPECT_TRUE(static_cast<int>(clock.zone()) == static_cast<int>(qypr::Zone::Left));
+    EXPECT_EQ(clock.priority(), 0);
+    EXPECT_FALSE(clock.hasDetailedView());
+    EXPECT_TRUE(clock.createTile() == nullptr);
+    EXPECT_TRUE(clock.createDetailedView() == nullptr);
+}
+
+TEST(ClockIndicatorRenders) {
+    qypr::SystemBackends backends{};
+    qypr::ClockIndicator clock(backends);
+
+    // Poll to populate cached time
+    clock.poll(qypr::nowMs());
+
+    // Icon returns formatted time string
+    std::string t = clock.icon();
+    EXPECT_TRUE(!t.empty());
+
+    // Tooltip returns date string
+    std::string d = clock.tooltip();
+    EXPECT_TRUE(!d.empty());
+
+    // Measure width against a real painter
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 400, 60);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    double w = clock.measureWidth(p);
+    EXPECT_TRUE(w > 0);
+
+    // Draw
+    clock.bounds = {0, 0, w, 36};
+    clock.draw(p, qypr::nowMs());
+
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+TEST(BatteryIndicatorConstruction) {
+    qypr::SystemBackends backends{};
+    qypr::BatteryIndicator batt(backends);
+
+    EXPECT_EQ(batt.id(), std::string("battery"));
+    EXPECT_TRUE(static_cast<int>(batt.zone()) == static_cast<int>(qypr::Zone::Right));
+    EXPECT_EQ(batt.priority(), 500);
+    EXPECT_TRUE(batt.hasDetailedView());
+}
+
+TEST(BatteryIndicatorCreatesInfoTile) {
+    qypr::SystemBackends backends{};
+    qypr::BatteryIndicator batt(backends);
+
+    auto tile = batt.createTile();
+    EXPECT_TRUE(tile != nullptr);
+    EXPECT_TRUE(tile->type() == qypr::QSTile::Type::Info);
+
+    // Draw the tile
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 200, 80);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    tile->bounds = {0, 0, 180, 64};
+    tile->draw(p, qypr::nowMs());
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+TEST(BatteryIndicatorColorCoding) {
+    qypr::SystemBackends backends{};
+    qypr::BatteryIndicator batt(backends);
+
+    // Default state: 0%, Unknown
+    qypr::Color c = batt.iconColor();
+    // Should be red for 0%
+    EXPECT_TRUE(c.r > 0.5);  // red channel dominant
+
+    // Poll (backend may not be available in test, but should not crash)
+    batt.poll(qypr::nowMs());
+
+    // Measure should return positive width
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 200, 60);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    double w = batt.measureWidth(p);
+    EXPECT_TRUE(w > 0);
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+TEST(BatteryBackendConstruction) {
+    qypr::BatteryBackend backend;
+    // Should not crash even if UPower is not available
+    backend.refresh();
+    backend.processEvents();
+    EXPECT_TRUE(backend.dbusFd() >= 0);
 }
 
 // -----------------------------------------------------------------------------

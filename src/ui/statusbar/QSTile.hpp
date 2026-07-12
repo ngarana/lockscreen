@@ -69,4 +69,22 @@ private:
     Rect sliderTrackBounds_;
 };
 
+class QSInfoTile : public QSTile {
+public:
+    QSInfoTile(const std::string& title, const std::string& icon,
+               std::function<double()> getProgress,
+               std::function<std::string()> getInfo)
+        : title_(title), icon_(icon), getProgress_(std::move(getProgress)),
+          getInfo_(std::move(getInfo)) {}
+
+    Type type() const override { return Type::Info; }
+    void draw(Painter& p, int64_t now) override;
+
+private:
+    std::string title_;
+    std::string icon_;
+    std::function<double()> getProgress_;
+    std::function<std::string()> getInfo_;
+};
+
 }  // namespace qypr

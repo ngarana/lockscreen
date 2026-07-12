@@ -125,4 +125,49 @@ void QSSliderTile::draw(Painter& p, int64_t now) {
     p.fillCircle(thumbX, thumbY, thumbRadius, theme::color::primary);
 }
 
+// --- QSInfoTile ---
+
+void QSInfoTile::draw(Painter& p, int64_t now) {
+    double progress = getProgress_ ? getProgress_() : 0.0;
+    std::string info = getInfo_ ? getInfo_() : "";
+
+    // Background
+    p.fillRoundedRect(bounds, 12.0, theme::color::glass);
+    p.strokeRoundedRect(bounds, 12.0, theme::color::glassBorder, 1.0);
+
+    double pad = 12.0;
+
+    // Icon
+    TextStyle iconStyle{theme::font::iconFamily, 18.0, PANGO_WEIGHT_NORMAL, theme::color::text};
+    Size iconSz = p.measureText(icon_, iconStyle);
+    double iconX = bounds.x + pad;
+    double iconY = bounds.y + pad;
+    p.drawText(iconX, iconY, icon_, iconStyle);
+
+    // Title (top-right of icon)
+    TextStyle titleStyle{theme::font::family, 13.0, PANGO_WEIGHT_BOLD, theme::color::text};
+    Size titleSz = p.measureText(title_, titleStyle);
+    p.drawText(iconX + iconSz.w + 10.0, iconY, title_, titleStyle);
+
+    // Progress bar
+    double barY = bounds.y + pad + iconSz.h + 8.0;
+    double barH = 6.0;
+    double barW = bounds.w - 2 * pad;
+    Rect barBg{bounds.x + pad, barY, barW, barH};
+    p.fillRoundedRect(barBg, barH / 2.0, theme::color::surface);
+
+    Rect barFill{bounds.x + pad, barY, barW * clamp01(progress), barH};
+    Color barColor = progress > 0.5 ? theme::color::success
+                   : progress > 0.2 ? theme::color::warning
+                   : theme::color::error;
+    p.fillRoundedRect(barFill, barH / 2.0, barColor);
+
+    // Info text below bar
+    if (!info.empty()) {
+        TextStyle infoStyle{theme::font::family, 11.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
+        Size infoSz = p.measureText(info, infoStyle);
+        p.drawText(bounds.x + pad, barY + barH + 6.0, info, infoStyle);
+    }
+}
+
 }  // namespace qypr
