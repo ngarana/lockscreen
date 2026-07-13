@@ -1,0 +1,29 @@
+// DNDIndicator.hpp - Do Not Disturb: moon icon (visible only when active)
+// plus a Quick Settings toggle. Consumes the qypr-local DndState — no
+// notification daemon involved (native-only principle).
+
+#pragma once
+
+#include "ui/statusbar/StatusIndicator.hpp"
+#include "system/DndState.hpp"
+#include <string>
+
+namespace qypr {
+
+class DNDIndicator : public StatusIndicator {
+public:
+    explicit DNDIndicator(const SystemBackends& backends);
+
+    std::string icon() const override { return "󰽥"; }
+    std::string tooltip() const override { return "Do Not Disturb"; }
+    Color iconColor() const override;
+
+    void onBackendUpdate() override;
+
+    std::unique_ptr<QSTile> createTile() override;
+
+private:
+    DndState* dnd_ = nullptr;
+};
+
+}  // namespace qypr

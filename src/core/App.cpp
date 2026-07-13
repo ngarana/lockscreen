@@ -68,6 +68,8 @@ int App::run() {
     // (non-fatal: the affected indicator stays hidden).
     battery_.start();
     brightness_.start();
+    wifi_.start();
+    bluetooth_.start();
 
     // Start video playback (non-fatal if it fails).
     if (video_.init()) {
@@ -82,8 +84,10 @@ int App::run() {
 
 int App::preview(const std::string& path, int width, int height) {
     shell_.setNotifications(demoNotifications());  // sample cards, preview only
-    battery_.start();     // live battery state for the status bar
-    brightness_.start();  // live backlight state for the status bar
+    battery_.start();     // live status bar state: battery, backlight,
+    brightness_.start();  // WiFi, and Bluetooth
+    wifi_.start();
+    bluetooth_.start();
 
     // Idle state (before any interaction).
     renderToPng(shell_, path.substr(0, path.rfind('.')) + "-idle.png", width, height);
@@ -100,6 +104,15 @@ int App::preview(const std::string& path, int width, int height) {
     shell_.onPointerButton(width, height, width - 78.0, 42.0, 0x110, true);
     usleep(300 * 1000);
     renderToPng(shell_, path.substr(0, path.rfind('.')) + "-qs.png", width, height);
+
+    // DND tile (row 2, col 1 of the toggle grid): Shell suppresses the demo
+    // cards and the moon icon appears in the bar.
+    // Panel x = w-48-380; tile centre: x+16+84, y = 66+16+64+10+32.
+    shell_.onPointerButton(width, height, width - 328.0, 188.0, 0x110, true);
+    usleep(400 * 1000);
+    renderToPng(shell_, path.substr(0, path.rfind('.')) + "-dnd.png", width, height);
+    shell_.onPointerButton(width, height, width - 328.0, 188.0, 0x110, true);  // restore
+    usleep(400 * 1000);
 
     // Dismiss the panel by clicking outside it (consumed by the status bar).
     shell_.onPointerButton(width, height, width / 2.0, height / 2.0, 0x110, true);

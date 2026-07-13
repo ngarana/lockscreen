@@ -16,7 +16,11 @@ Shell::Shell(EventLoop& loop, RenderHost& host, PamAuthenticator& pam, PowerMana
     : loop_(loop),
       host_(host),
       lockScreen_(loop, host, pam, power),
-      statusBar_(loop, host, backends) {
+      statusBar_(loop, host, backends),
+      dnd_(backends.dnd) {
+    if (dnd_) {
+        dnd_->addListener([this] { applyNotificationFilter(); });
+    }
     restartIdleTimer();
 }
 
@@ -29,7 +33,14 @@ void Shell::setVideoPlayer(VideoPlayer* video) {
 }
 
 void Shell::setNotifications(std::vector<Notification> notes) {
-    lockScreen_.setNotifications(std::move(notes));
+    pendingNotes_ = std::move(notes);
+    applyNotificationFilter();
+}
+
+void Shell::applyNotificationFilter() {
+    const bool suppress = dnd_ && dnd_->enabled();
+    lockScreen_.setNotifications(suppress ? std::vector<Notification>{} : pendingNotes_);
+    host_.invalidate();
 }
 
 void Shell::setIdleTimeout(int64_t ms) {

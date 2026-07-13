@@ -12,8 +12,11 @@
 #include "notifications/NotificationMonitor.hpp"
 #include "power/PowerManager.hpp"
 #include "system/BatteryBackend.hpp"
+#include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
+#include "system/DndState.hpp"
 #include "system/SystemBus.hpp"
+#include "system/WifiBackend.hpp"
 #include "ui/AudioController.hpp"
 #include "ui/Shell.hpp"
 #include "video/VideoPlayer.hpp"
@@ -59,7 +62,14 @@ private:
     SystemBus systemBus_{loop_};
     BatteryBackend battery_{systemBus_};
     BrightnessBackend brightness_{loop_, systemBus_};
-    SystemBackends backends_{.battery = &battery_, .brightness = &brightness_};
+    WifiBackend wifi_{systemBus_};
+    BluetoothBackend bluetooth_{systemBus_};
+    DndState dnd_;
+    SystemBackends backends_{.battery = &battery_,
+                             .brightness = &brightness_,
+                             .wifi = &wifi_,
+                             .bluetooth = &bluetooth_,
+                             .dnd = &dnd_};
 
     Shell shell_;
 };

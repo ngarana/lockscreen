@@ -27,10 +27,10 @@ this document sequences the work.
 | 1 | Core framework: StatusBar, registry, QS panel, popovers | **Done** |
 | 2 | Clock + Battery (UPower push over shared `SystemBus`) | **Done** — verified live |
 | 2.5 | Lockscreen integration: chromeless, frame-aligned, reveal-dimmed | **Done** |
-| 3a | **Brightness** — sysfs read, udev-push change events, logind write; scroll-to-adjust; QS slider | **In progress** |
-| 3b | **WiFi** — NetworkManager D-Bus on `SystemBus`; signal icon; QS toggle | Planned |
-| 3c | **Bluetooth** — BlueZ D-Bus on `SystemBus`; device count; QS toggle | Planned |
-| 3d | **DND** — qypr-local state, Shell-mediated suppression; QS toggle | Planned |
+| 3a | **Brightness** — sysfs read, udev-push change events, logind write; scroll-to-adjust; QS slider | **Done** — verified live |
+| 3b | **WiFi** — NetworkManager D-Bus on `SystemBus`; signal icon; QS toggle | **Done** — verified live |
+| 3c | **Bluetooth** — BlueZ D-Bus on `SystemBus`; device count; QS toggle | **Done** — verified live |
+| 3d | **DND** — qypr-local state, Shell-mediated suppression; QS toggle | **Done** — suppression verified in preview |
 | 4 | **Volume** — libpulse against pipewire-pulse; requires a `pa_mainloop_api` adapter over `EventLoop` (io/time/defer events); QS slider + scroll + mute | Planned |
 | 5 | **SNI tray host** — `StatusNotifierWatcher`/Host on the session bus; third-party icons | Planned |
 | 6 | **Polish** — full keyboard nav (Home/End, slider arrows), battery charging pulse, icon crossfades, per-indicator tooltips | Planned |

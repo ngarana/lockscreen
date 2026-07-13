@@ -13,6 +13,7 @@
 
 #include "core/Interfaces.hpp"
 #include "core/Types.hpp"
+#include "system/DndState.hpp"
 #include "ui/LockScreen.hpp"
 #include "ui/statusbar/StatusBar.hpp"
 
@@ -54,6 +55,7 @@ private:
     void wakeFromIdle();
     void restartIdleTimer();
     void enterIdle();
+    void applyNotificationFilter();
 
     EventLoop& loop_;
     RenderHost& host_;
@@ -62,6 +64,12 @@ private:
     // Children — peers, not parent-child.
     LockScreen lockScreen_;
     StatusBar statusBar_;
+
+    // DND mediation: Shell reads the qypr-local flag and decides what the
+    // lockscreen sees. Neither child references the other; the monitor keeps
+    // collecting, so the stack reappears intact when DND lifts.
+    DndState* dnd_ = nullptr;
+    std::vector<Notification> pendingNotes_;
 
     // Shared idle state (moved from LockScreen).
     bool idle_ = false;

@@ -106,7 +106,13 @@ int g_tests_failed = 0;
 #include "system/BatteryBackend.hpp"
 #include "system/BrightnessBackend.hpp"
 #include "system/SystemBus.hpp"
+#include "system/BluetoothBackend.hpp"
+#include "system/WifiBackend.hpp"
+#include "system/DndState.hpp"
+#include "ui/indicators/BluetoothIndicator.hpp"
 #include "ui/indicators/BrightnessIndicator.hpp"
+#include "ui/indicators/DNDIndicator.hpp"
+#include "ui/indicators/WifiIndicator.hpp"
 #include "core/App.hpp"
 
 #undef private
@@ -1163,6 +1169,153 @@ TEST(BrightnessBackendConstruction) {
     } else {
         EXPECT_FALSE(s.available);
     }
+}
+
+// =============================================================================
+// Phase 3b: WiFi Indicator Tests
+// =============================================================================
+
+TEST(WifiIndicatorConstruction) {
+    qypr::SystemBackends backends{};
+    qypr::WifiIndicator wifi(backends);
+
+    EXPECT_EQ(wifi.id(), std::string("wifi"));
+    EXPECT_TRUE(static_cast<int>(wifi.zone()) == static_cast<int>(qypr::Zone::Right));
+    EXPECT_EQ(wifi.priority(), 300);
+
+    // Icon tracks radio/connection/strength states
+    wifi.lastSnap_.enabled = false;
+    EXPECT_EQ(wifi.icon(), std::string("󰤮"));
+    wifi.lastSnap_.enabled = true;
+    wifi.lastSnap_.connected = false;
+    EXPECT_EQ(wifi.icon(), std::string("󰤭"));
+    wifi.lastSnap_.connected = true;
+    wifi.lastSnap_.strength = 80;
+    EXPECT_EQ(wifi.icon(), std::string("󰤨"));
+    wifi.lastSnap_.strength = 60;
+    EXPECT_EQ(wifi.icon(), std::string("󰤥"));
+    wifi.lastSnap_.strength = 30;
+    EXPECT_EQ(wifi.icon(), std::string("󰤢"));
+    wifi.lastSnap_.strength = 10;
+    EXPECT_EQ(wifi.icon(), std::string("󰤯"));
+}
+
+TEST(WifiIndicatorCreatesToggleTile) {
+    qypr::SystemBackends backends{};
+    qypr::WifiIndicator wifi(backends);
+    wifi.lastSnap_.enabled = true;
+    wifi.lastSnap_.connected = true;
+    wifi.lastSnap_.ssid = "TestNet";
+
+    auto tile = wifi.createTile();
+    EXPECT_TRUE(tile != nullptr);
+    EXPECT_TRUE(tile->type() == qypr::QSTile::Type::Toggle);
+
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 200, 80);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    tile->bounds = {0, 0, 160, 64};
+    tile->draw(p, qypr::nowMs());
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+
+    // Toggling without a backend must be a no-op, not a crash
+    tile->onClick(10, 10);
+}
+
+// =============================================================================
+// Phase 3c: Bluetooth Indicator Tests
+// =============================================================================
+
+TEST(BluetoothIndicatorConstruction) {
+    qypr::SystemBackends backends{};
+    qypr::BluetoothIndicator bt(backends);
+
+    EXPECT_EQ(bt.id(), std::string("bluetooth"));
+    EXPECT_TRUE(static_cast<int>(bt.zone()) == static_cast<int>(qypr::Zone::Right));
+    EXPECT_EQ(bt.priority(), 350);
+
+    // Icon and accent track power/connection state
+    bt.lastSnap_.powered = false;
+    EXPECT_EQ(bt.icon(), std::string("󰂲"));
+    bt.lastSnap_.powered = true;
+    bt.lastSnap_.connectedCount = 0;
+    EXPECT_EQ(bt.icon(), std::string("󰂯"));
+    bt.lastSnap_.connectedCount = 1;
+    bt.lastSnap_.firstDevice = "Headphones";
+    EXPECT_EQ(bt.icon(), std::string("󰂱"));
+    EXPECT_TRUE(bt.tooltip().find("Headphones") != std::string::npos);
+    // Connected: blue accent, not the plain text color
+    qypr::Color accent = bt.iconColor();
+    EXPECT_TRUE(accent.b > accent.r);
+}
+
+TEST(BluetoothIndicatorCreatesToggleTile) {
+    qypr::SystemBackends backends{};
+    qypr::BluetoothIndicator bt(backends);
+    bt.lastSnap_.powered = true;
+    bt.lastSnap_.connectedCount = 2;
+
+    auto tile = bt.createTile();
+    EXPECT_TRUE(tile != nullptr);
+    EXPECT_TRUE(tile->type() == qypr::QSTile::Type::Toggle);
+
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 200, 80);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    tile->bounds = {0, 0, 160, 64};
+    tile->draw(p, qypr::nowMs());
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+
+    // Toggling without a backend must be a no-op, not a crash
+    tile->onClick(10, 10);
+}
+
+// =============================================================================
+// Phase 3d: DND Tests
+// =============================================================================
+
+TEST(DndStateToggleNotifiesAllListeners) {
+    qypr::DndState dnd;
+    int a = 0, b = 0;
+    dnd.addListener([&] { ++a; });
+    dnd.addListener([&] { ++b; });
+
+    EXPECT_FALSE(dnd.enabled());
+    dnd.toggle();
+    EXPECT_TRUE(dnd.enabled());
+    EXPECT_EQ(a, 1);
+    EXPECT_EQ(b, 1);
+
+    // Setting the same value must not re-notify
+    dnd.setEnabled(true);
+    EXPECT_EQ(a, 1);
+
+    dnd.setEnabled(false);
+    EXPECT_FALSE(dnd.enabled());
+    EXPECT_EQ(a, 2);
+}
+
+TEST(DNDIndicatorVisibilityAndTile) {
+    qypr::DndState dnd;
+    qypr::SystemBackends backends{};
+    backends.dnd = &dnd;
+    qypr::DNDIndicator ind(backends);
+
+    // Moon icon hidden until DND is active
+    EXPECT_FALSE(ind.visible);
+    dnd.setEnabled(true);
+    ind.onBackendUpdate();
+    EXPECT_TRUE(ind.visible);
+
+    auto tile = ind.createTile();
+    EXPECT_TRUE(tile != nullptr);
+    EXPECT_TRUE(tile->type() == qypr::QSTile::Type::Toggle);
+
+    // The tile toggles the shared state directly
+    tile->onClick(10, 10);
+    EXPECT_FALSE(dnd.enabled());
 }
 
 // -----------------------------------------------------------------------------

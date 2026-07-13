@@ -19,6 +19,7 @@ class BrightnessBackend;
 class WifiBackend;
 class BluetoothBackend;
 class SNIBackend;
+class DndState;
 
 struct SystemBackends {
     BatteryBackend* battery = nullptr;
@@ -27,6 +28,7 @@ struct SystemBackends {
     WifiBackend* wifi = nullptr;
     BluetoothBackend* bluetooth = nullptr;
     SNIBackend* sni = nullptr;
+    DndState* dnd = nullptr;
 };
 
 class StatusIndicator : public Widget {

@@ -8,7 +8,10 @@
 #include "core/Types.hpp"
 #include "render/Painter.hpp"
 #include "system/BatteryBackend.hpp"
+#include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
+#include "system/DndState.hpp"
+#include "system/WifiBackend.hpp"
 #include "ui/Theme.hpp"
 #include "ui/statusbar/IndicatorRegistry.hpp"
 
@@ -51,6 +54,15 @@ StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& b
     }
     if (backends.brightness) {
         backends.brightness->setOnChange([this] { notifyBackendUpdate(); });
+    }
+    if (backends.wifi) {
+        backends.wifi->setOnChange([this] { notifyBackendUpdate(); });
+    }
+    if (backends.bluetooth) {
+        backends.bluetooth->setOnChange([this] { notifyBackendUpdate(); });
+    }
+    if (backends.dnd) {
+        backends.dnd->addListener([this] { notifyBackendUpdate(); });
     }
 
     // The bar's own 1s tick: drives poll() (clock text, animations that
