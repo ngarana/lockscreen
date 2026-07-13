@@ -27,6 +27,11 @@ public:
 
     // Watch fd for readability; cb runs on the loop thread when it fires.
     void addFd(int fd, FdCallback cb);
+    // Watch fd with an explicit epoll event mask (EPOLLIN/EPOLLOUT/...);
+    // needed by adapters whose protocol also waits for writability (libpulse).
+    void addFd(int fd, uint32_t events, FdCallback cb);
+    // Change the watched mask of an already-added fd.
+    void modifyFd(int fd, uint32_t events);
     void removeFd(int fd);
 
     // Create a timerfd. Returns its fd (an opaque handle for removeTimer).

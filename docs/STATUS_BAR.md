@@ -1133,7 +1133,7 @@ panel skeleton. Pure UI, no system backends yet.
 | `sdbus-c++` | Yes (MprisController) | Alternative D-Bus binding |
 | Nerd Font glyphs | Yes (ActionButton, PowerDialog) | Status bar icons |
 | Cairo/Pango | Yes (entire UI) | Rendering |
-| `libpulse` | No (new) | Event-driven volume via pipewire-pulse (no CLI spawning — principle 2) |
+| `libpulse` | Yes (VolumeBackend via PulseLoop) | Event-driven volume via pipewire-pulse (no CLI spawning — principle 2) |
 | `sysfs` | No (new) | Backlight brightness fallback |
 | SNI D-Bus protocol | No (new) | Third-party tray icon hosting |
 

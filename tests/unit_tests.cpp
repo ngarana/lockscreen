@@ -109,9 +109,11 @@ int g_tests_failed = 0;
 #include "system/BluetoothBackend.hpp"
 #include "system/WifiBackend.hpp"
 #include "system/DndState.hpp"
+#include "system/VolumeBackend.hpp"
 #include "ui/indicators/BluetoothIndicator.hpp"
 #include "ui/indicators/BrightnessIndicator.hpp"
 #include "ui/indicators/DNDIndicator.hpp"
+#include "ui/indicators/VolumeIndicator.hpp"
 #include "ui/indicators/WifiIndicator.hpp"
 #include "core/App.hpp"
 
@@ -1316,6 +1318,62 @@ TEST(DNDIndicatorVisibilityAndTile) {
     // The tile toggles the shared state directly
     tile->onClick(10, 10);
     EXPECT_FALSE(dnd.enabled());
+}
+
+// =============================================================================
+// Phase 4: Volume Tests
+// =============================================================================
+
+TEST(VolumeIndicatorConstruction) {
+    qypr::SystemBackends backends{};
+    qypr::VolumeIndicator vol(backends);
+
+    EXPECT_EQ(vol.id(), std::string("volume"));
+    EXPECT_TRUE(static_cast<int>(vol.zone()) == static_cast<int>(qypr::Zone::Right));
+    EXPECT_EQ(vol.priority(), 200);
+
+    // Icon tracks level and mute
+    vol.lastSnap_.level = 0.8;
+    EXPECT_EQ(vol.icon(), std::string("󰕾"));
+    vol.lastSnap_.level = 0.5;
+    EXPECT_EQ(vol.icon(), std::string("󰖀"));
+    vol.lastSnap_.level = 0.1;
+    EXPECT_EQ(vol.icon(), std::string("󰕿"));
+    vol.lastSnap_.muted = true;
+    EXPECT_EQ(vol.icon(), std::string("󰝟"));
+
+    // Scroll without a backend must be a no-op, not a crash
+    EXPECT_FALSE(vol.onScroll(0, -1.0));
+}
+
+TEST(VolumeIndicatorCreatesSliderTile) {
+    qypr::SystemBackends backends{};
+    qypr::VolumeIndicator vol(backends);
+    vol.lastSnap_.level = 0.55;
+
+    auto tile = vol.createTile();
+    EXPECT_TRUE(tile != nullptr);
+    EXPECT_TRUE(tile->type() == qypr::QSTile::Type::Slider);
+
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 400, 60);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    tile->bounds = {0, 0, 348, 40};
+    tile->draw(p, qypr::nowMs());
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+TEST(VolumeBackendConstructAndTeardown) {
+    // Exercises the PulseLoop adapter lifecycle: async connect begins, then
+    // the destructor disconnects with callbacks silenced. Must not crash or
+    // touch freed memory whether or not a pulse server exists.
+    qypr::EventLoop loop;
+    qypr::VolumeBackend backend(loop);
+    backend.setOnChange([] {});
+    backend.start();
+    // Snapshot stays unavailable until the (never-run) loop delivers READY.
+    EXPECT_FALSE(backend.snapshot().available);
 }
 
 // -----------------------------------------------------------------------------

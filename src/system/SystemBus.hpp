@@ -1,9 +1,12 @@
-// SystemBus.hpp - Shared sd-bus system-bus connection for status bar backends.
+// SystemBus.hpp - Shared sd-bus connection for status bar backends.
 //
-// One connection, one fd in the epoll EventLoop, any number of subscribers
-// (minimal-footprint principle: one bus connection per bus). Backends add
-// signal matches through addMatch() and may issue their single startup fetch
-// on get(); after that everything is push — no polling.
+// One connection per bus, one fd in the epoll EventLoop, any number of
+// subscribers (minimal-footprint principle). Backends add signal matches
+// through addMatch() and may issue their single startup fetch on get();
+// after that everything is push — no polling.
+//
+// Named for its original (and default) role as the system-bus connection;
+// BusKind::Session opens the user session bus with identical semantics.
 
 #pragma once
 
@@ -13,9 +16,11 @@ namespace qypr {
 
 class EventLoop;
 
+enum class BusKind { System, Session };
+
 class SystemBus {
 public:
-    explicit SystemBus(EventLoop& loop);
+    explicit SystemBus(EventLoop& loop, BusKind kind = BusKind::System);
     ~SystemBus();
 
     SystemBus(const SystemBus&) = delete;

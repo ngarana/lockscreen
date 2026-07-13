@@ -34,6 +34,7 @@ pkg_check_modules(PANGO    REQUIRED IMPORTED_TARGET pangocairo)
 pkg_check_modules(SDBUS    REQUIRED IMPORTED_TARGET sdbus-c++)
 pkg_check_modules(SYSTEMD  REQUIRED IMPORTED_TARGET libsystemd)  # sd-bus (notification monitor)
 pkg_check_modules(UDEV     REQUIRED IMPORTED_TARGET libudev)     # backlight change events
+pkg_check_modules(PULSE    REQUIRED IMPORTED_TARGET libpulse)    # volume (pipewire-pulse)
 pkg_check_modules(MPV      REQUIRED IMPORTED_TARGET mpv)
 pkg_check_modules(RSVG     REQUIRED IMPORTED_TARGET librsvg-2.0)  # SVG icon rasterization
 
@@ -96,6 +97,7 @@ target_link_libraries(qypr-lock PRIVATE
     PkgConfig::SDBUS
     PkgConfig::SYSTEMD
     PkgConfig::UDEV
+    PkgConfig::PULSE
     PkgConfig::MPV
     PkgConfig::RSVG
     "${PAM_LIBRARY}"
@@ -147,6 +149,7 @@ target_link_libraries(qypr-test PRIVATE
     PkgConfig::PANGO
     PkgConfig::SYSTEMD
     PkgConfig::UDEV
+    PkgConfig::PULSE
     PkgConfig::MPV
     PkgConfig::RSVG
     Threads::Threads)

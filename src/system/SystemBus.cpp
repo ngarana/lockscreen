@@ -7,10 +7,11 @@
 
 namespace qypr {
 
-SystemBus::SystemBus(EventLoop& loop) : loop_(loop) {
-    int r = sd_bus_open_system(&bus_);
+SystemBus::SystemBus(EventLoop& loop, BusKind kind) : loop_(loop) {
+    int r = kind == BusKind::Session ? sd_bus_open_user(&bus_) : sd_bus_open_system(&bus_);
     if (r < 0) {
-        std::fprintf(stderr, "qypr: system bus unavailable (%d); system indicators disabled\n", r);
+        std::fprintf(stderr, "qypr: %s bus unavailable (%d); dependent indicators disabled\n",
+                     kind == BusKind::Session ? "session" : "system", r);
         bus_ = nullptr;
         return;
     }

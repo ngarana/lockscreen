@@ -29,11 +29,23 @@ EventLoop::~EventLoop() {
 }
 
 void EventLoop::addFd(int fd, FdCallback cb) {
+    addFd(fd, EPOLLIN, std::move(cb));
+}
+
+void EventLoop::addFd(int fd, uint32_t events, FdCallback cb) {
     fds_[fd] = std::move(cb);
     epoll_event ev{};
-    ev.events = EPOLLIN;
+    ev.events = events;
     ev.data.fd = fd;
     epoll_ctl(epollFd_, EPOLL_CTL_ADD, fd, &ev);
+}
+
+void EventLoop::modifyFd(int fd, uint32_t events) {
+    if (!fds_.count(fd)) return;
+    epoll_event ev{};
+    ev.events = events;
+    ev.data.fd = fd;
+    epoll_ctl(epollFd_, EPOLL_CTL_MOD, fd, &ev);
 }
 
 void EventLoop::removeFd(int fd) {
@@ -45,6 +57,8 @@ int EventLoop::addTimer(int64_t intervalMs, bool repeat, Callback cb) {
     itimerspec its{};
     its.it_value.tv_sec = intervalMs / 1000;
     its.it_value.tv_nsec = (intervalMs % 1000) * 1'000'000;
+    // An all-zero it_value DISARMS a timerfd: clamp "fire now" to 1ns.
+    if (its.it_value.tv_sec == 0 && its.it_value.tv_nsec == 0) its.it_value.tv_nsec = 1;
     if (repeat) its.it_interval = its.it_value;
     timerfd_settime(tfd, 0, &its, nullptr);
 
@@ -109,7 +123,9 @@ void EventLoop::run() {
         for (int i = 0; i < n && running_; ++i) {
             int fd = events[i].data.fd;
             auto it = fds_.find(fd);
-            if (it != fds_.end()) it->second(events[i].events);
+            if (it == fds_.end()) continue;
+            auto cb = it->second;  // copy: the handler may remove its own fd
+            cb(events[i].events);
         }
     }
 }

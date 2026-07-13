@@ -31,7 +31,7 @@ this document sequences the work.
 | 3b | **WiFi** — NetworkManager D-Bus on `SystemBus`; signal icon; QS toggle | **Done** — verified live |
 | 3c | **Bluetooth** — BlueZ D-Bus on `SystemBus`; device count; QS toggle | **Done** — verified live |
 | 3d | **DND** — qypr-local state, Shell-mediated suppression; QS toggle | **Done** — suppression verified in preview |
-| 4 | **Volume** — libpulse against pipewire-pulse; requires a `pa_mainloop_api` adapter over `EventLoop` (io/time/defer events); QS slider + scroll + mute | Planned |
+| 4 | **Volume** — libpulse against pipewire-pulse via the `PulseLoop` `pa_mainloop_api` adapter over `EventLoop`; QS slider + scroll | **Done** — verified live (mute toggle UI deferred to Phase 6 polish) |
 | 5 | **SNI tray host** — `StatusNotifierWatcher`/Host on the session bus; third-party icons | Planned |
 | 6 | **Polish** — full keyboard nav (Home/End, slider arrows), battery charging pulse, icon crossfades, per-indicator tooltips | Planned |
 | 7 | **Standalone `qypr-bar`** — separate binary hosting the same StatusBar code on `wlr-layer-shell` for daily (unlocked) use on any Wayland WM | Planned |

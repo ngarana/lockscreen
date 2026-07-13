@@ -16,6 +16,7 @@
 #include "system/BrightnessBackend.hpp"
 #include "system/DndState.hpp"
 #include "system/SystemBus.hpp"
+#include "system/VolumeBackend.hpp"
 #include "system/WifiBackend.hpp"
 #include "ui/AudioController.hpp"
 #include "ui/Shell.hpp"
@@ -64,8 +65,10 @@ private:
     BrightnessBackend brightness_{loop_, systemBus_};
     WifiBackend wifi_{systemBus_};
     BluetoothBackend bluetooth_{systemBus_};
+    VolumeBackend volume_{loop_};
     DndState dnd_;
     SystemBackends backends_{.battery = &battery_,
+                             .volume = &volume_,
                              .brightness = &brightness_,
                              .wifi = &wifi_,
                              .bluetooth = &bluetooth_,

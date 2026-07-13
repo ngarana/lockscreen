@@ -1,0 +1,70 @@
+// VolumeBackend.hpp - Default-sink volume via libpulse (pipewire-pulse).
+//
+// In-process native client on the shared EventLoop through PulseLoop — no
+// CLI spawning, no polling (minimal-footprint principle). Connects async;
+// once ready it resolves the default sink, reads volume/mute, and subscribes
+// to SINK + SERVER events for push updates. Writes are async with optimistic
+// snapshot updates.
+
+#pragma once
+
+#include <pulse/pulseaudio.h>
+
+#include <functional>
+#include <string>
+
+#include "system/PulseLoop.hpp"
+
+namespace qypr {
+
+class EventLoop;
+
+struct VolumeSnapshot {
+    bool available = false;   // connected and a default sink resolved
+    double level = 0.0;       // 0..1 (PA_VOLUME_NORM = 1.0)
+    bool muted = false;
+    std::string sinkName;     // human-readable description
+
+    bool operator==(const VolumeSnapshot&) const = default;
+};
+
+class VolumeBackend {
+public:
+    explicit VolumeBackend(EventLoop& loop);
+    ~VolumeBackend();
+
+    VolumeBackend(const VolumeBackend&) = delete;
+    VolumeBackend& operator=(const VolumeBackend&) = delete;
+
+    // Begins the async connect; availability arrives via onChange once the
+    // context is ready. Returns false only if the context refused to start.
+    bool start();
+
+    const VolumeSnapshot& snapshot() const { return snap_; }
+
+    // Fires whenever a pushed update actually changed the snapshot.
+    void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
+
+    // Set the default sink volume 0..1 / toggle mute (async, optimistic).
+    void setLevel(double frac);
+    void toggleMute();
+
+private:
+    static void onContextState(pa_context* c, void* userdata);
+    static void onServerInfo(pa_context* c, const pa_server_info* info, void* userdata);
+    static void onSinkInfo(pa_context* c, const pa_sink_info* info, int eol, void* userdata);
+    static void onSubscribe(pa_context* c, pa_subscription_event_type_t t, uint32_t idx,
+                            void* userdata);
+    void queryServer();
+    void querySink();
+    void changed(const VolumeSnapshot& next);
+
+    PulseLoop pulseLoop_;
+    pa_context* ctx_ = nullptr;
+    std::string defaultSink_;   // internal sink name (write target)
+    uint8_t channels_ = 2;
+    VolumeSnapshot snap_;
+    std::function<void()> onChange_;
+};
+
+}  // namespace qypr

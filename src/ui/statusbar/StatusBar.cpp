@@ -11,6 +11,7 @@
 #include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
 #include "system/DndState.hpp"
+#include "system/VolumeBackend.hpp"
 #include "system/WifiBackend.hpp"
 #include "ui/Theme.hpp"
 #include "ui/statusbar/IndicatorRegistry.hpp"
@@ -60,6 +61,9 @@ StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& b
     }
     if (backends.bluetooth) {
         backends.bluetooth->setOnChange([this] { notifyBackendUpdate(); });
+    }
+    if (backends.volume) {
+        backends.volume->setOnChange([this] { notifyBackendUpdate(); });
     }
     if (backends.dnd) {
         backends.dnd->addListener([this] { notifyBackendUpdate(); });
