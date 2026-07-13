@@ -8,3 +8,8 @@ build/
 *.gcda
 *.gcno
 CMakeFiles/
+
+# In-source cmake runs (build in build/ only)
+CMakeCache.txt
+Makefile
+cmake_install.cmake
