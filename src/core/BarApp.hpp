@@ -11,8 +11,10 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
+#include "core/Config.hpp"
 #include "core/EventLoop.hpp"
 #include "core/Interfaces.hpp"
 #include "system/BatteryBackend.hpp"
@@ -52,12 +54,26 @@ private:
     // Grow/shrink the layer surfaces when the open-overlay state flips.
     void syncOverlay();
 
-    // Reserved strip: topMargin(24) + bar height(36) + a 6px gap, matching the
-    // chromeless floating strip the lock screen draws.
-    static constexpr int kReserved = 66;
+    // --- config helpers (used in the member-init list; see the ctor) ---
+    static Config loadConfig();
+    static BarGeometry readGeometry(const Config& c);
+    // std::nullopt when the config names no modules — StatusBar then falls back
+    // to every registered indicator (the compiled default bar).
+    static std::optional<IndicatorRegistry::ModuleSelection> readModules(const Config& c);
+    // Strip footprint = edge gap + bar height + a 6px breathing gap. This is the
+    // exclusive zone and the idle surface height.
+    static int reservedFor(const BarGeometry& g) {
+        return static_cast<int>(g.edgeMargin + g.height + 6.0);
+    }
+
+    // Declaration order is initialisation order: config_ must precede
+    // everything that reads it (geometry_, modules_, display_, statusBar_).
+    Config config_{loadConfig()};
+    BarGeometry geom_{readGeometry(config_)};
+    std::optional<IndicatorRegistry::ModuleSelection> modules_{readModules(config_)};
 
     EventLoop loop_;
-    BarDisplay display_{loop_, kReserved};
+    BarDisplay display_{loop_, reservedFor(geom_), geom_.bottom};
 
     // One shared connection per bus (system + session), same as the lock app.
     SystemBus systemBus_{loop_};
@@ -79,9 +95,10 @@ private:
                              .sni = &sni_,
                              .workspace = &workspace_,
                              .toplevel = &toplevel_,
-                             .dnd = &dnd_};
+                             .dnd = &dnd_,
+                             .config = &config_};
 
-    StatusBar statusBar_{loop_, *this, backends_};
+    StatusBar statusBar_{loop_, *this, backends_, modules_ ? &*modules_ : nullptr};
     bool overlayActive_ = false;
 };
 

@@ -22,6 +22,7 @@ class SNIBackend;
 class WorkspaceBackend;
 class ToplevelBackend;
 class DndState;
+class Config;
 
 struct SystemBackends {
     BatteryBackend* battery = nullptr;
@@ -33,6 +34,10 @@ struct SystemBackends {
     WorkspaceBackend* workspace = nullptr;  // ext-workspace-v1 (session-sensitive)
     ToplevelBackend* toplevel = nullptr;    // active window (session-sensitive)
     DndState* dnd = nullptr;
+    // User config, or nullptr when the host has none (qypr-lock). Indicators
+    // read their own `[<id>]` section; every key must have a compiled default so
+    // a null config is always valid.
+    const Config* config = nullptr;
 };
 
 class StatusIndicator : public Widget {
@@ -87,6 +92,10 @@ public:
     // --- Getters ---
     std::string id() const { return id_; }
     Zone zone() const { return zone_; }
+    // Re-home this indicator. Set by IndicatorRegistry when config lists a
+    // module under a zone other than its compiled-in default; StatusBar buckets
+    // by zone() at construction, so this must be called before that.
+    void setZone(Zone z) { zone_ = z; }
     int priority() const { return priority_; }
 
     bool hovered = false;

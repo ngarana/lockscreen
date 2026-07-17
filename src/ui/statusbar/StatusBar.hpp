@@ -6,7 +6,9 @@
 #include <memory>
 #include <vector>
 
+#include "ui/Theme.hpp"
 #include "ui/Widget.hpp"
+#include "ui/statusbar/IndicatorRegistry.hpp"
 #include "ui/statusbar/PopoverManager.hpp"
 #include "ui/statusbar/QuickSettingsPanel.hpp"
 #include "ui/statusbar/StatusIndicator.hpp"
@@ -16,11 +18,26 @@ namespace qypr {
 class EventLoop;
 class Invalidator;
 
+// Panel geometry. Defaults reproduce the compiled-in lockscreen strip; qypr-bar
+// overrides them from bar.conf (Phase 9). `bottom` mirrors the bar to the lower
+// screen edge — including the direction popovers open.
+struct BarGeometry {
+    double height = theme::statusbar::height;
+    double edgeMargin = theme::statusbar::topMargin;  // gap from the anchored edge
+    double sideMargin = theme::statusbar::sideMargin;
+    bool bottom = false;
+};
+
 class StatusBar : public Widget {
 public:
     // Deliberately takes Invalidator, not RenderHost: the status bar is
     // lock-agnostic and must stay hostable outside the lockscreen.
-    StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& backends);
+    //
+    // `sel` (optional) is the config-driven module set; nullptr means "every
+    // registered indicator, compiled zones and priorities" — the lock screen's
+    // behaviour, unchanged.
+    StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& backends,
+              const IndicatorRegistry::ModuleSelection* sel = nullptr);
     ~StatusBar() override;
 
     // Layout the bar based on focused screen width
@@ -58,12 +75,20 @@ public:
     // Draw a subtle rounded backdrop behind the strip. Off by default (the lock
     // screen stays chromeless over its dark video); the standalone desktop bar
     // turns it on so the glyphs stay legible over an arbitrary wallpaper.
-    void setBackdrop(bool enabled) { backdrop_ = enabled; }
+    // `alpha` < 0 keeps the built-in default.
+    void setBackdrop(bool enabled, double alpha = -1.0);
+
+    // Panel geometry (size + which edge the bar is anchored to).
+    void setGeometry(const BarGeometry& g);
+    const BarGeometry& geometry() const { return geom_; }
 
 private:
     void toggleQuickSettings();
     void activateIndicator(StatusIndicator& ind);
     void notifyBackendUpdate();
+    // Point a popover away from the anchored screen edge (down for a top bar,
+    // up for a bottom bar).
+    void anchorPopoverY(DetailedPopover& pop) const;
 
     // Effective visibility: a sensitive indicator is hidden unless session
     // content is enabled. All layout/draw/hit-testing goes through this.
@@ -91,8 +116,12 @@ private:
     bool sessionContentVisible_ = false;
 
     // Subtle strip backdrop (standalone desktop bar only; lock screen stays
-    // chromeless). Off by default.
+    // chromeless). Off by default; alpha is config-tunable.
     bool backdrop_ = false;
+    double backdropAlpha_ = -1.0;  // <0 → use the built-in default
+
+    // Panel geometry; defaults reproduce the lockscreen strip.
+    BarGeometry geom_;
 
     // 1s tick driving indicator poll() — the bar's own timer, never
     // LockScreen's (decoupling principle 1).

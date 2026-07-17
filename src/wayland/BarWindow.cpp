@@ -26,12 +26,14 @@ const zwlr_layer_surface_v1_listener kLayerSurfaceListener = {
 constexpr int kFallbackOutputHeight = 2160;
 }  // namespace
 
-BarWindow::BarWindow(wl_output* output, uint32_t name, OutputEnv* env, int reservedHeight)
+BarWindow::BarWindow(wl_output* output, uint32_t name, OutputEnv* env, int reservedHeight,
+                     bool bottom)
     : output_(output),
       name_(name),
       env_(env),
       reservedHeight_(reservedHeight),
-      requestedHeight_(reservedHeight) {
+      requestedHeight_(reservedHeight),
+      bottom_(bottom) {
     wl_output_add_listener(output_, &kOutputListener, this);
 }
 
@@ -53,10 +55,13 @@ void BarWindow::createLayerSurface(zwlr_layer_shell_v1* shell) {
         shell_, surface_, output_, ZWLR_LAYER_SHELL_V1_LAYER_TOP, "qypr-bar");
     zwlr_layer_surface_v1_add_listener(layerSurface_, &kLayerSurfaceListener, this);
 
-    // Anchor a full-width strip to the top; width 0 stretches between the
-    // left/right anchors. Reserve the strip height so tiled windows avoid it.
+    // Anchor a full-width strip to the configured edge; width 0 stretches
+    // between the left/right anchors. Reserve the strip height so tiled windows
+    // avoid it. Anchoring to the edge (rather than positioning) is also what
+    // keeps the overlay grow correct: the surface always extends inward.
     zwlr_layer_surface_v1_set_anchor(layerSurface_,
-                                     ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP |
+                                     (bottom_ ? ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM
+                                              : ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) |
                                          ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
                                          ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
     zwlr_layer_surface_v1_set_size(layerSurface_, 0, requestedHeight_);

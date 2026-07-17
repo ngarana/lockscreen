@@ -32,13 +32,17 @@ public:
     Rect getBounds() const {
         double w = contentWidth();
         double h = contentHeight();
-        // Shift popover left so the anchor point aligns with the top-right of popover
-        return {anchorX - w, anchorY, w, h};
+        // Shift popover left so the anchor point aligns with the top-right of
+        // popover. growUp extends upward from the anchor instead of down, so a
+        // bottom-anchored bar opens its panels toward the screen centre.
+        return {anchorX - w, growUp ? anchorY - h : anchorY, w, h};
     }
 
     // Anchor point (set by PopoverManager or StatusBar)
     double anchorX = 0;
     double anchorY = 0;
+    // Open upward from the anchor (set by StatusBar for a bottom-edge bar).
+    bool growUp = false;
 
     // Animation progress (0.0 to 1.0)
     Animated openProgress_{0.0};

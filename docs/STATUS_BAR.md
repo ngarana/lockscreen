@@ -2,10 +2,20 @@
 
 ## Overview
 
-A **fully extensible status bar** anchored to the top edge of the lockscreen,
-providing system indicators (Clock, Battery, WiFi, Volume, Brightness,
-Bluetooth, Do Not Disturb) and a **Quick Settings panel** for rapid toggle
-access. The design draws from three mature desktop shell implementations:
+A **fully extensible status bar** with two hosts: the chromeless strip on the
+lockscreen (`qypr-lock`) and a standalone desktop panel (`qypr-bar`) on
+wlr-layer-shell.
+
+**Objective:** `qypr-bar` is not "a waybar clone with a few modules" — the target
+is a **full panel replacement of KDE Plasma's calibre**: the panel is the user's
+primary interface to the session (windows, workspaces, media, notifications,
+power, tray, launchers), it is **configurable without recompiling**, and it works
+on any Wayland compositor. Phases 1–8 built the *engine* (plugin registry,
+backends, two hosts, Quick Settings, tray). Phases 9+ close the distance to that
+objective — see [KDE-Panel Parity — Gap Analysis](#kde-panel-parity--gap-analysis)
+for the honest scorecard of what is still missing.
+
+The design draws from three mature desktop shell implementations:
 
 | Desktop | Component | Key Ideas Borrowed |
 |---------|-----------|--------------------|
@@ -59,8 +69,15 @@ are one continuous surface rather than two stacked panels.
 
 2. **Minimal Footprint** — qypr's founding objective is minimum memory and
    process count; the status bar must not erode it:
-   - **No new processes.** Backends never shell out (`wpctl`, `pactl`,
-     etc.) — they use in-process, event-driven APIs.
+   - **No process may be spawned to read state.** Backends never shell out
+     (`wpctl`, `pactl`, etc.) — they use in-process, event-driven APIs. This is
+     the rule that actually protects the footprint: a polled `wpctl` is a fork
+     per tick, forever.
+   - **User-initiated, one-shot launches are allowed** (decision D1): a launcher,
+     a `spawn-on-click` command, or `PowerManager`'s `systemctl` call is a
+     deliberate action with a bounded lifetime, not a monitoring strategy. A
+     panel that cannot launch anything is not a panel replacement. Never spawn
+     on a timer, and never to answer "what is the current state?".
    - **Push, not poll.** Backends subscribe (D-Bus `PropertiesChanged`,
      protocol events) and put their fds in the epoll `EventLoop`; a
      synchronous fetch is allowed once at startup only.
@@ -1034,6 +1051,87 @@ Focus ring: 2px `theme::color::primary` outline with 2px offset, rounded.
 
 ---
 
+## KDE-Panel Parity — Gap Analysis
+
+Scored against the stated objective: a **full panel replacement of KDE Plasma's
+calibre**. Phases 1–8 delivered the engine and the system-status widgets; what
+remains is mostly *session* surface area (windows, media, notifications, power),
+**configurability**, and depth inside the widgets that already exist.
+
+### Feature matrix
+
+| KDE Plasma panel feature | qypr today | Gap | Phase |
+|---|---|---|---|
+| Panel surface, exclusive zone, multi-monitor | ✅ `BarWindow` per output, reserves its zone | — | 7 ✅ |
+| Plasmoid/applet architecture | ✅ `IndicatorRegistry` + 3-layer views | compile-time only (see below) | 1 ✅ / 9 |
+| Pager (virtual desktops) | ✅ `WorkspacesIndicator` | — | 8 ✅ |
+| System tray (SNI) | ⚠️ icons + left-click `Activate` | **right-click menus (dbusmenu)**, overflow "hidden items" popup, `SecondaryActivate`, scroll | 6 / 13 |
+| Battery / power management | ✅ UPower + QS tile | power **profiles** (`net.hadess.PowerProfiles`), charge thresholds | 14 |
+| Brightness | ✅ sysfs + logind + slider | multi-display, keyboard backlight | 14 |
+| Networks | ⚠️ WiFi status + toggle | **connection list / picker**, ethernet, VPN, per-network connect | 14 |
+| Bluetooth | ⚠️ status + toggle | **device list**, connect/disconnect, battery per device | 14 |
+| Audio volume | ⚠️ master sink only | **per-app streams**, output/input **device switching**, mute UI | 4 / 14 |
+| Clock | ⚠️ time text only | **calendar popover**, timezones, format config | 12 |
+| **Task manager (window list)** | ❌ active window title only | **icons-only taskbar**: all toplevels, click-to-focus/minimize, grouping, pinning | 11 |
+| **Notifications applet + history** | ❌ DND toggle only | bell + unread count, **history popover**, per-app actions, inhibit | 10 |
+| **Media player (MPRIS)** | ❌ lockscreen only | bar applet: play/pause/next/prev, art, player switching | 10 |
+| **Session / power menu** | ❌ lockscreen only | logout / reboot / shutdown / suspend / lock from the bar | 10 |
+| **Application launcher** | ❌ none | Kickoff-style menu, search, `.desktop` index, favourites | 15 |
+| Clipboard history (Klipper) | ❌ none | applet + history popover | 15 |
+| Keyboard layout indicator | ❌ none | layout display + switch | 15 |
+| Idle inhibitor | ❌ none | toggle (idle-inhibit protocol / logind) | 15 |
+| System monitors (CPU/RAM/net/disk/temp) | ❌ none | compact meters + tooltips | 15 |
+| **User configuration** | ✅ `bar.conf` (INI): modules per zone, geometry, backdrop, clock formats | per-module `spawn-on-click` (D1) lands with the launcher | 9 ✅ |
+| Panel geometry (edge, size, auto-hide, floating) | ⚠️ position top/bottom, height, margins — config-driven | **auto-hide/dodge**, left/right edges, per-output selection | 9 (deferred) |
+| Widget add/remove/reorder at runtime | ✅ config-driven; any module in any zone | no runtime editor planned (restart to apply) | 9 ✅ |
+
+### The three structural gaps
+
+1. ~~**No configuration system at all.**~~ **CLOSED by Phase 9.** Every choice —
+   which modules appear, their order, the bar height/edge, the clock format, the
+   backdrop — was a compile-time constant, making adoption impossible without a
+   recompile. Now `bar.conf` (INI, hand-rolled, no new dependency) drives all of
+   it. As predicted, `IndicatorRegistry` already keyed factories by `id` + `zone`
+   + `priority`, so selection became a filter in `createAll()` and the indicators
+   were untouched; config reaches them via a `const Config*` on the existing
+   `SystemBackends` aggregate, so `qypr-lock` just passes `nullptr`.
+   *(Phase 9 also absorbed `NotificationMonitor`'s **hardcoded
+   `/home/arch/.config/qypr/sensitive_apps.conf`** — a portability bug that
+   silently fell back to defaults for every other user; it is now XDG-resolved.)*
+   **Still open:** auto-hide/dodge, left/right edges, per-output selection.
+
+2. **The session surface is missing.** A KDE panel is how you *drive the
+   session*; qypr's bar only *reports system state*. The three biggest absences
+   — window list, notification history, media controls — are what make a panel a
+   panel. Critically, **most of this is already built and merely lock-only**:
+   `MprisController`, `NotificationMonitor` (+ `NotificationLog` backlog),
+   and `PowerManager` are complete classes that `BarApp` simply does not
+   instantiate; and `ToplevelBackend` **already tracks every toplevel** (title,
+   app id, activated state) — `ActiveWindowIndicator` just discards all but the
+   focused one. Phases 10–11 are therefore mostly *surfacing*, not building.
+
+3. **Widget depth stops at "status".** WiFi/Bluetooth/Volume show state and
+   toggle, but cannot *do the thing* users open them for: pick a network, connect
+   a headset, move audio to another device, or mute one app. Each has its backend
+   and its `DetailedPopover` slot already; the gap is list UI + a few more D-Bus
+   calls (Phase 14).
+
+### Outstanding architectural decisions
+
+These need a ruling **before** the phases that depend on them; each is a genuine
+tension with an existing principle, not an oversight.
+
+| # | Decision | Why it's contested | Recommendation |
+|---|---|---|---|
+| D1 | **May the bar spawn processes?** | Principle 2 says "no new processes" — but a launcher, "open pavucontrol", or clipboard→rofi inherently spawn, and a panel without them is not a replacement. Note `PowerManager` **already `fork`+`execlp`s `systemctl`**, so the codebase's real rule is narrower than the prose. | **Sharpen the principle, don't break it:** forbid spawning *to read state* (the actual footprint enemy: no `wpctl` polling); allow **user-initiated, one-shot** launches (`spawn-on-click`, launcher). Document the distinction in Principle 2. |
+| D2 | **Config format** | No precedent in-repo (`sensitive_apps.conf` is ad-hoc lines). Adding a TOML/JSON lib fights the minimal-dependency ethos. | A **small hand-rolled INI/key-value parser** (~150 LOC, no new dependency), matching the existing `.conf` convention. Sections per module, `modules-left/center/right` ordering keys. |
+| D3 | **Runtime config reload** | Nice-to-have; `inotify` on the config file fits the epoll loop cleanly (push, not poll). | Ship Phase 9 **without** reload; add inotify later if wanted. Restarting a 1MB bar is cheap. |
+| D4 | **MPRIS polls 1×/sec** | `MprisController` refreshes on a timer — a standing violation of Principle 2 ("push, not poll") that is tolerable on the lock screen but not for an always-running panel. | Convert to `PropertiesChanged` push **as part of Phase 10**, before it is surfaced in the bar. |
+| D5 | **Taskbar vs. protocol limits** | `wlr-foreign-toplevel-management` gives title/app-id/state and `activate`/`close`/`minimize` — enough for a taskbar. But app **icons** need `.desktop` lookup by app-id (fuzzy, imperfect). | Accept fuzzy icon resolution (reuse `IconResolver` + a `.desktop` index, shared with the Phase 15 launcher); fall back to the app-id initial glyph. |
+| D6 | **Scope of "no daemon-specific interfaces"** | The user's waybar runs `swaync-client` (notification centre) and KDE Connect — both daemon-specific. | Hold the line: qypr's notification applet uses its **own** `NotificationMonitor` (works with any daemon). KDE Connect stays **out of scope** (it is an app integration, not a standard). |
+
+---
+
 ## Phases
 
 ### Phase 1 — Core Framework & Plugin System
@@ -1166,6 +1264,134 @@ async item fetch are Phase 6.
 
 ---
 
+### Phase 9 — Configuration & Panel Geometry  ✅
+
+Closed the gap that made "full replacement" impossible: **nothing was
+configurable without a recompile**. A small hand-rolled INI parser (D2 — no new
+dependency), read once at startup (D3 — no reload). Example: `examples/bar.conf`.
+
+| File | Purpose |
+|------|---------|
+| `src/core/Config.hpp/.cpp` | INI parser + typed accessors (`getString/Int/Double/Bool/List`); resolves `$XDG_CONFIG_HOME/qypr/bar.conf`. Also fixed `NotificationMonitor`'s hardcoded `/home/arch/…` path |
+| `src/ui/statusbar/IndicatorRegistry.*` | `ModuleSelection` + `createAll(backends, sel)`: select by id, order per zone, re-home across zones; unknown ids reported and skipped. `nullptr` = compiled defaults |
+| `src/ui/statusbar/StatusIndicator.hpp` | `SystemBackends.config` — how indicators reach config with no new plumbing; `setZone()` for re-homing |
+| `src/ui/statusbar/StatusBar.*` | `BarGeometry` + `setGeometry()`; bounds measured from `screenH` so `bottom` pins correctly in both host states; `setBackdrop(on, alpha)` |
+| `src/ui/statusbar/DetailedPopover.hpp` | `growUp` — a bottom bar opens panels upward instead of off-screen |
+| `src/wayland/BarWindow.*`, `BarDisplay.*` | Anchor top **or bottom**; height/zone from config |
+| `src/core/BarApp.*` | Owns `Config` (declared first — init order); feeds geometry, module set, backdrop |
+
+**Config surface (shipped):** `[bar]` `position` (top/bottom), `height`,
+`margin`, `margin-side`, `backdrop` (0–1), `modules-left/center/right` (ordered;
+any module in any zone; empty value = empty zone); `[clock]` `format`,
+`tooltip-format`.
+
+**Deferred (not built):** `auto-hide`/dodge (needs a pointer-proximity + reveal
+state machine — its own work), left/right edges, `outputs = …` selection, and
+per-module `spawn-on-click` (D1 — lands with the Phase 15 launcher, its first
+consumer).
+
+**Verified live:** `position=bottom` → layer at y=1138 h=62 (margin 12 + height
+44 + gap 6); `format = CFG %H:%M:%S` → `CFG 12:47:41`; clock ordered ahead of
+workspaces; wifi/bt/brightness/dnd dropped; centre emptied; a typo names the bad
+id and lists the valid ones; **no config reproduces the shipped bar exactly**
+(top, h=66, silent).
+
+> **Test-harness note.** The `TEST` macro runs bodies during *static
+> initialisation*, so the compiled-in `REGISTER_INDICATOR` set may not exist yet
+> (cross-TU static init order is unspecified) — a test leaning on
+> `IndicatorRegistry::instance()` passes or fails by link order. The Phase 9
+> registry tests therefore build a **local** `IndicatorRegistry`, which is both
+> hermetic and keeps fake indicators out of the global one.
+
+---
+
+### Phase 10 — Session Surface: Media, Notifications, Power  *(mostly surfacing existing code)*
+
+The three biggest "it's not a panel" absences — and all three classes **already
+exist**, merely never instantiated by `BarApp`.
+
+| File | Purpose |
+|------|---------|
+| `src/mpris/MprisController.*` | **Convert 1s polling → `PropertiesChanged` push (D4)** before it runs in an always-on panel |
+| `src/ui/indicators/MediaIndicator.hpp/.cpp` | Bar applet: title/artist compact view; popover with play/pause/next/prev, art, player switching |
+| `src/ui/indicators/NotificationIndicator.hpp/.cpp` | Bell + unread badge; **history popover** over the existing `NotificationMonitor`/`NotificationLog`; folds in the DND toggle |
+| `src/ui/indicators/PowerMenuIndicator.hpp/.cpp` | Session menu over the existing `PowerManager` (lock / logout / suspend / reboot / shutdown), confirm step |
+
+All three are **session-sensitive** (`sensitive()` → `true`): media titles,
+notification contents, and a shutdown button must never appear on the locked
+bar. `qypr-lock` keeps its own in-lockscreen versions; the bar gets applets.
+
+---
+
+### Phase 11 — Task Manager (Window List)
+
+The signature panel feature. `ToplevelBackend` **already tracks every toplevel**
+(title, app id, activated) — `ActiveWindowIndicator` just discards all but the
+focused one, so the data layer is largely done.
+
+| File | Purpose |
+|------|---------|
+| `src/system/ToplevelBackend.*` | Expose the full list (not just the active one); add `activate`/`close`/`minimize` (needs a `wl_seat`) |
+| `src/ui/indicators/TaskbarIndicator.hpp/.cpp` | Icons-only task manager: per-window button, active/urgent styling, click-to-focus, minimize-on-click-active, middle-click close, grouping by app id |
+| `src/ui/IconResolver.*` | `.desktop` index for app-id → icon (D5), shared with the Phase 15 launcher; initial-glyph fallback |
+
+Session-sensitive. Center or left zone, config-selectable (Phase 9).
+
+---
+
+### Phase 12 — Clock Calendar Popover
+
+| File | Purpose |
+|------|---------|
+| `src/ui/indicators/ClockIndicator.*` | Config-driven format (Phase 9); popover with a month calendar, week numbers, month navigation; optional secondary timezones |
+
+No new dependency (POSIX time only). Deliberately **no** event/PIM integration —
+that would require a daemon-specific interface (D6).
+
+---
+
+### Phase 13 — Tray Completeness
+
+Finishes Phase 5's host. Absorbs the tray items from Phase 6.
+
+| File | Purpose |
+|------|---------|
+| `src/system/DbusMenuBackend.hpp/.cpp` | `com.canonical.dbusmenu` client: layout fetch, nested menus, `Event` clicks — required by **menu-only items like nm-applet** |
+| `src/ui/statusbar/MenuPopover.hpp/.cpp` | Generic menu renderer (separators, checkboxes, submenus) |
+| `src/ui/indicators/SNITrayHost.*` | Right-click → dbusmenu; `SecondaryActivate` (middle-click); scroll; **overflow "show hidden items"** popup; async item fetch |
+
+---
+
+### Phase 14 — Widget Depth (do the thing, not just show it)
+
+Turns status widgets into working controls. Each already has a backend and an
+unused `DetailedPopover` slot; the gap is list UI + a few D-Bus calls.
+
+| Widget | Added capability |
+|--------|------------------|
+| **Networks** | Connection list/picker, connect/disconnect, ethernet, VPN, signal per AP |
+| **Bluetooth** | Device list, connect/disconnect, per-device battery |
+| **Audio** | **Per-app streams**, output/input **device switching**, mute UI (deferred from Phase 4) |
+| **Power** | Power profiles (`net.hadess.PowerProfiles`), charge thresholds |
+| **Brightness** | Multi-display, keyboard backlight |
+
+---
+
+### Phase 15 — Utility Indicators
+
+The long tail that makes a panel daily-drivable. Each is small and independent;
+all are config-gated (Phase 9) and off by default.
+
+| Indicator | Backend |
+|-----------|---------|
+| **Application launcher** | `.desktop` index (shared with Phase 11) + search; spawn-on-click per **D1** |
+| **Clipboard history** | Wayland `wl_data_device` / `zwlr_data_control_manager_v1` (standard protocol — no `cliphist` dependency) |
+| **Keyboard layout** | xkb state from the existing `Seat` |
+| **Idle inhibitor** | `zwp_idle_inhibit_manager_v1` / logind inhibitor fd |
+| **System monitors** | CPU/RAM (`/proc`), disk (`statvfs`), net throughput, temperature (`hwmon`) — compact meters; the one place a **timer tick is legitimate** (no push source exists) |
+
+---
+
 ## File Summary
 
 ### New Files
@@ -1206,8 +1432,10 @@ async item fetch are Phase 6.
 | `src/ui/indicators/ActiveWindowIndicator.hpp/.cpp` | Focused-window title (session-sensitive) |
 | `src/system/WorkspaceBackend.hpp/.cpp` | `ext-workspace-v1` client |
 | `src/system/ToplevelBackend.hpp/.cpp` | `wlr-foreign-toplevel-management` client |
-| `src/core/BarApp.hpp/.cpp` | Standalone bar host (`Invalidator` + `InputSink`); enables session content + backdrop, starts WM backends |
+| `src/core/BarApp.hpp/.cpp` | Standalone bar host (`Invalidator` + `InputSink`); enables session content + backdrop, starts WM backends; owns the `Config` |
 | `src/bar_main.cpp` | `qypr-bar` entry point |
+| `src/core/Config.hpp/.cpp` | INI config reader + XDG path resolution (Phase 9) |
+| `examples/bar.conf` | Documented example config (installed to `share/qypr/examples`) |
 | `src/wayland/BarDisplay.hpp/.cpp` | wlr-layer-shell connection/binder (sibling of `WaylandDisplay`) |
 | `src/wayland/BarWindow.hpp/.cpp` | Per-output layer surface + render loop + overlay grow (sibling of `Output`) |
 | `protocols/wlr-layer-shell-unstable-v1.xml` | Vendored layer-shell protocol |
@@ -1288,6 +1516,7 @@ async item fetch are Phase 6.
 ## Implementation Order
 
 ```
+── THE ENGINE (done) ───────────────────────────────────────────────────────
 Phase 1  ─── Core Framework + Plugin System ──── StatusBar + base classes + QS panel
     │
 Phase 2  ─── Clock + Battery ─────────────────── Simplest indicators, verify framework
@@ -1298,8 +1527,34 @@ Phase 4  ─── WiFi + Bluetooth + DND ──────────── T
     │
 Phase 5  ─── SNI Tray Host ───────────────────── Third-party icon support
     │
-Phase 6  ─── Integration & Polish ────────────── LockScreen wiring, keyboard nav, animations
+Phase 7  ─── Standalone qypr-bar ─────────────── wlr-layer-shell desktop panel
+    │
+Phase 8  ─── WM widgets ──────────────────────── Workspaces + active window (gated)
+    │
+── THE PANEL (see § KDE-Panel Parity) ──────────────────────────────────────
+Phase 9  ─── Config & Geometry ───────────────── DONE — unblocked everything below
+    │                                            bar.conf: modules/position/height/formats
+    ├─────────────┬─────────────┬─────────────┬─────────────┐
+Phase 10       Phase 11      Phase 12      Phase 13      Phase 14
+Session        Taskbar       Calendar      Tray done     Widget depth
+surface        (window       popover       (dbusmenu,    (net picker, BT
+(media,        list)                       overflow)     devices, per-app
+notifs,          │                                       audio, profiles)
+power)           │
+    │            │
+    └─────────────┴──────────────► Phase 15 ─── Utility indicators
+                                   (launcher, clipboard, kbd layout,
+                                    idle inhibitor, system monitors)
 ```
 
-Each phase is independently testable and shippable. Phases 2–5 are
-parallelizable after Phase 1 is complete.
+Each phase is independently testable and shippable. Phases 2–5 were
+parallelizable after Phase 1; likewise **Phases 10–14 are parallelizable once
+Phase 9 lands** — they touch disjoint indicators and share only the config
+plumbing. Phase 15 trails because its launcher and clipboard reuse the
+`.desktop` index built in Phase 11 and the spawn policy settled in D1.
+
+**Phase 6 (Polish)** is retained but hollowed out: its tray items (dbusmenu,
+async fetch) graduated to **Phase 13**, since they are the tray's real blocker
+rather than cosmetics. What is left there is genuinely cosmetic — keyboard-nav
+completeness, charging pulse, icon crossfades, tooltips, mute UI — and can land
+any time.

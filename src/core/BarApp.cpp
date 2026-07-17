@@ -2,13 +2,67 @@
 
 #include <xkbcommon/xkbcommon-keysyms.h>
 
+#include <algorithm>
 #include <cstdio>
+#include <string>
 
 #include "core/Types.hpp"
 #include "render/Painter.hpp"
 #include "wayland/Seat.hpp"  // Mod bits
 
 namespace qypr {
+
+// -----------------------------------------------------------------------------
+// Config (Phase 9). Every knob falls back to the compiled default, so a missing
+// or partial bar.conf still yields exactly the bar we shipped before.
+// -----------------------------------------------------------------------------
+Config BarApp::loadConfig() {
+    Config c;
+    if (c.load()) {
+        std::fprintf(stderr, "qypr-bar: config %s\n", c.path().c_str());
+    }
+    return c;
+}
+
+BarGeometry BarApp::readGeometry(const Config& c) {
+    BarGeometry g;  // defaults = theme constants (the lockscreen strip)
+    g.height = c.getDouble("bar", "height", g.height);
+    g.edgeMargin = c.getDouble("bar", "margin", g.edgeMargin);
+    g.sideMargin = c.getDouble("bar", "margin-side", g.sideMargin);
+    const std::string pos = c.getString("bar", "position", "top");
+    g.bottom = (pos == "bottom");
+    if (pos != "top" && pos != "bottom") {
+        std::fprintf(stderr, "qypr-bar: unknown position '%s' (want top|bottom); using top\n",
+                     pos.c_str());
+    }
+    return g;
+}
+
+std::optional<IndicatorRegistry::ModuleSelection> BarApp::readModules(const Config& c) {
+    const bool any = c.has("bar", "modules-left") || c.has("bar", "modules-center") ||
+                     c.has("bar", "modules-right");
+    if (!any) return std::nullopt;  // no module keys: keep the compiled default set
+
+    IndicatorRegistry::ModuleSelection sel;
+    sel.left = c.getList("bar", "modules-left");
+    sel.center = c.getList("bar", "modules-center");
+    sel.right = c.getList("bar", "modules-right");
+
+    // A typo silently drops a module, which is baffling in a bar you cannot
+    // introspect — so name the unknown ids and list what was available.
+    const auto known = IndicatorRegistry::instance().registeredIds();
+    for (const auto* zone : {&sel.left, &sel.center, &sel.right}) {
+        for (const auto& id : *zone) {
+            if (std::find(known.begin(), known.end(), id) == known.end()) {
+                std::string all;
+                for (const auto& k : known) all += (all.empty() ? "" : ", ") + k;
+                std::fprintf(stderr, "qypr-bar: unknown module '%s' (have: %s)\n", id.c_str(),
+                             all.c_str());
+            }
+        }
+    }
+    return sel;
+}
 
 BarApp::BarApp() = default;
 
@@ -27,8 +81,11 @@ int BarApp::run() {
     // start their backends on the same wl_display (they bind their own registry).
     statusBar_.setSessionContentVisible(true);
     // Give the chromeless strip a subtle backdrop so it stays legible over an
-    // arbitrary desktop wallpaper (the lock screen never does this).
-    statusBar_.setBackdrop(true);
+    // arbitrary desktop wallpaper (the lock screen never does this). `backdrop`
+    // is 0..1; 0 restores the pure chromeless look.
+    const double alpha = config_.getDouble("bar", "backdrop", -1.0);
+    statusBar_.setBackdrop(alpha != 0.0, alpha);
+    statusBar_.setGeometry(geom_);
 
     // Status bar backends: one startup fetch, push-only afterwards (each is
     // non-fatal — a missing daemon just hides its indicator).

@@ -27,7 +27,7 @@ class EventLoop;
 
 class BarDisplay {
 public:
-    BarDisplay(EventLoop& loop, int reservedHeight);
+    BarDisplay(EventLoop& loop, int reservedHeight, bool bottom = false);
     ~BarDisplay();
 
     BarDisplay(const BarDisplay&) = delete;
@@ -60,6 +60,7 @@ private:
 
     EventLoop& loop_;
     int reservedHeight_ = 0;
+    bool bottom_ = false;  // anchor the panel to the lower screen edge
 
     wl_display* display_ = nullptr;
     wl_registry* registry_ = nullptr;

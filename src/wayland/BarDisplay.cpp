@@ -16,8 +16,8 @@ const wl_registry_listener kRegistryListener = {
 };
 }  // namespace
 
-BarDisplay::BarDisplay(EventLoop& loop, int reservedHeight)
-    : loop_(loop), reservedHeight_(reservedHeight) {}
+BarDisplay::BarDisplay(EventLoop& loop, int reservedHeight, bool bottom)
+    : loop_(loop), reservedHeight_(reservedHeight), bottom_(bottom) {}
 
 BarDisplay::~BarDisplay() {
     windows_.clear();
@@ -115,7 +115,8 @@ void BarDisplay::onGlobal(void* data, wl_registry* registry, uint32_t name,
             wl_registry_bind(registry, name, &wl_output_interface, std::min(version, 4u)));
         // Construct now so the wl_output listener catches mode/scale; only wire
         // the layer surface once the shell is bound (immediately if hotplugged).
-        auto win = std::make_unique<BarWindow>(output, name, &self->env_, self->reservedHeight_);
+        auto win = std::make_unique<BarWindow>(output, name, &self->env_, self->reservedHeight_,
+                                               self->bottom_);
         if (self->connected_ && self->layerShell_) win->createLayerSurface(self->layerShell_);
         self->windows_.push_back(std::move(win));
     }

@@ -25,6 +25,11 @@ private:
     std::string timeString() const;
     std::string dateString() const;
 
+    // strftime patterns; config-overridable (`[clock] format`), else the
+    // compiled defaults — so a config-less host (qypr-lock) is unaffected.
+    std::string format_ = "%a %b %-d   %-I:%M %p";
+    std::string tooltipFormat_ = "%A, %B %-d";
+
     std::string cachedTime_;
     int64_t lastPoll_ = 0;
 };

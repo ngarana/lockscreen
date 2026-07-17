@@ -15,11 +15,27 @@ public:
 
     using Factory = std::function<std::unique_ptr<StatusIndicator>(const SystemBackends&)>;
 
+    // Config-driven module selection: ordered indicator ids per zone, as read
+    // from `modules-left/center/right`. Order is visual (left → right); an
+    // empty vector means that zone is deliberately empty. A module may be
+    // placed in any zone regardless of its compiled-in default.
+    struct ModuleSelection {
+        std::vector<std::string> left, center, right;
+    };
+
     // Register an indicator factory.
     void registerIndicator(const std::string& id, Zone zone, int priority, Factory factory);
 
-    // Construct all registered indicators.
-    std::vector<std::unique_ptr<StatusIndicator>> createAll(const SystemBackends& backends) const;
+    // Construct indicators. With `sel == nullptr` (no config): every registered
+    // indicator, grouped by its compiled zone and ordered by priority. With a
+    // selection: only the named ids, in the given order, re-homed to the zone
+    // they were listed under. Unknown ids are skipped (a typo drops a module,
+    // it never crashes the bar).
+    std::vector<std::unique_ptr<StatusIndicator>> createAll(
+        const SystemBackends& backends, const ModuleSelection* sel = nullptr) const;
+
+    // Ids of every registered indicator (for diagnostics / typo reporting).
+    std::vector<std::string> registeredIds() const;
 
 private:
     IndicatorRegistry() = default;

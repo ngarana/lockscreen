@@ -31,10 +31,12 @@ constexpr double kGearWidth = 32.0;
 constexpr double kBackdropAlpha = 0.80;
 }  // namespace
 
-StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& backends)
+StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& backends,
+                     const IndicatorRegistry::ModuleSelection* sel)
     : loop_(loop), host_(host) {
-    // Create all indicators registered by plugins
-    auto all = IndicatorRegistry::instance().createAll(backends);
+    // Create indicators: the config-selected set when the host supplied one,
+    // otherwise every registered indicator (the lock screen's behaviour).
+    auto all = IndicatorRegistry::instance().createAll(backends, sel);
     for (auto& ind : all) {
         if (ind->zone() == Zone::Left) {
             leftIndicators_.push_back(std::move(ind));
@@ -118,6 +120,17 @@ bool StatusBar::hasOpenOverlay() const {
     return popovers_.active() != nullptr || popovers_.isTransitioning();
 }
 
+void StatusBar::setBackdrop(bool enabled, double alpha) {
+    backdrop_ = enabled;
+    backdropAlpha_ = alpha;
+    host_.invalidate();
+}
+
+void StatusBar::setGeometry(const BarGeometry& g) {
+    geom_ = g;
+    host_.invalidate();  // layout() recomputes bounds on the next frame
+}
+
 void StatusBar::notifyBackendUpdate() {
     for (auto& ind : leftIndicators_) ind->onBackendUpdate();
     for (auto& ind : centerIndicators_) ind->onBackendUpdate();
@@ -126,14 +139,18 @@ void StatusBar::notifyBackendUpdate() {
 }
 
 void StatusBar::layout(int screenW, int screenH) {
-    (void)screenH;
-    double topMargin = theme::statusbar::topMargin;
-    double sideMargin = theme::statusbar::sideMargin;
-    double barH = theme::statusbar::height;
+    double sideMargin = geom_.sideMargin;
+    double barH = geom_.height;
     double pad = theme::statusbar::padding;
     double sp = theme::statusbar::iconSpacing;
 
-    bounds = {sideMargin, topMargin, screenW - 2 * sideMargin, barH};
+    // The strip sits `edgeMargin` from the anchored edge. Measuring the bottom
+    // edge from screenH (rather than a fixed y) is what makes `position=bottom`
+    // work in both host states: on the idle 66px layer-shell strip screenH is
+    // the strip itself, and when the surface grows for an overlay screenH is the
+    // whole output — the bar stays pinned to the same physical edge either way.
+    const double y = geom_.bottom ? screenH - geom_.edgeMargin - barH : geom_.edgeMargin;
+    bounds = {sideMargin, y, screenW - 2 * sideMargin, barH};
 
     Painter meas(measureCr_);
 
@@ -185,11 +202,19 @@ void StatusBar::layout(int screenW, int screenH) {
         cx += w + sp;
     }
 
-    // 5. Anchor the Quick Settings panel below the right edge of the bar.
+    // 5. Anchor the Quick Settings panel to the right edge of the bar, opening
+    //    away from the anchored screen edge (down for a top bar, up for a
+    //    bottom bar).
     if (popovers_.active() == &qsPanel_) {
         qsPanel_.anchorX = bounds.x + bounds.w;
-        qsPanel_.anchorY = bounds.y + barH + 6.0;
+        anchorPopoverY(qsPanel_);
     }
+}
+
+void StatusBar::anchorPopoverY(DetailedPopover& pop) const {
+    // growUp makes getBounds() extend upward from the anchor instead of down.
+    pop.growUp = geom_.bottom;
+    pop.anchorY = geom_.bottom ? bounds.y - 6.0 : bounds.y + bounds.h + 6.0;
 }
 
 void StatusBar::draw(Painter& p, int64_t now) {
@@ -201,8 +226,9 @@ void StatusBar::draw(Painter& p, int64_t now) {
     // (setBackdrop) so the chromeless glyphs stay legible over an arbitrary
     // wallpaper; the lock screen never enables it.
     if (backdrop_ && bounds.w > 0) {
+        const double a = backdropAlpha_ >= 0.0 ? backdropAlpha_ : kBackdropAlpha;
         p.fillRoundedRect(bounds, theme::statusbar::cornerRadius,
-                          theme::color::background.withAlpha(kBackdropAlpha));
+                          theme::color::background.withAlpha(a));
     }
 
     auto drawZone = [&](auto& list) {
@@ -279,8 +305,9 @@ void StatusBar::activateIndicator(StatusIndicator& ind) {
     ind.onActivate();
     if (ind.hasDetailedView()) {
         if (auto view = ind.createDetailedView()) {
-            popovers_.open(std::move(view), ind.bounds.x + ind.bounds.w,
-                           ind.bounds.y + ind.bounds.h + 6.0);
+            DetailedPopover* p = view.get();
+            popovers_.open(std::move(view), ind.bounds.x + ind.bounds.w, 0);
+            anchorPopoverY(*p);  // opens away from the anchored screen edge
         }
     } else {
         toggleQuickSettings();
@@ -411,7 +438,8 @@ void StatusBar::toggleQuickSettings() {
     if (popovers_.active() == &qsPanel_) {
         popovers_.closeActive();
     } else {
-        popovers_.openBorrowed(&qsPanel_, bounds.x + bounds.w, bounds.y + bounds.h + 6.0);
+        popovers_.openBorrowed(&qsPanel_, bounds.x + bounds.w, 0);
+        anchorPopoverY(qsPanel_);
     }
 }
 

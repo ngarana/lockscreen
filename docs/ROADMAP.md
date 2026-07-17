@@ -34,9 +34,28 @@ specs live in [STATUS_BAR.md](STATUS_BAR.md); this document sequences the work.
 | 3d | **DND** — qypr-local state, Shell-mediated suppression; QS toggle | **Done** — suppression verified in preview |
 | 4 | **Volume** — libpulse against pipewire-pulse via the `PulseLoop` `pa_mainloop_api` adapter over `EventLoop`; QS slider + scroll | **Done** — verified live (mute toggle UI deferred to Phase 6 polish) |
 | 5 | **SNI tray host** — host mode against the running `StatusNotifierWatcher` on the session bus; themed icons via inheritance-aware `IconResolver`; left-click `Activate` | **Done** — verified live (nm-applet + blueman icons render; blueman `Activate(ii)` targeted) |
-| 6 | **Polish** — tray context menus (`com.canonical.dbusmenu`, needed by menu-only items like nm-applet) + async item fetch; full keyboard nav (Home/End, slider arrows); battery charging pulse; icon crossfades; per-indicator tooltips; volume mute-toggle UI | Planned |
+| 6 | **Polish** (cosmetic only) — full keyboard nav (Home/End, slider arrows); battery charging pulse; icon crossfades; per-indicator tooltips; volume mute-toggle UI. *Tray context menus + async fetch graduated to Phase 13 — they are the tray's real blocker, not cosmetics* | Planned — land any time |
 | 7 | **Standalone `qypr-bar`** — separate binary hosting the same StatusBar on `wlr-layer-shell` for daily (unlocked) use on any Wayland WM. Reserves an exclusive zone (a real panel), enables session-sensitive widgets (`setSessionContentVisible(true)`), starts the WM backends, and draws a subtle backdrop (`setBackdrop`) so the chromeless glyphs stay legible over any wallpaper | **Done** — verified live on Hyprland (reserves 66px zone, stacks with waybar; QS opens with real WiFi/BT/battery data; surface grows 66→full for overlays and shrinks back) |
 | 8 | **WM widgets** — workspaces (`ext-workspace-v1`) + active window (`wlr-foreign-toplevel-management`) | **Done** — verified live; **gated hidden while locked** (session-sensitive); now surface in the unlocked qypr-bar (Phase 7) |
+| 9 | **Config & panel geometry** — hand-rolled INI at `$XDG_CONFIG_HOME/qypr/bar.conf`; module set/order per zone (any module in any zone), position (top/bottom), height, margins, backdrop, clock formats | **Done** — verified live (bottom bar at y=1138 h=62; `CFG %H:%M:%S` clock; modules reordered/dropped/re-homed; typo diagnosed; no-config still yields the shipped default). *Auto-hide and per-output selection deferred — see below* |
+| 10 | **Session surface** — media (MPRIS) applet, notification centre (bell + unread + history), session/power menu. All three classes already exist (lock-only); includes the MPRIS poll→push conversion | Planned |
+| 11 | **Task manager** — icons-only window list over the existing `ToplevelBackend` (already tracks every toplevel); click-to-focus, minimize, close, grouping, `.desktop` icons | Planned |
+| 12 | **Clock calendar popover** — config-driven format, month calendar, timezones | Planned |
+| 13 | **Tray completeness** — `com.canonical.dbusmenu` right-click menus (absorbs Phase 6's tray items), `SecondaryActivate`, scroll, overflow "hidden items", async fetch | Planned |
+| 14 | **Widget depth** — network connection picker, BT device list, per-app audio + device switching, power profiles, multi-display brightness | Planned |
+| 15 | **Utility indicators** — launcher, clipboard, keyboard layout, idle inhibitor, system monitors | Planned |
+
+**Objective check.** Phases 1–8 built the *engine* (registry, backends, two
+hosts, Quick Settings, tray) — but measured against the real objective, **a full
+KDE-Plasma-calibre panel replacement**, three structural gaps remain: (1) **zero
+user configuration** — every module, size, and format is a compile-time constant,
+so no one can adopt the bar without a recompile; (2) **no session surface** — the
+bar reports system state but cannot drive the session (no window list, no
+notification history, no media, no power menu); (3) **widget depth stops at
+"status"** — WiFi/BT/Volume show and toggle, but cannot pick a network, connect a
+headset, or move audio. Phases 9–15 close exactly those. Full matrix and the
+architectural decisions (D1–D6) are in
+[STATUS_BAR.md § KDE-Panel Parity](STATUS_BAR.md#kde-panel-parity--gap-analysis).
 
 ## Sequencing rationale
 
@@ -69,6 +88,35 @@ specs live in [STATUS_BAR.md](STATUS_BAR.md); this document sequences the work.
   supported protocol carrying per-window *focus* state (the standard
   `ext-foreign-toplevel-list-v1` is list-only). Still no per-WM IPC — portable
   across Hyprland, Sway, river, ….
+- **Config first (9):** it is the only gap that *blocks* others — module
+  selection, geometry, formats and per-module spawn commands are inputs every
+  later phase needs. Building 10–15 first would bake in more compile-time
+  constants to retrofit. It was also cheap, as predicted: `IndicatorRegistry`
+  already keyed factories by id/zone/priority, so selection became a filter in
+  `createAll()` and the indicators were untouched. Config reaches indicators via
+  a `const Config*` on the existing `SystemBackends` aggregate — no new plumbing,
+  and `qypr-lock` simply passes `nullptr` (every key has a compiled default, so a
+  config-less host is always valid).
+  **Deferred from 9 (not built):** `auto-hide`/dodge-windows and per-output
+  (`outputs = …`) selection — both are real panel features, but neither blocks
+  10–15, and auto-hide needs a pointer-proximity + reveal state machine that is
+  its own piece of work. Per-module `spawn-on-click` (D1) lands with the
+  launcher in 15, which is the first thing that needs it.
+- **Session surface next (10):** the highest value per line of code in the whole
+  plan — `MprisController`, `NotificationMonitor` (+`NotificationLog`) and
+  `PowerManager` are **already written and verified**, just never instantiated by
+  `BarApp`. The work is applets + wiring, not backends. The one real task is
+  converting MPRIS from 1s polling to `PropertiesChanged` push (decision D4)
+  before it runs in an always-on panel.
+- **Taskbar (11) before the long tail:** it is the signature panel feature and
+  the data layer is already there — `ToplevelBackend` tracks every toplevel and
+  `ActiveWindowIndicator` merely discards all but the focused one. The new work
+  is list UI + `activate`/`minimize`/`close` + `.desktop` icon lookup (D5).
+- **Tray completeness (13) folds in Phase 6:** dbusmenu is the tray's real
+  blocker (menu-only items like nm-applet are inert without it), so it moved out
+  of generic "polish" into its own phase with the overflow popup.
+- **Depth (14) before the long tail (15):** making the existing widgets actually
+  *work* beats adding more widgets that only show state.
 
 ## Per-phase verification
 
@@ -82,3 +130,10 @@ specs live in [STATUS_BAR.md](STATUS_BAR.md); this document sequences the work.
 | 5 | A real SNI app shows a themed icon (nm-applet `nm-signal-75`, blueman); left-click targets the item's real `Activate(ii)` (verified present on blueman) |
 | 7 | Bar renders on Hyprland (verified: reserves a 66px exclusive zone, full width, stacks below waybar; workspaces + active window + system indicators all draw; gear-click opens Quick Settings with real WiFi/BT/battery/brightness/volume, growing the surface 66→1200 then shrinking back); session-sensitive widgets appear only here, never on the lock screen. Cross-WM (Sway/river) still to spot-check |
 | 8 | Live workspace list with active highlight + switch-on-click; active-window title tracks focus — both **absent from the locked bar** (verified: preview shows neither), present only under `setSessionContentVisible(true)` |
+| 9 | ✅ A module is dropped, zones reordered, a module re-homed across zones, the bar moved to the bottom and the clock format changed — **all with no recompile** (verified live: `position=bottom` → layer at y=1138 h=62; `format = CFG %H:%M:%S` → `CFG 12:47:41`; wifi/bt/brightness/dnd dropped; clock ahead of workspaces; empty centre); a typo names the bad id and lists the valid ones; **no config still yields the shipped default bar** (top, h=66, silent) |
+| 10 | Real track from a live player with working transport; a real notification lands in the history popover and the unread badge clears; a session action round-trips through logind. All three **absent from the locked bar** |
+| 11 | Every open window appears; click focuses, click-active minimizes, middle-click closes; grouping and icons correct across at least 3 real apps; tracks open/close live |
+| 12 | Calendar matches `cal` for the current month and across a month/year boundary |
+| 13 | **nm-applet's real menu opens and an item actuates** (the item that Phase 5 could not reach); overflow popup shows/hides items |
+| 14 | Connect to a real network from the picker; connect a real BT device; move a live stream to another sink and mute one app |
+| 15 | Each indicator proven against its real source (launcher spawns; clipboard captures a copy; layout switch reflects; inhibitor blocks a real idle cycle; monitors match `top`/`df`) |

@@ -159,6 +159,7 @@ target_link_libraries(qypr-bar PRIVATE
 
 # 2. Standalone Recorder target (only needs systemd for sd-bus)
 add_executable(qypr-record
+    src/core/Config.cpp          # NotificationMonitor resolves its XDG config dir
     src/core/EventLoop.cpp
     src/notifications/NotificationMonitor.cpp
     src/notifications/NotificationLog.cpp
@@ -214,3 +215,6 @@ install(TARGETS qypr-lock qypr-bar qypr-record RUNTIME DESTINATION bin)
 # Man pages.
 install(FILES man/man1/qypr-lock.1 man/man1/qypr-bar.1 man/man1/qypr-record.1
         DESTINATION share/man/man1)
+
+# Example configuration (copy to $XDG_CONFIG_HOME/qypr/bar.conf to use).
+install(FILES examples/bar.conf DESTINATION share/qypr/examples)

@@ -27,7 +27,9 @@ namespace qypr {
 
 class BarWindow {
 public:
-    BarWindow(wl_output* output, uint32_t name, OutputEnv* env, int reservedHeight);
+    // `bottom` anchors the panel to the lower screen edge instead of the top.
+    BarWindow(wl_output* output, uint32_t name, OutputEnv* env, int reservedHeight,
+              bool bottom = false);
     ~BarWindow();
 
     BarWindow(const BarWindow&) = delete;
@@ -81,6 +83,7 @@ private:
     int reservedHeight_ = 0;    // exclusive zone + idle strip height (logical)
     int outputHeight_ = 0;      // full output height (logical), for overlays
     int requestedHeight_ = 0;   // current set_size height (logical)
+    bool bottom_ = false;       // anchored to the lower screen edge
     bool overlayActive_ = false;
 
     int width_ = 0;      // logical, from configure

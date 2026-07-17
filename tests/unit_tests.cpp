@@ -10,6 +10,8 @@
 #include <cmath>
 #include <thread>
 #include <chrono>
+#include <fstream>
+#include <cstdlib>
 
 // Helper to convert any type to string for test diagnostics
 template <typename T>
@@ -101,6 +103,7 @@ int g_tests_failed = 0;
 #include "ui/statusbar/QuickSettingsPanel.hpp"
 #include "ui/statusbar/PopoverManager.hpp"
 #include "ui/statusbar/DetailedPopover.hpp"
+#include "core/Config.hpp"
 #include "ui/indicators/ClockIndicator.hpp"
 #include "ui/indicators/BatteryIndicator.hpp"
 #include "system/BatteryBackend.hpp"
@@ -1582,6 +1585,264 @@ TEST(SensitiveIndicatorsGatedByDefault) {
     EXPECT_TRUE(ws.sensitive());
     EXPECT_TRUE(aw.sensitive());
     EXPECT_FALSE(bat.sensitive());  // default: not sensitive
+}
+
+// -----------------------------------------------------------------------------
+// Phase 9 — Config
+// -----------------------------------------------------------------------------
+
+// Write a temp config and return its path.
+static std::string writeTempConfig(const std::string& body) {
+    std::string path = "/tmp/qypr-test-" + std::to_string(::getpid()) + "-" +
+                       std::to_string(::rand()) + ".conf";
+    std::ofstream f(path);
+    f << body;
+    f.close();
+    return path;
+}
+
+TEST(ConfigParsing) {
+    const std::string path = writeTempConfig(
+        "# a comment\n"
+        "// another comment\n"
+        "\n"
+        "[bar]\n"
+        "position = bottom\n"
+        "height = 40\n"
+        "backdrop = 0.5\n"
+        "auto-hide = yes\n"
+        "modules-left = workspaces, clock\n"
+        "  spaced-key   =   value with inner spaces  \n"
+        "junk line without equals\n"
+        "\n"
+        "[clock]\n"
+        "format = %H:%M\n");
+
+    qypr::Config c;
+    EXPECT_TRUE(c.load(path));
+    EXPECT_TRUE(c.loaded());
+
+    // Typed accessors + section scoping.
+    EXPECT_EQ(c.getString("bar", "position", "top"), std::string("bottom"));
+    EXPECT_EQ(c.getInt("bar", "height", 36), 40);
+    EXPECT_TRUE(std::fabs(c.getDouble("bar", "backdrop", 0.8) - 0.5) < 1e-9);
+    EXPECT_TRUE(c.getBool("bar", "auto-hide", false));
+    EXPECT_EQ(c.getString("clock", "format", "x"), std::string("%H:%M"));
+
+    // Ends trimmed, inner spaces kept.
+    EXPECT_EQ(c.getString("bar", "spaced-key", ""), std::string("value with inner spaces"));
+
+    // Lists split + trim.
+    auto mods = c.getList("bar", "modules-left");
+    EXPECT_EQ(static_cast<int>(mods.size()), 2);
+    EXPECT_EQ(mods[0], std::string("workspaces"));
+    EXPECT_EQ(mods[1], std::string("clock"));
+
+    // Absent keys fall back; a key in the wrong section is absent.
+    EXPECT_EQ(c.getInt("bar", "nope", 7), 7);
+    EXPECT_EQ(c.getString("bar", "format", "def"), std::string("def"));  // clock's, not bar's
+    EXPECT_FALSE(c.has("bar", "format"));
+    EXPECT_TRUE(c.has("clock", "format"));
+
+    ::unlink(path.c_str());
+}
+
+TEST(ConfigMissingFileIsNotAnError) {
+    // The compiled-in bar must still run with no config at all.
+    qypr::Config c;
+    EXPECT_FALSE(c.load("/tmp/qypr-definitely-does-not-exist-9182.conf"));
+    EXPECT_FALSE(c.loaded());
+    EXPECT_EQ(c.getInt("bar", "height", 36), 36);       // default survives
+    EXPECT_EQ(static_cast<int>(c.getList("bar", "modules-left").size()), 0);
+}
+
+TEST(ConfigMalformedValuesKeepDefaults) {
+    const std::string path = writeTempConfig(
+        "[bar]\nheight = not-a-number\nbackdrop = \nflag = maybe\n");
+    qypr::Config c;
+    EXPECT_TRUE(c.load(path));
+    EXPECT_EQ(c.getInt("bar", "height", 36), 36);                       // stoi throws → default
+    EXPECT_TRUE(std::fabs(c.getDouble("bar", "backdrop", 0.8) - 0.8) < 1e-9);
+    EXPECT_TRUE(c.getBool("bar", "flag", true));                        // unparseable → default
+    ::unlink(path.c_str());
+}
+
+TEST(ConfigEmptyListEmptiesZone) {
+    // An explicitly empty value means "this zone is empty", which must be
+    // distinguishable from "key absent" (= use defaults).
+    const std::string path = writeTempConfig("[bar]\nmodules-center =\n");
+    qypr::Config c;
+    EXPECT_TRUE(c.load(path));
+    EXPECT_TRUE(c.has("bar", "modules-center"));
+    std::vector<std::string> fallback{"active-window"};
+    EXPECT_EQ(static_cast<int>(c.getList("bar", "modules-center", fallback).size()), 0);
+    // Absent key → caller's fallback.
+    EXPECT_EQ(static_cast<int>(c.getList("bar", "modules-left", fallback).size()), 1);
+    ::unlink(path.c_str());
+}
+
+TEST(ConfigDirRespectsXdg) {
+    const char* old = ::getenv("XDG_CONFIG_HOME");
+    const std::string saved = old ? old : "";
+    ::setenv("XDG_CONFIG_HOME", "/tmp/xdg-probe", 1);
+    EXPECT_EQ(qypr::Config::configDir(), std::string("/tmp/xdg-probe/qypr"));
+    EXPECT_EQ(qypr::Config::defaultPath(), std::string("/tmp/xdg-probe/qypr/bar.conf"));
+
+    // Without XDG_CONFIG_HOME it falls back to $HOME/.config/qypr.
+    ::unsetenv("XDG_CONFIG_HOME");
+    ::setenv("HOME", "/tmp/home-probe", 1);
+    EXPECT_EQ(qypr::Config::configDir(), std::string("/tmp/home-probe/.config/qypr"));
+
+    if (!saved.empty()) ::setenv("XDG_CONFIG_HOME", saved.c_str(), 1);
+}
+
+// These use a LOCAL registry rather than instance(). The TEST macro runs bodies
+// during static initialisation, so the compiled-in REGISTER_INDICATOR set is not
+// guaranteed to exist yet (cross-TU static init order is unspecified) — a test
+// leaning on it would pass or fail by link order. A local registry is hermetic
+// and also keeps fake indicators out of the global one.
+static qypr::IndicatorRegistry::Factory testFactory(const std::string& id, qypr::Zone z, int p) {
+    return [id, z, p](const qypr::SystemBackends&) {
+        return std::make_unique<TestIndicator>(id, z, p);
+    };
+}
+
+TEST(RegistryModuleSelection) {
+    qypr::IndicatorRegistry reg;  // ctor reachable via `#define private public`
+    reg.registerIndicator("clock", qypr::Zone::Left, 0, testFactory("clock", qypr::Zone::Left, 0));
+    reg.registerIndicator("battery", qypr::Zone::Right, 500,
+                          testFactory("battery", qypr::Zone::Right, 500));
+    reg.registerIndicator("volume", qypr::Zone::Right, 200,
+                          testFactory("volume", qypr::Zone::Right, 200));
+    reg.registerIndicator("brightness", qypr::Zone::Right, 100,
+                          testFactory("brightness", qypr::Zone::Right, 100));
+
+    // Config-driven selection: only the named ids, in the listed order, re-homed
+    // to the zone they were listed under.
+    qypr::SystemBackends b{};
+    qypr::IndicatorRegistry::ModuleSelection sel;
+    sel.left = {"clock"};                  // compiled Left, stays Left
+    sel.center = {"battery"};              // compiled Right → re-homed to Center
+    sel.right = {"volume", "brightness"};  // reversed vs compiled priority
+
+    auto made = reg.createAll(b, &sel);
+    EXPECT_EQ(static_cast<int>(made.size()), 4);
+    EXPECT_EQ(made[0]->id(), std::string("clock"));
+    EXPECT_TRUE(made[0]->zone() == qypr::Zone::Left);
+    // Re-homed: a module lands in the zone it was listed under.
+    EXPECT_EQ(made[1]->id(), std::string("battery"));
+    EXPECT_TRUE(made[1]->zone() == qypr::Zone::Center);
+    // Listed order wins over compiled priority (brightness=100 < volume=200
+    // would otherwise sort first).
+    EXPECT_EQ(made[2]->id(), std::string("volume"));
+    EXPECT_EQ(made[3]->id(), std::string("brightness"));
+    EXPECT_TRUE(made[2]->zone() == qypr::Zone::Right);
+}
+
+TEST(RegistryUnknownModuleIsSkipped) {
+    // A typo must drop that module, never crash the bar.
+    qypr::IndicatorRegistry reg;
+    reg.registerIndicator("clock", qypr::Zone::Left, 0, testFactory("clock", qypr::Zone::Left, 0));
+    reg.registerIndicator("battery", qypr::Zone::Right, 500,
+                          testFactory("battery", qypr::Zone::Right, 500));
+
+    qypr::SystemBackends b{};
+    qypr::IndicatorRegistry::ModuleSelection sel;
+    sel.left = {"clock", "no-such-module", "battery"};
+    auto made = reg.createAll(b, &sel);
+    EXPECT_EQ(static_cast<int>(made.size()), 2);
+    EXPECT_EQ(made[0]->id(), std::string("clock"));
+    EXPECT_EQ(made[1]->id(), std::string("battery"));
+}
+
+TEST(RegistryNullSelectionKeepsCompiledDefaults) {
+    // No selection (the lock screen's path): every registered indicator, grouped
+    // by compiled zone, priority ascending — unchanged behaviour.
+    qypr::IndicatorRegistry reg;
+    reg.registerIndicator("battery", qypr::Zone::Right, 500,
+                          testFactory("battery", qypr::Zone::Right, 500));
+    reg.registerIndicator("brightness", qypr::Zone::Right, 100,
+                          testFactory("brightness", qypr::Zone::Right, 100));
+    reg.registerIndicator("clock", qypr::Zone::Left, 0, testFactory("clock", qypr::Zone::Left, 0));
+
+    qypr::SystemBackends b{};
+    auto all = reg.createAll(b, nullptr);
+    EXPECT_EQ(static_cast<int>(all.size()), 3);
+    EXPECT_EQ(static_cast<int>(reg.registeredIds().size()), 3);
+    // Left zone first, then Right by ascending priority.
+    EXPECT_EQ(all[0]->id(), std::string("clock"));
+    EXPECT_EQ(all[1]->id(), std::string("brightness"));  // 100 before 500
+    EXPECT_EQ(all[2]->id(), std::string("battery"));
+    for (size_t i = 1; i < all.size(); ++i) {
+        if (all[i - 1]->zone() == all[i]->zone()) {
+            EXPECT_TRUE(all[i - 1]->priority() <= all[i]->priority());
+        }
+    }
+}
+
+TEST(ClockFormatFromConfig) {
+    const std::string path = writeTempConfig("[clock]\nformat = %Y\n");
+    qypr::Config c;
+    EXPECT_TRUE(c.load(path));
+
+    qypr::SystemBackends b{};
+    b.config = &c;
+    qypr::ClockIndicator clk(b);
+    clk.poll(1'000'000);  // force a refresh past the 1s gate
+
+    // %Y renders a 4-digit year — proves the config format is in effect.
+    const std::string label = clk.label();
+    EXPECT_EQ(static_cast<int>(label.size()), 4);
+    EXPECT_TRUE(label[0] == '2');
+
+    // No config → compiled default (contains ":" from %-I:%M).
+    qypr::SystemBackends plain{};
+    qypr::ClockIndicator def(plain);
+    def.poll(1'000'000);
+    EXPECT_TRUE(def.label().find(':') != std::string::npos);
+
+    ::unlink(path.c_str());
+}
+
+TEST(StatusBarGeometryTopAndBottom) {
+    qypr::EventLoop loop;
+    struct Inv : qypr::Invalidator { void invalidate() override {} } inv;
+    qypr::SystemBackends b{};
+    qypr::StatusBar bar(loop, inv, b);
+
+    // Default (top): the strip sits `edgeMargin` below the top edge.
+    qypr::BarGeometry top;
+    top.height = 36; top.edgeMargin = 24; top.sideMargin = 48; top.bottom = false;
+    bar.setGeometry(top);
+    bar.layout(1920, 66);
+    EXPECT_TRUE(std::fabs(bar.bounds.y - 24.0) < 1e-9);
+    EXPECT_TRUE(std::fabs(bar.bounds.w - (1920 - 96)) < 1e-9);
+
+    // Bottom: measured from screenH, so it pins to the lower edge — and stays
+    // pinned when the host surface grows for an overlay (66 → 1200).
+    qypr::BarGeometry bot = top;
+    bot.bottom = true;
+    bar.setGeometry(bot);
+    bar.layout(1920, 66);
+    EXPECT_TRUE(std::fabs(bar.bounds.y - (66 - 24 - 36)) < 1e-9);  // 6
+    bar.layout(1920, 1200);
+    EXPECT_TRUE(std::fabs(bar.bounds.y - (1200 - 24 - 36)) < 1e-9);  // 1140
+}
+
+TEST(PopoverGrowsAwayFromBarEdge) {
+    // A bottom bar must open its panels upward, or they render off-screen.
+    struct P : qypr::DetailedPopover {
+        void draw(qypr::Painter&, int64_t) override {}
+        double contentHeight() const override { return 100.0; }
+        double contentWidth() const override { return 200.0; }
+    } pop;
+
+    pop.anchorX = 500; pop.anchorY = 60; pop.growUp = false;
+    EXPECT_TRUE(std::fabs(pop.getBounds().y - 60.0) < 1e-9);   // hangs down
+    EXPECT_TRUE(std::fabs(pop.getBounds().x - 300.0) < 1e-9);  // right-aligned to anchor
+
+    pop.growUp = true;
+    EXPECT_TRUE(std::fabs(pop.getBounds().y - (60.0 - 100.0)) < 1e-9);  // extends up
 }
 
 // -----------------------------------------------------------------------------

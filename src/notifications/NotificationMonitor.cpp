@@ -8,6 +8,7 @@
 #include <cstring>
 #include <string>
 
+#include "core/Config.hpp"
 #include "core/EventLoop.hpp"
 #include "notifications/NotificationLog.hpp"
 
@@ -42,7 +43,10 @@ std::vector<std::string> sensitiveApps_;
 void loadSensitiveApps() {
     if (!sensitiveApps_.empty()) return;
     
-    std::ifstream f("/home/arch/.config/qypr/sensitive_apps.conf");
+    // XDG-resolved, not a hardcoded home: this file shipped with an absolute
+    // /home/arch path, which silently fell back to the defaults for any other
+    // user.
+    std::ifstream f(Config::configDir() + "/sensitive_apps.conf");
     if (!f.is_open()) {
         sensitiveApps_ = {
             "signal", "telegram", "whatsapp", "discord", "thunderbird",
