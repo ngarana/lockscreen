@@ -51,26 +51,35 @@ const zwlr_foreign_toplevel_manager_v1_listener kManagerListener = {managerTople
                                                                     managerFinished};
 
 // --- registry ---
-constexpr uint32_t kWantVersion = 3;
-
 void registryGlobal(void* data, wl_registry* reg, uint32_t name, const char* iface,
                     uint32_t version) {
-    if (std::strcmp(iface, zwlr_foreign_toplevel_manager_v1_interface.name) == 0) {
-        auto** mgr = static_cast<zwlr_foreign_toplevel_manager_v1**>(data);
-        uint32_t bind = version < kWantVersion ? version : kWantVersion;
-        *mgr = static_cast<zwlr_foreign_toplevel_manager_v1*>(
-            wl_registry_bind(reg, name, &zwlr_foreign_toplevel_manager_v1_interface, bind));
-    }
+    static_cast<ToplevelBackend*>(data)->onRegistryGlobal(reg, name, iface, version);
 }
 void registryGlobalRemove(void*, wl_registry*, uint32_t) {}
 const wl_registry_listener kRegistryListener = {registryGlobal, registryGlobalRemove};
 
 }  // namespace
 
+// Bind the manager and (for activate) our own seat. `this` is the listener data
+// so late-appearing globals stay safe — the registry listener outlives start().
+void ToplevelBackend::onRegistryGlobal(wl_registry* reg, uint32_t name, const char* iface,
+                                       uint32_t version) {
+    constexpr uint32_t kWantVersion = 3;
+    if (std::strcmp(iface, zwlr_foreign_toplevel_manager_v1_interface.name) == 0 && !manager_) {
+        uint32_t bind = version < kWantVersion ? version : kWantVersion;
+        manager_ = static_cast<zwlr_foreign_toplevel_manager_v1*>(
+            wl_registry_bind(reg, name, &zwlr_foreign_toplevel_manager_v1_interface, bind));
+    } else if (std::strcmp(iface, wl_seat_interface.name) == 0 && !seat_) {
+        // Seat v1 is enough: activate() only needs the object, not input events.
+        seat_ = static_cast<wl_seat*>(wl_registry_bind(reg, name, &wl_seat_interface, 1));
+    }
+}
+
 ToplevelBackend::~ToplevelBackend() {
     for (auto& h : handles_) {
         if (h->handle) zwlr_foreign_toplevel_handle_v1_destroy(h->handle);
     }
+    if (seat_) wl_seat_destroy(seat_);
     if (manager_) zwlr_foreign_toplevel_manager_v1_destroy(manager_);
     if (registry_) wl_registry_destroy(registry_);
 }
@@ -80,7 +89,7 @@ bool ToplevelBackend::start(wl_display* display) {
     display_ = display;
 
     registry_ = wl_display_get_registry(display);
-    wl_registry_add_listener(registry_, &kRegistryListener, &manager_);
+    wl_registry_add_listener(registry_, &kRegistryListener, this);
     wl_display_roundtrip(display);  // one startup sync: discover + bind
     if (!manager_) {
         std::fprintf(stderr,
@@ -99,6 +108,7 @@ void ToplevelBackend::onManagerToplevel(zwlr_foreign_toplevel_handle_v1* h) {
     auto t = std::make_unique<TlHandle>();
     t->backend = this;
     t->handle = h;
+    t->id = nextId_++;
     zwlr_foreign_toplevel_handle_v1_add_listener(h, &kHandleListener, t.get());
     handles_.push_back(std::move(t));
 }
@@ -113,8 +123,10 @@ void ToplevelBackend::onHandleAppId(TlHandle* h, const char* appId) {
 
 void ToplevelBackend::onHandleState(TlHandle* h, const uint32_t* states, size_t n) {
     h->active = false;
+    h->minimized = false;
     for (size_t i = 0; states && i < n; ++i) {
         if (states[i] == ZWLR_FOREIGN_TOPLEVEL_HANDLE_V1_STATE_ACTIVATED) h->active = true;
+        if (states[i] == ZWLR_FOREIGN_TOPLEVEL_HANDLE_V1_STATE_MINIMIZED) h->minimized = true;
     }
 }
 
@@ -138,9 +150,13 @@ void ToplevelBackend::onHandleClosed(TlHandle* h) {
 void ToplevelBackend::rebuildAndNotify() {
     ToplevelSnapshot next;
     next.available = snap_.available;
-    // The most recently focused toplevel wins if several report activated
-    // (during a focus handoff both may briefly carry the bit).
     for (const auto& h : handles_) {
+        // Skip handles the compositor has announced but not yet described — they
+        // would otherwise flash as a blank taskbar button for one frame.
+        if (h->appId.empty() && h->title.empty()) continue;
+        next.windows.push_back({h->id, h->appId, h->title, h->active, h->minimized});
+        // The most recently focused toplevel wins if several report activated
+        // (during a focus handoff both may briefly carry the bit).
         if (h->active) {
             next.hasActive = true;
             next.appId = h->appId;
@@ -151,6 +167,38 @@ void ToplevelBackend::rebuildAndNotify() {
     if (next == snap_) return;
     snap_ = std::move(next);
     if (onChange_) onChange_();
+}
+
+TlHandle* ToplevelBackend::find(uint64_t id) const {
+    for (const auto& h : handles_) {
+        if (h->id == id) return h.get();
+    }
+    return nullptr;
+}
+
+void ToplevelBackend::activate(uint64_t id) {
+    TlHandle* h = find(id);
+    if (!h || !h->handle || !seat_) return;
+    zwlr_foreign_toplevel_handle_v1_activate(h->handle, seat_);
+    if (display_) wl_display_flush(display_);
+}
+
+void ToplevelBackend::close(uint64_t id) {
+    TlHandle* h = find(id);
+    if (!h || !h->handle) return;
+    zwlr_foreign_toplevel_handle_v1_close(h->handle);
+    if (display_) wl_display_flush(display_);
+}
+
+void ToplevelBackend::toggleMinimize(uint64_t id) {
+    TlHandle* h = find(id);
+    if (!h || !h->handle) return;
+    if (h->minimized) {
+        zwlr_foreign_toplevel_handle_v1_unset_minimized(h->handle);
+    } else {
+        zwlr_foreign_toplevel_handle_v1_set_minimized(h->handle);
+    }
+    if (display_) wl_display_flush(display_);
 }
 
 }  // namespace qypr

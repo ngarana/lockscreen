@@ -1072,7 +1072,7 @@ remains is mostly *session* surface area (windows, media, notifications, power),
 | Bluetooth | ⚠️ status + toggle | **device list**, connect/disconnect, battery per device | 14 |
 | Audio volume | ⚠️ master sink only, QS mute toggle | **per-app streams**, output/input **device switching** | 4 / 14 |
 | Clock | ⚠️ time text only | **calendar popover**, timezones, format config | 12 |
-| **Task manager (window list)** | ❌ active window title only | **icons-only taskbar**: all toplevels, click-to-focus/minimize, grouping, pinning | 11 |
+| **Task manager (window list)** | ✅ icons-only taskbar: all toplevels, click-to-focus, click-focused-to-minimize, minimized dimming | middle-click close, grouping, pinning | 11 ✅ |
 | **Notifications applet + history** | ✅ bell + count + history popover; per-row **dismiss**, **Clear all**, **scroll**, relative timestamps, critical accent | per-app inline actions (buttons) | 10a ✅ |
 | **Media player (MPRIS)** | ✅ now-playing + transport popover, pushed (no poll) | album art, seek, explicit player switching | 10b ✅ |
 | **Session / power menu** | ✅ Lock/Suspend/Hibernate/Restart/Shut Down, arm-then-confirm | logout (session-manager specific) | 10a ✅ |
@@ -1100,15 +1100,16 @@ remains is mostly *session* surface area (windows, media, notifications, power),
    silently fell back to defaults for every other user; it is now XDG-resolved.)*
    **Still open:** auto-hide/dodge, left/right edges, per-output selection.
 
-2. **The session surface is missing.** A KDE panel is how you *drive the
-   session*; qypr's bar only *reports system state*. The three biggest absences
-   — window list, notification history, media controls — are what make a panel a
-   panel. Critically, **most of this is already built and merely lock-only**:
-   `MprisController`, `NotificationMonitor` (+ `NotificationLog` backlog),
-   and `PowerManager` are complete classes that `BarApp` simply does not
-   instantiate; and `ToplevelBackend` **already tracks every toplevel** (title,
-   app id, activated state) — `ActiveWindowIndicator` just discards all but the
-   focused one. Phases 10–11 are therefore mostly *surfacing*, not building.
+2. ~~**The session surface is missing.**~~ **CLOSED by Phases 10–11.** A KDE
+   panel is how you *drive the session*; qypr's bar only *reported system state*.
+   The three biggest absences — window list, notification history, media controls
+   — are what make a panel a panel. As predicted, **most of this was already built
+   and merely lock-only**: `MprisController`, `NotificationMonitor` (+
+   `NotificationLog` backlog), and `PowerManager` were complete classes `BarApp`
+   simply did not instantiate (surfaced in Phase 10); and `ToplevelBackend`
+   **already tracked every toplevel**, so the taskbar (Phase 11) only had to expose
+   the full list + add `activate`/`minimize`. All are session-sensitive, so none
+   leak onto the lock screen.
 
 3. **Widget depth stops at "status".** WiFi/Bluetooth/Volume show state and
    toggle, but cannot *do the thing* users open them for: pick a network, connect
@@ -1378,19 +1379,32 @@ kdeconnect) that the old `pickActive` had hidden. Absent from the locked bar.
 
 ---
 
-### Phase 11 — Task Manager (Window List)
+### Phase 11 — Task Manager (Window List) ✅
 
-The signature panel feature. `ToplevelBackend` **already tracks every toplevel**
-(title, app id, activated) — `ActiveWindowIndicator` just discards all but the
-focused one, so the data layer is largely done.
+The signature panel feature. `ToplevelBackend` **already tracked every toplevel**
+(title, app id, activated) — `ActiveWindowIndicator` just discarded all but the
+focused one, so the data layer was largely done.
 
 | File | Purpose |
 |------|---------|
-| `src/system/ToplevelBackend.*` | Expose the full list (not just the active one); add `activate`/`close`/`minimize` (needs a `wl_seat`) |
-| `src/ui/indicators/TaskbarIndicator.hpp/.cpp` | Icons-only task manager: per-window button, active/urgent styling, click-to-focus, minimize-on-click-active, middle-click close, grouping by app id |
-| `src/ui/IconResolver.*` | `.desktop` index for app-id → icon (D5), shared with the Phase 15 launcher; initial-glyph fallback |
+| `src/system/ToplevelBackend.*` | Now exposes the **full window list** (`ToplevelSnapshot::windows`, each with a stable `id` + minimized flag) alongside the active-window fields the `ActiveWindowIndicator` still reads. Binds **its own `wl_seat`** from its registry (activate needs one) and adds `activate` / `close` / `toggleMinimize`, each flushing the display. Blank not-yet-described handles are skipped so no button flashes empty |
+| `src/ui/indicators/TaskbarIndicator.hpp/.cpp` | Icons-only task manager (`Zone::Left`, priority 100): one button per window, focused one highlighted (pill + accent underline), minimized ones dimmed. **Left click focuses/raises; clicking the focused window minimizes it** (the familiar toggle). Icons via `IconResolver` from the app id (D5), with a hashed-colour **initial-letter tile** fallback. `sensitive()` = true |
 
-Session-sensitive. Center or left zone, config-selectable (Phase 9).
+**Deferred within the phase:** middle-click-close (needs the button number plumbed
+through `StatusBar::handlePointerButton`, which currently discards it) and app
+grouping. A dedicated `.desktop` index for app-id → icon (D5) was **not needed**
+in practice — the app id resolves directly through `IconResolver`'s themed lookup
+(tried as-is and lowercased) for the common cases, with the letter tile covering
+the rest; the fuller index can still land with the Phase 15 launcher.
+
+**Verified** with an offscreen render harness against the real icon theme: Firefox
+(active, highlighted), kitty, Dolphin (minimized, dimmed), VS Code all resolve to
+their real icons, an unknown app id falls back to a coloured "W" tile, and the
+click hit-test maps each button centre to its index (gaps and out-of-strip → −1).
+`--preview` confirms the taskbar is **absent from the locked bar** (session-sensitive,
+like workspaces/active-window). 68/68 tests; clean from-scratch build.
+
+Config-selectable (Phase 9): add `taskbar` to any zone in `bar.conf`.
 
 ---
 

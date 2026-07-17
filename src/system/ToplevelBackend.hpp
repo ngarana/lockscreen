@@ -23,16 +23,30 @@
 
 struct wl_display;
 struct wl_registry;
+struct wl_seat;
 struct zwlr_foreign_toplevel_manager_v1;
 struct zwlr_foreign_toplevel_handle_v1;
 
 namespace qypr {
 
+// One open toplevel, in stable arrival order. `id` is a small monotonic key the
+// UI hit-tests against (the wl handle pointer is not exposed).
+struct ToplevelWindow {
+    uint64_t id = 0;
+    std::string appId;
+    std::string title;
+    bool active = false;
+    bool minimized = false;
+
+    bool operator==(const ToplevelWindow&) const = default;
+};
+
 struct ToplevelSnapshot {
     bool available = false;  // the compositor exposes the protocol
     bool hasActive = false;  // some toplevel is currently activated
-    std::string appId;
-    std::string title;
+    std::string appId;       // the *active* window's app id / title (kept for the
+    std::string title;       // ActiveWindowIndicator, which only wants the focused one)
+    std::vector<ToplevelWindow> windows;  // every toplevel (taskbar), arrival order
 
     bool operator==(const ToplevelSnapshot&) const = default;
 };
@@ -41,9 +55,11 @@ struct ToplevelSnapshot {
 struct TlHandle {
     class ToplevelBackend* backend = nullptr;
     zwlr_foreign_toplevel_handle_v1* handle = nullptr;
+    uint64_t id = 0;
     std::string appId;
     std::string title;
     bool active = false;
+    bool minimized = false;
 };
 
 class ToplevelBackend {
@@ -61,7 +77,14 @@ public:
     const ToplevelSnapshot& snapshot() const { return snap_; }
     void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
 
+    // --- Actions (taskbar). No-op when the id is unknown, or (for activate)
+    // when the compositor exposes no seat. Each flushes the display. ---
+    void activate(uint64_t id);        // focus/raise the window
+    void close(uint64_t id);           // ask the app to close it
+    void toggleMinimize(uint64_t id);  // (un)minimize
+
     // --- C listener trampolines (public; not for external use) ---
+    void onRegistryGlobal(wl_registry*, uint32_t name, const char* iface, uint32_t version);
     void onManagerToplevel(zwlr_foreign_toplevel_handle_v1* h);
     void onHandleTitle(TlHandle*, const char* title);
     void onHandleAppId(TlHandle*, const char* appId);
@@ -71,11 +94,14 @@ public:
 
 private:
     void rebuildAndNotify();
+    TlHandle* find(uint64_t id) const;
 
     wl_display* display_ = nullptr;
     wl_registry* registry_ = nullptr;
     zwlr_foreign_toplevel_manager_v1* manager_ = nullptr;
+    wl_seat* seat_ = nullptr;  // for activate(); bound from the registry
     std::vector<std::unique_ptr<TlHandle>> handles_;
+    uint64_t nextId_ = 1;
     ToplevelSnapshot snap_;
     std::function<void()> onChange_;
 };
