@@ -39,7 +39,7 @@ specs live in [STATUS_BAR.md](STATUS_BAR.md); this document sequences the work.
 | 8 | **WM widgets** — workspaces (`ext-workspace-v1`) + active window (`wlr-foreign-toplevel-management`) | **Done** — verified live; **gated hidden while locked** (session-sensitive); now surface in the unlocked qypr-bar (Phase 7) |
 | 9 | **Config & panel geometry** — hand-rolled INI at `$XDG_CONFIG_HOME/qypr/bar.conf`; module set/order per zone (any module in any zone), position (top/bottom), height, margins, backdrop, clock formats | **Done** — verified live (bottom bar at y=1138 h=62; `CFG %H:%M:%S` clock; modules reordered/dropped/re-homed; typo diagnosed; no-config still yields the shipped default). *Auto-hide and per-output selection deferred — see below* |
 | 10a | **Session surface: notifications + power** — bell + count + history popover over the existing `NotificationMonitor`; session menu (Lock/Suspend/Hibernate/Restart/Shut Down) over the existing `PowerManager`, destructive rows arm-then-confirm | **Done** — verified live (bell counts real `notify-send`s 1→3; history lists them newest-first, critical accented red; menu renders). Double-gated: session-sensitive **and** absent without their backends, so `qypr-lock` has neither |
-| 10b | **Session surface: media (MPRIS)** — applet + transport/popover; requires the **poll→push conversion (D4)** first, which touches the lock screen's audio panel | Planned — split out to isolate that risk |
+| 10b | **Session surface: media (MPRIS)** — now-playing applet (click=play/pause, scroll=track) + transport popover; **poll→push conversion (D4)** via sdbus-c++ `addMatch` + `getEventLoopPollData()`/`processPendingEvent()` on the `EventLoop` (no thread, no timer); push is opt-in so the lock screen's polled path is untouched | **Done** — verified live (harness: 6 arg0namespace signals delivered on real bus changes; bar shows a real paused phone track). Also fixed `pickActive`: a *stopped* preferred player no longer outranks a *playing/paused* one |
 | 11 | **Task manager** — icons-only window list over the existing `ToplevelBackend` (already tracks every toplevel); click-to-focus, minimize, close, grouping, `.desktop` icons | Planned |
 | 12 | **Clock calendar popover** — config-driven format, month calendar, timezones | Planned |
 | 13 | **Tray completeness** — `com.canonical.dbusmenu` right-click menus (absorbs Phase 6's tray items), `SecondaryActivate`, scroll, overflow "hidden items", async fetch | Planned |
@@ -54,8 +54,8 @@ Phases 9–15 close them, and the first two are now under way:
 1. ~~**Zero user configuration**~~ — **closed (9)**: `bar.conf` drives the module
    set/order, geometry, and formats. *Open: auto-hide, per-output.*
 2. **No session surface** — the bar reported system state but could not drive the
-   session. **Half closed (10a)**: notification centre + session/power menu are
-   live. *Open: media (10b), window list (11).*
+   session. **Closed (10)**: notification centre, session/power menu, and the
+   now-playing applet are live. *Open: window list (11).*
 3. **Widget depth stops at "status"** — WiFi/BT/Volume show and toggle, but
    cannot pick a network, connect a headset, or move audio. *Open (14).*
 
@@ -137,7 +137,7 @@ Full matrix and the architectural decisions (D1–D6) are in
 | 8 | Live workspace list with active highlight + switch-on-click; active-window title tracks focus — both **absent from the locked bar** (verified: preview shows neither), present only under `setSessionContentVisible(true)` |
 | 9 | ✅ A module is dropped, zones reordered, a module re-homed across zones, the bar moved to the bottom and the clock format changed — **all with no recompile** (verified live: `position=bottom` → layer at y=1138 h=62; `format = CFG %H:%M:%S` → `CFG 12:47:41`; wifi/bt/brightness/dnd dropped; clock ahead of workspaces; empty centre); a typo names the bad id and lists the valid ones; **no config still yields the shipped default bar** (top, h=66, silent) |
 | 10a | ✅ A real notification lands in the history popover and the bell count tracks it live (verified: 3 × `notify-send` → bell "3", all three listed newest-first with app/title/body, `-u critical` accented red); the power menu renders and destructive rows require a confirming second click. **Both absent from the locked bar** (verified: preview shows no bell, no power button) |
-| 10b | Real track from a live player with working transport, pushed (no 1s poll); **absent from the locked bar** |
+| 10b | ✅ Real track from a live player, pushed with no polling (harness on the real session bus: fd + `processPendingEvent` delivered 12 broad / 6 narrow `arg0namespace` signals; the bar rendered "▶ RUPIE EDWARDS — …" from a phone via kdeconnect that the old `pickActive` hid behind a stopped browser); **absent from the locked bar** (verified: preview shows no media applet) |
 | 11 | Every open window appears; click focuses, click-active minimizes, middle-click closes; grouping and icons correct across at least 3 real apps; tracks open/close live |
 | 12 | Calendar matches `cal` for the current month and across a month/year boundary |
 | 13 | **nm-applet's real menu opens and an item actuates** (the item that Phase 5 could not reach); overflow popup shows/hides items |

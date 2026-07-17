@@ -1,11 +1,21 @@
 // MprisController.hpp - MPRIS media state + control over the session bus.
 //
-// Port of AudioService.qml. Uses sdbus-c++ with simple synchronous polling
-// (refreshed once a second from the event loop) rather than signal plumbing —
-// far less machinery for a screen that only samples state when visible (KISS).
+// Port of AudioService.qml. Two modes:
+//
+//   * Poll (default) — `refresh()` re-queries synchronously. The lock screen
+//     drives this from its 1s clock tick: far less machinery for a screen that
+//     only samples state while visible (KISS).
+//   * Push (`enablePush`) — subscribes to PropertiesChanged/NameOwnerChanged and
+//     plugs the connection's fd into the EventLoop, so updates arrive as they
+//     happen and nothing is polled. Required by the always-on qypr-bar, where a
+//     wakeup every second forever is exactly the footprint cost principle 2
+//     forbids (STATUS_BAR.md decision D4).
+//
+// Push is opt-in so the lock screen's proven path is untouched.
 
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -17,6 +27,8 @@ class IProxy;
 
 namespace qypr {
 
+class EventLoop;
+
 class MprisController {
 public:
     MprisController();
@@ -24,6 +36,15 @@ public:
 
     // Re-query the active player. Cheap no-op if the session bus is unavailable.
     void refresh();
+
+    // Opt into event-driven updates: watch every MPRIS player's
+    // PropertiesChanged plus name owner changes (players starting/quitting), and
+    // dispatch the connection from `loop` — no thread, no timer. Safe to call
+    // once; a no-op without a session bus.
+    void enablePush(EventLoop& loop);
+
+    // Fired on the loop thread whenever the snapshot changes (push mode only).
+    void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
 
     // Snapshot accessors (mirror AudioService's read-only properties).
 #ifdef TESTING
@@ -65,16 +86,22 @@ private:
         bool canGoNext = false;
         bool canGoPrevious = false;
         bool volumeSupported = false;
+
+        bool operator==(const Snapshot&) const = default;
     };
 
     std::vector<std::string> listPlayers();
     std::string pickActive(const std::vector<std::string>& players);
     Snapshot readSnapshot(const std::string& name);
     std::unique_ptr<sdbus::IProxy> playerProxy(const std::string& name);
+    // Re-read and notify only when something actually changed (push mode).
+    void refreshAndNotify();
 
     std::unique_ptr<sdbus::IConnection> conn_;
     std::unique_ptr<sdbus::IProxy> dbusProxy_;
     Snapshot snap_;
+    std::function<void()> onChange_;
+    bool pushEnabled_ = false;
 };
 
 }  // namespace qypr

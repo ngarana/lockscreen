@@ -106,6 +106,11 @@ int BarApp::run() {
         std::fprintf(stderr, "qypr-bar: notification monitor unavailable\n");
     }
 
+    // Media: push mode (decision D4). The lock screen re-polls MPRIS on its 1s
+    // tick, which an always-on panel must not do — enablePush() subscribes to
+    // PropertiesChanged and dispatches the bus from this loop instead.
+    mpris_.enablePush(loop_);  // StatusBar subscribed to it like any other backend
+
     loop_.run();
     return 0;
 }

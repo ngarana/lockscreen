@@ -17,6 +17,7 @@
 #include "core/Config.hpp"
 #include "core/EventLoop.hpp"
 #include "core/Interfaces.hpp"
+#include "mpris/MprisController.hpp"
 #include "notifications/NotificationMonitor.hpp"
 #include "power/PowerManager.hpp"
 #include "system/BatteryBackend.hpp"
@@ -93,6 +94,7 @@ private:
     // too — the bar simply hosts them as applets.
     NotificationMonitor notifications_{loop_};
     PowerManager power_;
+    MprisController mpris_;
     SystemBackends backends_{.battery = &battery_,
                              .volume = &volume_,
                              .brightness = &brightness_,
@@ -104,6 +106,7 @@ private:
                              .dnd = &dnd_,
                              .power = &power_,
                              .notifications = &notifications_,
+                             .mpris = &mpris_,
                              .config = &config_};
 
     StatusBar statusBar_{loop_, *this, backends_, modules_ ? &*modules_ : nullptr};

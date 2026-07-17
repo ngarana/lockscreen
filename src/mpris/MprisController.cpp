@@ -6,6 +6,8 @@
 #include <map>
 #include <optional>
 
+#include "core/EventLoop.hpp"
+
 namespace qypr {
 
 #ifndef TESTING
@@ -60,6 +62,59 @@ MprisController::MprisController() {
 
 MprisController::~MprisController() = default;
 
+void MprisController::refreshAndNotify() {
+    const Snapshot before = snap_;
+    refresh();
+    // Position advances constantly; comparing whole snapshots would fire every
+    // signal. Only notify on state the bar actually renders.
+    if (!(before == snap_) && onChange_) onChange_();
+}
+
+void MprisController::enablePush(EventLoop& loop) {
+#ifdef TESTING
+    (void)loop;
+    pushEnabled_ = true;
+#else
+    if (pushEnabled_ || !conn_) return;
+    pushEnabled_ = true;
+
+    try {
+        // One match for every MPRIS player's property changes — cheaper and
+        // simpler than a proxy per player that must be torn down and rebuilt as
+        // the active player changes.
+        conn_->addMatch(
+            "type='signal',interface='org.freedesktop.DBus.Properties',"
+            "member='PropertiesChanged',path='/org/mpris/MediaPlayer2'",
+            [this](sdbus::Message) { refreshAndNotify(); });
+
+        // Players appearing/quitting: the active player may change entirely.
+        conn_->addMatch(
+            "type='signal',sender='org.freedesktop.DBus',"
+            "interface='org.freedesktop.DBus',member='NameOwnerChanged',"
+            "arg0namespace='org.mpris.MediaPlayer2'",
+            [this](sdbus::Message) { refreshAndNotify(); });
+    } catch (...) {
+        pushEnabled_ = false;  // no matches: caller keeps polling
+        return;
+    }
+
+    // Dispatch the connection from our loop — never enterEventLoop(), which
+    // would spawn a thread (principle 2: single-threaded).
+    const int fd = conn_->getEventLoopPollData().fd;
+    loop.addFd(fd, [this](uint32_t) {
+        try {
+            while (conn_->processPendingEvent()) {
+            }
+        } catch (...) {
+            // A broken session bus must not take the bar down; the media applet
+            // simply stops updating.
+        }
+    });
+
+    refreshAndNotify();  // seed once; everything after this is pushed
+#endif
+}
+
 #ifndef TESTING
 std::unique_ptr<sdbus::IProxy> MprisController::playerProxy(const std::string& name) {
     return sdbus::createProxy(*conn_, sdbus::ServiceName{name}, sdbus::ObjectPath{kObjectPath});
@@ -79,21 +134,36 @@ std::vector<std::string> MprisController::listPlayers() {
 }
 
 std::string MprisController::pickActive(const std::vector<std::string>& players) {
+    // Preference order: a player with *content* always beats one without, and
+    // the priority list only breaks ties within a tier. Previously a stopped
+    // prioritized player (an idle browser) outranked a playing one elsewhere
+    // (e.g. a phone via kdeconnect), so the UI showed nothing while music was
+    // audible — status is what the user is looking at, so it leads.
     std::vector<std::string> prioritized;
-    std::string firstPlaying;
+    std::string firstPlaying, firstPaused;
+    std::string prioPlaying, prioPaused;
+
     for (const auto& name : players) {
-        if (matchesPriority(name)) prioritized.push_back(name);
+        const bool prio = matchesPriority(name);
+        if (prio) prioritized.push_back(name);
+
         auto proxy = playerProxy(name);
         auto status = getProp<std::string>(*proxy, kPlayerIface, "PlaybackStatus");
-        if (status && *status == "Playing" && firstPlaying.empty()) firstPlaying = name;
+        if (!status) continue;
+        if (*status == "Playing") {
+            if (firstPlaying.empty()) firstPlaying = name;
+            if (prio && prioPlaying.empty()) prioPlaying = name;
+        } else if (*status != "Stopped") {  // Paused
+            if (firstPaused.empty()) firstPaused = name;
+            if (prio && prioPaused.empty()) prioPaused = name;
+        }
     }
-    for (const auto& name : prioritized) {
-        auto proxy = playerProxy(name);
-        auto status = getProp<std::string>(*proxy, kPlayerIface, "PlaybackStatus");
-        if (status && *status == "Playing") return name;
-    }
-    if (!prioritized.empty()) return prioritized.front();
-    if (!firstPlaying.empty()) return firstPlaying;
+
+    if (!prioPlaying.empty()) return prioPlaying;  // playing, preferred app
+    if (!firstPlaying.empty()) return firstPlaying;  // playing anywhere
+    if (!prioPaused.empty()) return prioPaused;    // paused, preferred app
+    if (!firstPaused.empty()) return firstPaused;  // paused anywhere
+    if (!prioritized.empty()) return prioritized.front();  // stopped, preferred
     if (!players.empty()) return players.front();
     return "";
 }

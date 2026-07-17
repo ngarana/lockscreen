@@ -7,6 +7,7 @@
 #include "core/Interfaces.hpp"
 #include "core/Types.hpp"
 #include "render/Painter.hpp"
+#include "mpris/MprisController.hpp"
 #include "system/BatteryBackend.hpp"
 #include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
@@ -77,6 +78,9 @@ StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& b
     }
     if (backends.sni) {
         backends.sni->setOnChange([this] { notifyBackendUpdate(); });
+    }
+    if (backends.mpris) {
+        backends.mpris->setOnChange([this] { notifyBackendUpdate(); });
     }
     // Session-sensitive WM widgets (only ever started by the unlocked bar).
     if (backends.workspace) {

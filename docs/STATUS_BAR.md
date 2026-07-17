@@ -1074,7 +1074,7 @@ remains is mostly *session* surface area (windows, media, notifications, power),
 | Clock | ⚠️ time text only | **calendar popover**, timezones, format config | 12 |
 | **Task manager (window list)** | ❌ active window title only | **icons-only taskbar**: all toplevels, click-to-focus/minimize, grouping, pinning | 11 |
 | **Notifications applet + history** | ✅ bell + count + history popover (own monitor, any daemon) | per-app actions, dismiss-from-popover, scroll | 10a ✅ |
-| **Media player (MPRIS)** | ❌ lockscreen only | bar applet + transport; needs the poll→push conversion (D4) | 10b |
+| **Media player (MPRIS)** | ✅ now-playing + transport popover, pushed (no poll) | album art, seek, explicit player switching | 10b ✅ |
 | **Session / power menu** | ✅ Lock/Suspend/Hibernate/Restart/Shut Down, arm-then-confirm | logout (session-manager specific) | 10a ✅ |
 | **Application launcher** | ❌ none | Kickoff-style menu, search, `.desktop` index, favourites | 15 |
 | Clipboard history (Klipper) | ❌ none | applet + history popover | 15 |
@@ -1336,15 +1336,28 @@ popover lists all three newest-first with app/title/body, the `-u critical` one
 accented red; the power menu renders all five rows. Notification content comes
 from qypr's **own** daemon-agnostic monitor — no `swaync-client` (D6).
 
-**10b — Media (MPRIS) — outstanding**
+**10b — Media (MPRIS) ✅**
 
 | File | Purpose |
 |------|---------|
-| `src/mpris/MprisController.*` | **Convert polling → `PropertiesChanged` push (D4)** — confirmed real: `LockScreen.cpp` re-polls MPRIS on its 1s clock timer, which is tolerable behind a lock screen but not in an always-on panel. sdbus-c++ 2.x exposes `getEventLoopPollData()`/`processPendingEvent()`, so the connection fd can join the `EventLoop` with no thread |
-| `src/ui/indicators/MediaIndicator.hpp/.cpp` | Bar applet: title/artist compact view; popover with play/pause/next/prev, art, player switching |
+| `src/mpris/MprisController.*` | **`enablePush(loop)` (D4)**: `addMatch` on `PropertiesChanged` (path `/org/mpris/MediaPlayer2`, so one rule covers every player) + `NameOwnerChanged` (`arg0namespace`), with the connection fd dispatched from the `EventLoop` via `processPendingEvent()` — no thread (never `enterEventLoop`), no timer. **Opt-in**, so the lock screen's proven polled path is untouched. `refreshAndNotify()` only fires on a real snapshot change |
+| `src/ui/indicators/MediaIndicator.hpp/.cpp` | Compact "▶ Title — Artist" (UTF-8-safe truncation); click = play/pause, scroll = prev/next; popover with source, title/artist, progress, and prev/play-pause/next |
 
-Split out because the push conversion touches the **lock screen's** audio panel;
-landing notifications + power first keeps that risk isolated.
+**`pickActive` fix.** A *stopped* preferred player (an idle browser) outranked a
+*playing* one elsewhere, so the UI showed nothing while music was audible. Status
+now leads and the priority list only breaks ties within a tier:
+prio+playing → any playing → prio+paused → any paused → prio → first.
+This also improves the lock screen's audio panel.
+
+**Verified live:** a harness on the real session bus proved the plumbing
+end-to-end — 12 callbacks from a broad match, then **6 from the narrow
+`arg0namespace` rule** (2 per name × 3 name claims), with no polling anywhere;
+the bar then rendered a real paused phone track ("▶ RUPIE EDWARDS — …" via
+kdeconnect) that the old `pickActive` had hidden. Absent from the locked bar.
+
+> The earlier "0 signals" reading was an **idle bus**, not broken code — no
+> player was emitting. Worth remembering: verify a push path against a signal you
+> can actually trigger (claiming/releasing a bus name works well).
 
 ---
 
