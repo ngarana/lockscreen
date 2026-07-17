@@ -4,9 +4,20 @@
 // unlocked desktop — a waybar replacement that shares the lock screen's
 // StatusBar and indicators. Runs until the compositor or the user tears it down.
 
-#include "core/BarApp.hpp"
+#include <cstring>
+#include <iostream>
 
-int main(int, char**) {
+#include "core/BarApp.hpp"
+#include "Version.hpp"
+
+int main(int argc, char** argv) {
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--version") == 0) {
+            std::cout << "qypr-bar " << QYPR_VERSION_STRING << std::endl;
+            return 0;
+        }
+    }
+
     qypr::BarApp app;
     return app.run();
 }

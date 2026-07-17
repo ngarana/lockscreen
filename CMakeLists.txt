@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
-project(qypr LANGUAGES C CXX)
+project(qypr VERSION 0.1.0 LANGUAGES C CXX)
+
+# Pre-release / build-metadata suffix appended to the semantic version string
+# (e.g. "-rc1", "-dev+gabcdef0"). Leave empty for stable releases.
+set(QYPR_VERSION_EXTRA "" CACHE STRING "Version pre-release / build-metadata suffix")
 
 # -----------------------------------------------------------------------------
 # Standards & defaults
@@ -90,6 +94,14 @@ qypr_gen_protocol(wlr-layer-shell-unstable-v1
     "${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml")
 
 # -----------------------------------------------------------------------------
+# Version header (generated)
+# -----------------------------------------------------------------------------
+configure_file(
+    "${CMAKE_SOURCE_DIR}/src/core/Version.hpp.in"
+    "${CMAKE_BINARY_DIR}/generated/Version.hpp"
+    @ONLY)
+
+# -----------------------------------------------------------------------------
 # Targets
 # -----------------------------------------------------------------------------
 file(GLOB_RECURSE QYPR_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
@@ -110,6 +122,7 @@ add_executable(qypr-lock
 
 target_include_directories(qypr-lock PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_BINARY_DIR}/generated"
     "${GEN_DIR}"
     "${PAM_INCLUDE_DIR}")
 
@@ -139,6 +152,7 @@ add_executable(qypr-bar
 
 target_include_directories(qypr-bar PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_BINARY_DIR}/generated"
     "${GEN_DIR}"
     "${PAM_INCLUDE_DIR}")
 
@@ -168,6 +182,7 @@ add_executable(qypr-record
 
 target_include_directories(qypr-record PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_BINARY_DIR}/generated"
 )
 
 target_link_libraries(qypr-record PRIVATE
@@ -193,6 +208,7 @@ endif()
 
 target_include_directories(qypr-test PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_BINARY_DIR}/generated"
     "${GEN_DIR}"
     "${PAM_INCLUDE_DIR}")
 
