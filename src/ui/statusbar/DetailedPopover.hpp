@@ -23,6 +23,11 @@ public:
     virtual bool handleScroll(double dx, double dy) { return false; }
     virtual bool handleKey(uint32_t keysym) { return false; }
 
+    // Polled by the host right after handleClick: return true (once) to ask the
+    // manager to close this popover — e.g. a menu that just fired an item. The
+    // default popover never self-closes.
+    virtual bool consumeCloseRequest() { return false; }
+
     // Check if pointer is inside popover bounds
     bool contains(double px, double py) const {
         return getBounds().contains(px, py);

@@ -1025,9 +1025,10 @@ TEST(ClockIndicatorConstruction) {
     EXPECT_EQ(clock.id(), std::string("clock"));
     EXPECT_TRUE(static_cast<int>(clock.zone()) == static_cast<int>(qypr::Zone::Left));
     EXPECT_EQ(clock.priority(), 0);
-    EXPECT_FALSE(clock.hasDetailedView());
-    EXPECT_TRUE(clock.createTile() == nullptr);
-    EXPECT_TRUE(clock.createDetailedView() == nullptr);
+    EXPECT_TRUE(clock.createTile() == nullptr);  // no Quick Settings tile
+    // The clock drops a calendar popover (Phase 12).
+    EXPECT_TRUE(clock.hasDetailedView());
+    EXPECT_TRUE(clock.createDetailedView() != nullptr);
 }
 
 TEST(ClockIndicatorRenders) {
@@ -1446,9 +1447,9 @@ TEST(SNITrayHostVisibleWithItems) {
     qypr::SystemBus session(loop, qypr::BusKind::Session);
     qypr::SNIBackend sni(session);
     sni.items_.push_back(qypr::SNIItem{":1.51", "/org/blueman/sni", "blueman", "blueman", "Active",
-                                       nullptr});
+                                       "/org/blueman/sni/menu", nullptr});
     sni.items_.push_back(qypr::SNIItem{":1.17", "/org/ayatana/NotificationItem/nm_applet",
-                                       "nm-signal-75", "Network", "Active", nullptr});
+                                       "nm-signal-75", "Network", "Active", "", nullptr});
 
     qypr::SystemBackends backends{};
     backends.sni = &sni;

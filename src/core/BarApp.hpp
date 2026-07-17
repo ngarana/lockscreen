@@ -24,6 +24,7 @@
 #include "system/BatteryBackend.hpp"
 #include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
+#include "system/DbusMenuBackend.hpp"
 #include "system/DndState.hpp"
 #include "system/SNIBackend.hpp"
 #include "system/SystemBus.hpp"
@@ -88,6 +89,8 @@ private:
     BluetoothBackend bluetooth_{systemBus_};
     VolumeBackend volume_{loop_};
     SNIBackend sni_{sessionBus_};
+    // Tray item context menus, on the shared session bus (bar-only).
+    DbusMenuBackend dbusMenu_{sessionBus_};
     WorkspaceBackend workspace_;  // ext-workspace-v1 (on display_'s wl_display)
     ToplevelBackend toplevel_;    // active window (wlr-foreign-toplevel)
     DndState dnd_;
@@ -105,6 +108,7 @@ private:
                              .wifi = &wifi_,
                              .bluetooth = &bluetooth_,
                              .sni = &sni_,
+                             .dbusMenu = &dbusMenu_,
                              .workspace = &workspace_,
                              .toplevel = &toplevel_,
                              .dnd = &dnd_,

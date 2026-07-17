@@ -6,7 +6,9 @@
 #pragma once
 
 #include "ui/statusbar/StatusIndicator.hpp"
+#include <memory>
 #include <string>
+#include <vector>
 
 namespace qypr {
 
@@ -21,6 +23,11 @@ public:
 
     void poll(int64_t now) override;
 
+    // Click the clock to drop a month calendar (with month navigation and, if
+    // configured, secondary timezones). POSIX time only — no PIM/event source.
+    bool hasDetailedView() const override { return true; }
+    std::unique_ptr<DetailedPopover> createDetailedView() override;
+
 private:
     std::string timeString() const;
     std::string dateString() const;
@@ -29,6 +36,9 @@ private:
     // compiled defaults — so a config-less host (qypr-lock) is unaffected.
     std::string format_ = "%a %b %-d   %-I:%M %p";
     std::string tooltipFormat_ = "%A, %B %-d";
+    // Optional `[clock] timezones` (IANA names, e.g. "Asia/Tokyo"); each shows
+    // its current local time under the calendar. Empty by default.
+    std::vector<std::string> timezones_;
 
     std::string cachedTime_;
     int64_t lastPoll_ = 0;

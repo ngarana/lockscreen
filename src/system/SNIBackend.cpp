@@ -32,6 +32,18 @@ bool readVariantString(sd_bus_message* m, std::string* out) {
     return true;
 }
 
+// Same, for a variant holding an object path (the item's Menu property).
+bool readVariantObjectPath(sd_bus_message* m, std::string* out) {
+    if (sd_bus_message_enter_container(m, 'v', "o") < 0) {
+        sd_bus_message_skip(m, "v");
+        return false;
+    }
+    const char* s = nullptr;
+    if (sd_bus_message_read_basic(m, 'o', &s) >= 0 && s) *out = s;
+    sd_bus_message_exit_container(m);
+    return true;
+}
+
 // ARGB32 in network byte order (bytes A,R,G,B per the SNI spec) → a cairo
 // CAIRO_FORMAT_ARGB32 surface (native-endian, premultiplied).
 cairo_surface_t* pixmapToSurface(const unsigned char* argb, int w, int h) {
@@ -266,6 +278,8 @@ SNIItem SNIBackend::fetchItem(const std::string& service, const std::string& pat
                 readVariantString(reply, &item.status);
             } else if (std::strcmp(key, "IconPixmap") == 0) {
                 item.pixmap = readVariantPixmap(reply);
+            } else if (std::strcmp(key, "Menu") == 0) {
+                readVariantObjectPath(reply, &item.menuPath);
             } else {
                 sd_bus_message_skip(reply, "v");
             }
@@ -282,6 +296,13 @@ void SNIBackend::activate(size_t index, int x, int y) {
     const SNIItem& it = items_[index];
     sd_bus_call_method_async(bus_.get(), nullptr, it.service.c_str(), it.path.c_str(), kItemIface,
                              "Activate", nullptr, nullptr, "ii", x, y);
+}
+
+void SNIBackend::secondaryActivate(size_t index, int x, int y) {
+    if (!bus_.available() || index >= items_.size()) return;
+    const SNIItem& it = items_[index];
+    sd_bus_call_method_async(bus_.get(), nullptr, it.service.c_str(), it.path.c_str(), kItemIface,
+                             "SecondaryActivate", nullptr, nullptr, "ii", x, y);
 }
 
 void SNIBackend::clearItems() {

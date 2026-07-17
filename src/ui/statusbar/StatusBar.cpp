@@ -310,7 +310,15 @@ void StatusBar::activateIndicator(StatusIndicator& ind) {
     if (ind.hasDetailedView()) {
         if (auto view = ind.createDetailedView()) {
             DetailedPopover* p = view.get();
-            popovers_.open(std::move(view), ind.bounds.x + ind.bounds.w, 0);
+            // getBounds() treats anchorX as the popover's right edge (it extends
+            // left). That keeps right/center popovers clear of the right screen
+            // edge, but a left-zone indicator (e.g. the clock) would then open
+            // off the left edge — so anchor a left-zone popover by its left edge
+            // instead, opening rightward.
+            const double anchorX = ind.zone() == Zone::Left
+                                       ? ind.bounds.x + p->contentWidth()
+                                       : ind.bounds.x + ind.bounds.w;
+            popovers_.open(std::move(view), anchorX, 0);
             anchorPopoverY(*p);  // opens away from the anchored screen edge
         }
     } else {
@@ -321,12 +329,17 @@ void StatusBar::activateIndicator(StatusIndicator& ind) {
 
 bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pressed,
                                     int64_t now) {
-    (void)button;
     (void)now;
+    // Linux evdev button codes as delivered by wl_pointer.
+    constexpr uint32_t kBtnLeft = 0x110, kBtnRight = 0x111, kBtnMiddle = 0x112;
     if (popovers_.active()) {
         if (popovers_.active()->contains(x, y)) {
             if (pressed) {
                 popovers_.handleClick(x, y);
+                // A menu item may ask to close its popover after firing.
+                if (popovers_.active() && popovers_.active()->consumeCloseRequest()) {
+                    popovers_.closeActive();
+                }
             } else if (popovers_.active() == &qsPanel_) {
                 qsPanel_.activeDragTile_ = nullptr;  // release slider drag
             }
@@ -342,25 +355,28 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
 
     if (!pressed) return false;
 
-    // Gear button click
-    if (qsButtonBounds_.contains(x, y)) {
+    // Gear button click (left only; a right-click there is a no-op).
+    if (button == kBtnLeft && qsButtonBounds_.contains(x, y)) {
         toggleQuickSettings();
         host_.invalidate();
         return true;
     }
 
-    // Indicator click. onClick() gets first refusal (e.g. the tray host maps
-    // the click to a sub-icon); otherwise the default activate runs.
+    // Indicator click. Right/middle go to their handlers and never fall through
+    // to activate; a left click gets onClick() first refusal (e.g. the tray host
+    // maps it to a sub-icon), else the default activate (tile/popover) runs.
     auto checkClick = [&](auto& list) {
         for (auto& ind : list) {
-            if (isShown(*ind) && ind->bounds.contains(x, y)) {
-                if (ind->onClick(x, y)) {
-                    host_.invalidate();
-                } else {
-                    activateIndicator(*ind);
-                }
-                return true;
+            if (!isShown(*ind) || !ind->bounds.contains(x, y)) continue;
+            if (button == kBtnRight) {
+                ind->onSecondaryClick(x, y);
+            } else if (button == kBtnMiddle) {
+                ind->onMiddleClick(x, y);
+            } else if (!ind->onClick(x, y)) {
+                activateIndicator(*ind);
             }
+            host_.invalidate();
+            return true;
         }
         return false;
     };

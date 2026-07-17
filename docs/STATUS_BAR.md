@@ -1065,13 +1065,13 @@ remains is mostly *session* surface area (windows, media, notifications, power),
 | Panel surface, exclusive zone, multi-monitor | ✅ `BarWindow` per output, reserves its zone | — | 7 ✅ |
 | Plasmoid/applet architecture | ✅ `IndicatorRegistry` + 3-layer views | compile-time only (see below) | 1 ✅ / 9 |
 | Pager (virtual desktops) | ✅ `WorkspacesIndicator` | — | 8 ✅ |
-| System tray (SNI) | ⚠️ icons + left-click `Activate` | **right-click menus (dbusmenu)**, overflow "hidden items" popup, `SecondaryActivate`, scroll | 6 / 13 |
+| System tray (SNI) | ✅ icons + left `Activate` + **right-click dbusmenu** (submenus, toggles, drill-down) + middle `SecondaryActivate` | overflow "hidden items" popup, scroll | 6 / 13 ✅ |
 | Battery / power management | ✅ UPower + QS tile | power **profiles** (`net.hadess.PowerProfiles`), charge thresholds | 14 |
 | Brightness | ✅ sysfs + logind + slider | multi-display, keyboard backlight | 14 |
 | Networks | ⚠️ WiFi status + toggle | **connection list / picker**, ethernet, VPN, per-network connect | 14 |
 | Bluetooth | ⚠️ status + toggle | **device list**, connect/disconnect, battery per device | 14 |
 | Audio volume | ⚠️ master sink only, QS mute toggle | **per-app streams**, output/input **device switching** | 4 / 14 |
-| Clock | ⚠️ time text only | **calendar popover**, timezones, format config | 12 |
+| Clock | ✅ time text + **calendar popover** (month nav, week numbers, secondary timezones), format config | — | 12 ✅ |
 | **Task manager (window list)** | ✅ icons-only taskbar: all toplevels, click-to-focus, click-focused-to-minimize, minimized dimming | middle-click close, grouping, pinning | 11 ✅ |
 | **Notifications applet + history** | ✅ bell + count + history popover; per-row **dismiss**, **Clear all**, **scroll**, relative timestamps, critical accent | per-app inline actions (buttons) | 10a ✅ |
 | **Media player (MPRIS)** | ✅ now-playing + transport popover, pushed (no poll) | album art, seek, explicit player switching | 10b ✅ |
@@ -1408,26 +1408,54 @@ Config-selectable (Phase 9): add `taskbar` to any zone in `bar.conf`.
 
 ---
 
-### Phase 12 — Clock Calendar Popover
+### Phase 12 — Clock Calendar Popover ✅
 
 | File | Purpose |
 |------|---------|
-| `src/ui/indicators/ClockIndicator.*` | Config-driven format (Phase 9); popover with a month calendar, week numbers, month navigation; optional secondary timezones |
+| `src/ui/indicators/ClockIndicator.*` | Clicking the clock drops a **month calendar** popover: today circled, adjacent-month days dimmed, ISO **week numbers** (`%V`) down the left, weekend columns accented. **Month navigation** via ‹ / › and scroll, with a "Today" reset shown while off the current month. Optional **secondary timezones** (`[clock] timezones = Asia/Tokyo, …`) list each zone's live time under the grid |
+| `src/ui/statusbar/StatusBar.cpp` | `activateIndicator` now anchors a **left-zone** popover by its *left* edge (opens rightward) instead of its right edge, so the calendar under a left-zone clock does not run off the left screen edge. Right/center popovers are unchanged |
 
-No new dependency (POSIX time only). Deliberately **no** event/PIM integration —
-that would require a daemon-specific interface (D6).
+No new dependency (POSIX `strftime`/`mktime` only; timezones via a saved/restored
+`TZ` + `tzset`). Deliberately **no** event/PIM integration — that would require a
+daemon-specific interface (D6).
+
+**Verified** with an offscreen render harness: the current month renders today
+circled with correct week numbers and dimmed spill days; ‹/› + scroll navigate
+(next → the following month, "Today" reset appears, no today-highlight off-month);
+configured timezones show correct live times (Tokyo/New York, 13 h apart). Click
+hit-tests: ‹/›/Today consume, dead space does not. 68/68 tests (the clock test now
+asserts it *has* a detailed view).
 
 ---
 
-### Phase 13 — Tray Completeness
+### Phase 13 — Tray Completeness ✅ (core)
 
-Finishes Phase 5's host. Absorbs the tray items from Phase 6.
+Finishes Phase 5's host: tray items now have their **right-click menus**.
 
 | File | Purpose |
 |------|---------|
-| `src/system/DbusMenuBackend.hpp/.cpp` | `com.canonical.dbusmenu` client: layout fetch, nested menus, `Event` clicks — required by **menu-only items like nm-applet** |
-| `src/ui/statusbar/MenuPopover.hpp/.cpp` | Generic menu renderer (separators, checkboxes, submenus) |
-| `src/ui/indicators/SNITrayHost.*` | Right-click → dbusmenu; `SecondaryActivate` (middle-click); scroll; **overflow "show hidden items"** popup; async item fetch |
+| `src/system/DbusMenuBackend.hpp/.cpp` | `com.canonical.dbusmenu` client. `fetch()` calls **AboutToShow** then **GetLayout(parent, 1, [])** and parses the nested `(ia{sv}av)` tree (id, label, enabled/visible, separator, toggle-type/state, submenu). `clicked()` fires **Event "clicked"**. Synchronous request/reply (user-initiated on right-click — not polling), matching `SNIBackend`'s existing property reads |
+| `src/ui/statusbar/MenuPopover.hpp/.cpp` | Generic menu renderer: separators, disabled items greyed, check/radio toggles, submenu arrows, and **in-place drill-down** (a back header) so nested menus fit the one-active-popover model. Leaf activation fires the item and asks the host to close |
+| `src/ui/indicators/SNITrayHost.*` | **Right-click → dbusmenu** for the item under the pointer (opened through the normal detailed-view path); **middle-click → `SecondaryActivate`**. Left-click still `Activate`s |
+| `src/system/SNIBackend.*` | Fetches each item's **`Menu`** object path; adds `secondaryActivate` |
+| `src/ui/statusbar/StatusBar.cpp`, `StatusIndicator.hpp`, `DetailedPopover.hpp` | **Button plumbing**: right/middle clicks now dispatch to `onSecondaryClick`/`onMiddleClick` (StatusBar previously discarded the button number). Popovers can `consumeCloseRequest()` so a menu closes after an item fires |
+
+**Security.** The dbusmenu is **bar-only**: `BarApp` supplies `DbusMenuBackend`,
+`qypr-lock` leaves it null, so a right-click on a locked machine cannot open (say)
+nm-applet's connection editor. Verified: the lock `App` sets `.sni` but not
+`.dbusMenu`, so `SNITrayHost::onSecondaryClick` early-returns there.
+
+**Verified** against the live `nm-applet` tray menu: `GetLayout` parsed all 20
+items with the right disabled/separator/submenu/checkmark flags and stripped GTK
+mnemonic underscores; drilling into "Available networks" ran AboutToShow +
+GetLayout and returned the real AP ("Alexia1"); the popover renders like the
+native menu; a synthetic menu (empty path → no real Events fired) confirms
+leaf-click fires + closes, disabled is ignored, submenu drills in, and back pops.
+68/68 tests; clean build.
+
+**Deferred (within the phase):** the overflow "show hidden items" popup and
+tray scroll. The button plumbing also now unblocks the taskbar's middle-click
+close (Phase 11).
 
 ---
 

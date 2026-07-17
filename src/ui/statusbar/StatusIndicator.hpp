@@ -19,6 +19,7 @@ class BrightnessBackend;
 class WifiBackend;
 class BluetoothBackend;
 class SNIBackend;
+class DbusMenuBackend;
 class WorkspaceBackend;
 class ToplevelBackend;
 class DndState;
@@ -35,6 +36,10 @@ struct SystemBackends {
     WifiBackend* wifi = nullptr;
     BluetoothBackend* bluetooth = nullptr;
     SNIBackend* sni = nullptr;
+    // Tray item context menus (com.canonical.dbusmenu). Supplied only by the
+    // unlocked qypr-bar: the lock screen leaves this null so a locked machine
+    // cannot open an app's menu (e.g. nm-applet's connection editor).
+    DbusMenuBackend* dbusMenu = nullptr;
     WorkspaceBackend* workspace = nullptr;  // ext-workspace-v1 (session-sensitive)
     ToplevelBackend* toplevel = nullptr;    // active window (session-sensitive)
     DndState* dnd = nullptr;
@@ -93,6 +98,12 @@ public:
     // click to one of several sub-icons). Return true to consume; false falls
     // through to the default activate (tile/popover).
     virtual bool onClick(double x, double y) { return false; }
+    // Secondary (right) and middle clicks. Unlike onClick, a false return does
+    // NOT fall through to the default activate — an unhandled right/middle click
+    // is simply a no-op. Used by the tray host (right = dbusmenu, middle =
+    // SecondaryActivate) and the taskbar (middle = close).
+    virtual bool onSecondaryClick(double x, double y) { return false; }
+    virtual bool onMiddleClick(double x, double y) { return false; }
     bool interactive() const override { return true; }
 
     // Session-sensitive indicators reveal what you are doing (workspaces, the

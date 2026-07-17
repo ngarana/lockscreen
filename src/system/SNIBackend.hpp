@@ -34,6 +34,7 @@ struct SNIItem {
     std::string iconName;  // themed IconName ("" if the item ships only a pixmap)
     std::string title;     // Title (tooltip text)
     std::string status;    // "Active" | "Passive" | "NeedsAttention"
+    std::string menuPath;  // com.canonical.dbusmenu object path ("" if none)
 
     // Best IconPixmap converted to a premultiplied cairo surface, or nullptr.
     // Owned by the backend (freed in clearItems / the destructor). Used only
@@ -62,6 +63,9 @@ public:
     // Left-click activation. x,y are screen coordinates (the item may use them
     // to position its own menu). Fire-and-forget async call.
     void activate(size_t index, int x, int y);
+
+    // Middle-click: the spec's SecondaryActivate. Fire-and-forget async.
+    void secondaryActivate(size_t index, int x, int y);
 
     // Split a watcher item reference ("service/path" or a bare "service") into
     // its parts; the default path is "/StatusNotifierItem". Static + pure so
