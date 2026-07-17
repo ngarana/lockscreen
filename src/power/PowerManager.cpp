@@ -10,13 +10,16 @@ PowerManager::PowerManager() {
     signal(SIGCHLD, SIG_IGN);
 }
 
-void PowerManager::run(const char* verb) {
+void PowerManager::run(const char* verb) { runCmd("systemctl", verb); }
+
+void PowerManager::runCmd(const char* prog, const char* arg) {
 #ifdef TESTING
-    (void)verb;
+    (void)prog;
+    (void)arg;
 #else
     pid_t pid = fork();
     if (pid == 0) {
-        execlp("systemctl", "systemctl", verb, static_cast<char*>(nullptr));
+        execlp(prog, prog, arg, static_cast<char*>(nullptr));
         _exit(127);  // exec failed
     }
     // Parent: do not block; the action either takes over or fails silently.

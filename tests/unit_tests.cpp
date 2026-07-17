@@ -105,6 +105,9 @@ int g_tests_failed = 0;
 #include "ui/statusbar/DetailedPopover.hpp"
 #include "core/Config.hpp"
 #include "ui/indicators/ClockIndicator.hpp"
+#include "ui/indicators/NotificationIndicator.hpp"
+#include "ui/indicators/PowerMenuIndicator.hpp"
+#include "power/PowerManager.hpp"
 #include "ui/indicators/BatteryIndicator.hpp"
 #include "system/BatteryBackend.hpp"
 #include "system/BrightnessBackend.hpp"
@@ -1843,6 +1846,77 @@ TEST(PopoverGrowsAwayFromBarEdge) {
 
     pop.growUp = true;
     EXPECT_TRUE(std::fabs(pop.getBounds().y - (60.0 - 100.0)) < 1e-9);  // extends up
+}
+
+// -----------------------------------------------------------------------------
+// Phase 10 — Session surface (media / notifications / power)
+// -----------------------------------------------------------------------------
+
+TEST(SessionAppletsAbsentWithoutTheirBackends) {
+    // The lock screen's App supplies no PowerManager and no NotificationMonitor.
+    // Both applets must then not exist at all — belt-and-braces with sensitive().
+    qypr::SystemBackends none{};
+    qypr::PowerMenuIndicator power(none);
+    qypr::NotificationIndicator notes(none);
+    EXPECT_FALSE(power.visible);
+    EXPECT_FALSE(notes.visible);
+
+    // And both are session-sensitive, so even a host that constructed them would
+    // have to opt in explicitly (StatusBar::setSessionContentVisible).
+    EXPECT_TRUE(power.sensitive());
+    EXPECT_TRUE(notes.sensitive());
+}
+
+TEST(SessionAppletsAppearWithBackends) {
+    qypr::EventLoop loop;
+    qypr::PowerManager pm;                 // TESTING: actions are no-ops
+    qypr::NotificationMonitor mon(loop);   // not started: empty, but present
+    qypr::SystemBackends b{};
+    b.power = &pm;
+    b.notifications = &mon;
+
+    qypr::PowerMenuIndicator power(b);
+    qypr::NotificationIndicator notes(b);
+    EXPECT_TRUE(power.visible);
+    EXPECT_TRUE(notes.visible);
+
+    // Both offer a detailed popover (the menu / the history).
+    EXPECT_TRUE(power.hasDetailedView());
+    EXPECT_TRUE(notes.hasDetailedView());
+    EXPECT_TRUE(power.createDetailedView() != nullptr);
+    EXPECT_TRUE(notes.createDetailedView() != nullptr);
+}
+
+TEST(NotificationIndicatorCountAndDnd) {
+    qypr::EventLoop loop;
+    qypr::NotificationMonitor mon(loop);
+    qypr::DndState dnd;
+    qypr::SystemBackends b{};
+    b.notifications = &mon;
+    b.dnd = &dnd;
+    qypr::NotificationIndicator ind(b);
+
+    // Empty: no count label, muted colour, honest tooltip.
+    EXPECT_EQ(ind.label(), std::string(""));
+    EXPECT_EQ(ind.tooltip(), std::string("No notifications"));
+
+    // With notifications the bell carries the count and the singular/plural is
+    // correct. (notes_ is reachable via `#define private public`.)
+    mon.notes_.push_back(qypr::Notification{});
+    EXPECT_EQ(ind.label(), std::string("1"));
+    EXPECT_EQ(ind.tooltip(), std::string("1 notification"));
+    mon.notes_.push_back(qypr::Notification{});
+    EXPECT_EQ(ind.label(), std::string("2"));
+    EXPECT_EQ(ind.tooltip(), std::string("2 notifications"));
+
+    // DND mutes the bell glyph but keeps the count: suppressed notifications are
+    // still waiting for you.
+    const std::string bell = ind.icon();
+    dnd.setEnabled(true);
+    EXPECT_TRUE(ind.icon() != bell);
+    EXPECT_EQ(ind.label(), std::string("2"));
+    dnd.setEnabled(false);
+    EXPECT_EQ(ind.icon(), bell);
 }
 
 // -----------------------------------------------------------------------------

@@ -98,6 +98,14 @@ int BarApp::run() {
     workspace_.start(display_.display());
     toplevel_.start(display_.display());
 
+    // Notification centre: the monitor already pushes on the loop's fd. No
+    // backlog seed — that is the lock screen's concern (the pre-lock queue);
+    // a live bar collects from the moment it starts.
+    notifications_.setOnChange([this] { invalidate(); });
+    if (!notifications_.start(/*seedFromLog=*/false)) {
+        std::fprintf(stderr, "qypr-bar: notification monitor unavailable\n");
+    }
+
     loop_.run();
     return 0;
 }

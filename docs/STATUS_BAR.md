@@ -1073,9 +1073,9 @@ remains is mostly *session* surface area (windows, media, notifications, power),
 | Audio volume | ⚠️ master sink only | **per-app streams**, output/input **device switching**, mute UI | 4 / 14 |
 | Clock | ⚠️ time text only | **calendar popover**, timezones, format config | 12 |
 | **Task manager (window list)** | ❌ active window title only | **icons-only taskbar**: all toplevels, click-to-focus/minimize, grouping, pinning | 11 |
-| **Notifications applet + history** | ❌ DND toggle only | bell + unread count, **history popover**, per-app actions, inhibit | 10 |
-| **Media player (MPRIS)** | ❌ lockscreen only | bar applet: play/pause/next/prev, art, player switching | 10 |
-| **Session / power menu** | ❌ lockscreen only | logout / reboot / shutdown / suspend / lock from the bar | 10 |
+| **Notifications applet + history** | ✅ bell + count + history popover (own monitor, any daemon) | per-app actions, dismiss-from-popover, scroll | 10a ✅ |
+| **Media player (MPRIS)** | ❌ lockscreen only | bar applet + transport; needs the poll→push conversion (D4) | 10b |
+| **Session / power menu** | ✅ Lock/Suspend/Hibernate/Restart/Shut Down, arm-then-confirm | logout (session-manager specific) | 10a ✅ |
 | **Application launcher** | ❌ none | Kickoff-style menu, search, `.desktop` index, favourites | 15 |
 | Clipboard history (Klipper) | ❌ none | applet + history popover | 15 |
 | Keyboard layout indicator | ❌ none | layout display + switch | 15 |
@@ -1310,16 +1310,41 @@ id and lists the valid ones; **no config reproduces the shipped bar exactly**
 The three biggest "it's not a panel" absences — and all three classes **already
 exist**, merely never instantiated by `BarApp`.
 
+**10a — Notifications + Power ✅**
+
 | File | Purpose |
 |------|---------|
-| `src/mpris/MprisController.*` | **Convert 1s polling → `PropertiesChanged` push (D4)** before it runs in an always-on panel |
-| `src/ui/indicators/MediaIndicator.hpp/.cpp` | Bar applet: title/artist compact view; popover with play/pause/next/prev, art, player switching |
-| `src/ui/indicators/NotificationIndicator.hpp/.cpp` | Bell + unread badge; **history popover** over the existing `NotificationMonitor`/`NotificationLog`; folds in the DND toggle |
-| `src/ui/indicators/PowerMenuIndicator.hpp/.cpp` | Session menu over the existing `PowerManager` (lock / logout / suspend / reboot / shutdown), confirm step |
+| `src/ui/indicators/NotificationIndicator.hpp/.cpp` | Bell + count; **history popover** (newest-first, app/title/body, critical accented) over the existing `NotificationMonitor`. DND mutes the glyph but keeps the count |
+| `src/ui/indicators/PowerMenuIndicator.hpp/.cpp` | Session menu over the existing `PowerManager`: Lock / Suspend / Hibernate / Restart / Shut Down |
+| `src/power/PowerManager.*` | Added `lock()` via `loginctl lock-session` (the standard path — qypr never launches itself); `run()` generalised to `runCmd(prog, arg)` |
+| `src/ui/statusbar/StatusIndicator.hpp` | `SystemBackends.power` / `.notifications` — supplied only by `BarApp` |
+| `src/core/BarApp.*` | Owns `NotificationMonitor` (push, no backlog seed — that is the lock screen's concern) + `PowerManager` |
 
-All three are **session-sensitive** (`sensitive()` → `true`): media titles,
-notification contents, and a shutdown button must never appear on the locked
-bar. `qypr-lock` keeps its own in-lockscreen versions; the bar gets applets.
+**Safety.** Destructive rows (everything but Lock) **arm on the first click and
+fire only on a second**, so a stray click on a panel button cannot power the
+machine off. A click elsewhere disarms. *(Verified by inspection + visually; not
+unit-tested — `PowerManager` is a no-op under `TESTING`, so a fired action is
+unobservable, and the popover lives in an anonymous namespace.)*
+
+**Double-gated privacy.** Both applets are session-sensitive **and** hide
+themselves when their backend is null. `qypr-lock` supplies neither, so they do
+not exist there at all — it keeps its own PowerDialog and notification stack
+behind the reveal. Verified: `--preview` shows no bell and no power button.
+
+**Verified live:** `notify-send` → bell counts 1, 2, 3 in real time; the history
+popover lists all three newest-first with app/title/body, the `-u critical` one
+accented red; the power menu renders all five rows. Notification content comes
+from qypr's **own** daemon-agnostic monitor — no `swaync-client` (D6).
+
+**10b — Media (MPRIS) — outstanding**
+
+| File | Purpose |
+|------|---------|
+| `src/mpris/MprisController.*` | **Convert polling → `PropertiesChanged` push (D4)** — confirmed real: `LockScreen.cpp` re-polls MPRIS on its 1s clock timer, which is tolerable behind a lock screen but not in an always-on panel. sdbus-c++ 2.x exposes `getEventLoopPollData()`/`processPendingEvent()`, so the connection fd can join the `EventLoop` with no thread |
+| `src/ui/indicators/MediaIndicator.hpp/.cpp` | Bar applet: title/artist compact view; popover with play/pause/next/prev, art, player switching |
+
+Split out because the push conversion touches the **lock screen's** audio panel;
+landing notifications + power first keeps that risk isolated.
 
 ---
 

@@ -23,6 +23,8 @@ class WorkspaceBackend;
 class ToplevelBackend;
 class DndState;
 class Config;
+class PowerManager;
+class NotificationMonitor;
 
 struct SystemBackends {
     BatteryBackend* battery = nullptr;
@@ -34,6 +36,12 @@ struct SystemBackends {
     WorkspaceBackend* workspace = nullptr;  // ext-workspace-v1 (session-sensitive)
     ToplevelBackend* toplevel = nullptr;    // active window (session-sensitive)
     DndState* dnd = nullptr;
+    // Session surface (Phase 10): supplied only by the unlocked qypr-bar. The
+    // lock screen leaves these null — it has its own in-lockscreen power dialog
+    // and notification stack, and must never offer a shutdown button or reveal
+    // notification contents from the bar.
+    PowerManager* power = nullptr;
+    NotificationMonitor* notifications = nullptr;
     // User config, or nullptr when the host has none (qypr-lock). Indicators
     // read their own `[<id>]` section; every key must have a compiled default so
     // a null config is always valid.

@@ -17,6 +17,8 @@
 #include "core/Config.hpp"
 #include "core/EventLoop.hpp"
 #include "core/Interfaces.hpp"
+#include "notifications/NotificationMonitor.hpp"
+#include "power/PowerManager.hpp"
 #include "system/BatteryBackend.hpp"
 #include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
@@ -87,6 +89,10 @@ private:
     WorkspaceBackend workspace_;  // ext-workspace-v1 (on display_'s wl_display)
     ToplevelBackend toplevel_;    // active window (wlr-foreign-toplevel)
     DndState dnd_;
+    // Session surface (Phase 10): already-built subsystems the lock app owns
+    // too — the bar simply hosts them as applets.
+    NotificationMonitor notifications_{loop_};
+    PowerManager power_;
     SystemBackends backends_{.battery = &battery_,
                              .volume = &volume_,
                              .brightness = &brightness_,
@@ -96,6 +102,8 @@ private:
                              .workspace = &workspace_,
                              .toplevel = &toplevel_,
                              .dnd = &dnd_,
+                             .power = &power_,
+                             .notifications = &notifications_,
                              .config = &config_};
 
     StatusBar statusBar_{loop_, *this, backends_, modules_ ? &*modules_ : nullptr};
