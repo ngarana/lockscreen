@@ -1070,7 +1070,7 @@ remains is mostly *session* surface area (windows, media, notifications, power),
 | Brightness | ✅ sysfs + logind + slider | multi-display, keyboard backlight | 14 |
 | Networks | ⚠️ WiFi status + toggle | **connection list / picker**, ethernet, VPN, per-network connect | 14 |
 | Bluetooth | ⚠️ status + toggle | **device list**, connect/disconnect, battery per device | 14 |
-| Audio volume | ⚠️ master sink only, QS mute toggle | **per-app streams**, output/input **device switching** | 4 / 14 |
+| Audio volume | ✅ master sink + QS mute + **output-device switching** + **per-app stream volumes** | input/source device switching | 4 / 14 ✅ |
 | Clock | ✅ time text + **calendar popover** (month nav, week numbers, secondary timezones), format config | — | 12 ✅ |
 | **Task manager (window list)** | ✅ icons-only taskbar: all toplevels, click-to-focus, click-focused-to-minimize, minimized dimming | middle-click close, grouping, pinning | 11 ✅ |
 | **Notifications applet + history** | ✅ bell + count + history popover; per-row **dismiss**, **Clear all**, **scroll**, relative timestamps, critical accent | per-app inline actions (buttons) | 10a ✅ |
@@ -1468,9 +1468,28 @@ unused `DetailedPopover` slot; the gap is list UI + a few D-Bus calls.
 |--------|------------------|
 | **Networks** | Connection list/picker, connect/disconnect, ethernet, VPN, signal per AP |
 | **Bluetooth** | Device list, connect/disconnect, per-device battery |
-| **Audio** | **Per-app streams**, output/input **device switching**, mute UI (deferred from Phase 4) |
+| **Audio** ✅ | **Output-device switching + per-app stream volumes** (below). Input/source switching still TODO |
 | **Power** | Power profiles (`net.hadess.PowerProfiles`), charge thresholds |
 | **Brightness** | Multi-display, keyboard backlight |
+
+**Audio (first landed increment).** `VolumeBackend` gained `sinks()` /
+`streams()` enumeration (libpulse `get_sink_info_list` /
+`get_sink_input_info_list`, pushed via the `SINK` / `SINK_INPUT` / `SERVER`
+subscriptions — no new dependency, no polling) plus `setDefaultSink`,
+`setStreamVolume`, `toggleStreamMute`. Clicking the volume icon opens an
+`AudioPopover` (in `VolumeIndicator.cpp`): an **OUTPUT** device list with a
+radio selection and an **APPLICATIONS** section of per-app sliders.
+
+*Privacy.* App names disclose what you are running, so the per-app section is
+gated by a new `SystemBackends::sessionSurface` flag (true only on `BarApp`);
+the lock screen shows device switching only. Verified: lock-mode render drops the
+APPLICATIONS section.
+
+*Verified* live against PulseAudio: 4 real output devices (Speaker default) and a
+live browser stream enumerated and rendered; non-destructive interaction checks
+(re-assert current default, re-set current stream volume) confirm the
+`setDefaultSink` / `setStreamVolume` write paths and the sink-row hit-test without
+changing what plays. 68/68 tests.
 
 ---
 

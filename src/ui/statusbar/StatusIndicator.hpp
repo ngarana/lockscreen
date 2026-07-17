@@ -55,6 +55,11 @@ struct SystemBackends {
     // read their own `[<id>]` section; every key must have a compiled default so
     // a null config is always valid.
     const Config* config = nullptr;
+    // True only on the unlocked qypr-bar. Distinct from the individual session
+    // backends above: it gates session-revealing *detail* that lives inside an
+    // otherwise-safe applet — e.g. the audio panel's per-app stream list (app
+    // names disclose what you are running) while keeping device switching.
+    bool sessionSurface = false;
 };
 
 class StatusIndicator : public Widget {

@@ -57,9 +57,12 @@ void VolumeBackend::onContextState(pa_context* c, void* userdata) {
             fire(pa_context_subscribe(
                 c,
                 static_cast<pa_subscription_mask_t>(PA_SUBSCRIPTION_MASK_SINK |
+                                                    PA_SUBSCRIPTION_MASK_SINK_INPUT |
                                                     PA_SUBSCRIPTION_MASK_SERVER),
                 nullptr, nullptr));
             self->queryServer();
+            self->querySinks();
+            self->queryStreams();
             break;
         case PA_CONTEXT_FAILED:
         case PA_CONTEXT_TERMINATED: {
@@ -78,8 +81,12 @@ void VolumeBackend::onSubscribe(pa_context*, pa_subscription_event_type_t t, uin
     const auto facility = t & PA_SUBSCRIPTION_EVENT_FACILITY_MASK;
     if (facility == PA_SUBSCRIPTION_EVENT_SERVER) {
         self->queryServer();   // default sink may have changed
+        self->querySinks();    // …which re-marks isDefault
     } else if (facility == PA_SUBSCRIPTION_EVENT_SINK) {
-        self->querySink();     // volume/mute changed
+        self->querySink();     // default volume/mute changed
+        self->querySinks();    // a device came/went
+    } else if (facility == PA_SUBSCRIPTION_EVENT_SINK_INPUT) {
+        self->queryStreams();  // an app stream came/went/changed
     }
 }
 
@@ -113,6 +120,59 @@ void VolumeBackend::onSinkInfo(pa_context*, const pa_sink_info* info, int eol, v
     self->changed(next);
 }
 
+void VolumeBackend::querySinks() {
+    sinksBuilding_.clear();
+    fire(pa_context_get_sink_info_list(ctx_, &VolumeBackend::onSinkList, this));
+}
+
+void VolumeBackend::onSinkList(pa_context*, const pa_sink_info* info, int eol, void* userdata) {
+    auto* self = static_cast<VolumeBackend*>(userdata);
+    if (eol) {
+        // Enumeration complete: publish if it actually changed.
+        if (self->sinksBuilding_ != self->sinks_) {
+            self->sinks_ = self->sinksBuilding_;
+            self->notify();
+        }
+        self->sinksBuilding_.clear();
+        return;
+    }
+    if (!info) return;
+    AudioSink s;
+    s.name = info->name ? info->name : "";
+    s.description = info->description ? info->description : s.name;
+    s.isDefault = s.name == self->defaultSink_;
+    self->sinksBuilding_.push_back(std::move(s));
+}
+
+void VolumeBackend::queryStreams() {
+    streamsBuilding_.clear();
+    fire(pa_context_get_sink_input_info_list(ctx_, &VolumeBackend::onStreamList, this));
+}
+
+void VolumeBackend::onStreamList(pa_context*, const pa_sink_input_info* info, int eol,
+                                 void* userdata) {
+    auto* self = static_cast<VolumeBackend*>(userdata);
+    if (eol) {
+        if (self->streamsBuilding_ != self->streams_) {
+            self->streams_ = self->streamsBuilding_;
+            self->notify();
+        }
+        self->streamsBuilding_.clear();
+        return;
+    }
+    if (!info) return;
+    // Skip streams with no client (e.g. internal monitors) and PulseAudio's own
+    // helpers; a stream with no app name is not useful in the app list.
+    const char* app = pa_proplist_gets(info->proplist, PA_PROP_APPLICATION_NAME);
+    AudioStream s;
+    s.index = info->index;
+    s.appName = app ? app : (info->name ? info->name : "Audio");
+    s.level = static_cast<double>(pa_cvolume_avg(&info->volume)) / PA_VOLUME_NORM;
+    s.muted = info->mute != 0;
+    s.channels = info->volume.channels;
+    self->streamsBuilding_.push_back(std::move(s));
+}
+
 void VolumeBackend::changed(const VolumeSnapshot& next) {
     if (next == snap_) return;
     snap_ = next;
@@ -141,6 +201,41 @@ void VolumeBackend::toggleMute() {
     VolumeSnapshot next = snap_;
     next.muted = mute;
     changed(next);
+}
+
+void VolumeBackend::setDefaultSink(const std::string& name) {
+    if (!ctx_ || name.empty()) return;
+    fire(pa_context_set_default_sink(ctx_, name.c_str(), nullptr, nullptr));
+    // Optimistic: re-mark the list; the SERVER event confirms and re-queries.
+    defaultSink_ = name;
+    for (auto& s : sinks_) s.isDefault = (s.name == name);
+    notify();
+}
+
+void VolumeBackend::setStreamVolume(uint32_t index, double frac) {
+    if (!ctx_) return;
+    frac = std::clamp(frac, 0.0, 1.0);
+    for (auto& s : streams_) {
+        if (s.index != index) continue;
+        pa_cvolume cv;
+        pa_cvolume_set(&cv, s.channels, static_cast<pa_volume_t>(frac * PA_VOLUME_NORM + 0.5));
+        fire(pa_context_set_sink_input_volume(ctx_, index, &cv, nullptr, nullptr));
+        s.level = frac;  // optimistic; the SINK_INPUT event confirms
+        notify();
+        return;
+    }
+}
+
+void VolumeBackend::toggleStreamMute(uint32_t index) {
+    if (!ctx_) return;
+    for (auto& s : streams_) {
+        if (s.index != index) continue;
+        const bool mute = !s.muted;
+        fire(pa_context_set_sink_input_mute(ctx_, index, mute ? 1 : 0, nullptr, nullptr));
+        s.muted = mute;
+        notify();
+        return;
+    }
 }
 
 }  // namespace qypr

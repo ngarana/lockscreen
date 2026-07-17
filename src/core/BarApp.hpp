@@ -116,7 +116,8 @@ private:
                              .notifications = &notifications_,
                              .notificationActions = &notificationActions_,
                              .mpris = &mpris_,
-                             .config = &config_};
+                             .config = &config_,
+                             .sessionSurface = true};
 
     StatusBar statusBar_{loop_, *this, backends_, modules_ ? &*modules_ : nullptr};
     bool overlayActive_ = false;

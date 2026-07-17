@@ -23,8 +23,15 @@ public:
 
     std::unique_ptr<QSTile> createTile() override;
 
+    // Click the volume icon to open the audio panel: output-device switching
+    // and per-app stream volumes (Phase 14). Only offered on the bar, where the
+    // backend can actually enumerate them.
+    bool hasDetailedView() const override { return backend_ != nullptr; }
+    std::unique_ptr<DetailedPopover> createDetailedView() override;
+
 private:
     VolumeBackend* backend_ = nullptr;
+    bool sessionSurface_ = false;  // bar only → show the per-app stream list
     VolumeSnapshot lastSnap_;
 };
 

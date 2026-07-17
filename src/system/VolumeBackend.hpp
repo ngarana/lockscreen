@@ -10,8 +10,10 @@
 
 #include <pulse/pulseaudio.h>
 
+#include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 #include "system/PulseLoop.hpp"
 
@@ -28,6 +30,27 @@ struct VolumeSnapshot {
     bool operator==(const VolumeSnapshot&) const = default;
 };
 
+// An output device (PulseAudio sink). `name` is the internal id (the switch
+// target); `description` is what the user sees.
+struct AudioSink {
+    std::string name;
+    std::string description;
+    bool isDefault = false;
+
+    bool operator==(const AudioSink&) const = default;
+};
+
+// A per-application playback stream (PulseAudio sink-input).
+struct AudioStream {
+    uint32_t index = 0;
+    std::string appName;
+    double level = 0.0;
+    bool muted = false;
+    uint8_t channels = 2;  // for building the write cvolume
+
+    bool operator==(const AudioStream&) const = default;
+};
+
 class VolumeBackend {
 public:
     explicit VolumeBackend(EventLoop& loop);
@@ -42,28 +65,52 @@ public:
 
     const VolumeSnapshot& snapshot() const { return snap_; }
 
-    // Fires whenever a pushed update actually changed the snapshot.
+    // Output devices and per-app streams (Phase 14 audio depth). Rebuilt on the
+    // matching subscription events; empty until the first enumeration lands.
+    const std::vector<AudioSink>& sinks() const { return sinks_; }
+    const std::vector<AudioStream>& streams() const { return streams_; }
+
+    // Fires whenever a pushed update actually changed the snapshot OR the sink /
+    // stream lists.
     void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
 
     // Set the default sink volume 0..1 / toggle mute (async, optimistic).
     void setLevel(double frac);
     void toggleMute();
 
+    // Switch the default output device (async).
+    void setDefaultSink(const std::string& name);
+    // Per-app stream volume 0..1 / mute (async, optimistic).
+    void setStreamVolume(uint32_t index, double frac);
+    void toggleStreamMute(uint32_t index);
+
 private:
     static void onContextState(pa_context* c, void* userdata);
     static void onServerInfo(pa_context* c, const pa_server_info* info, void* userdata);
     static void onSinkInfo(pa_context* c, const pa_sink_info* info, int eol, void* userdata);
+    static void onSinkList(pa_context* c, const pa_sink_info* info, int eol, void* userdata);
+    static void onStreamList(pa_context* c, const pa_sink_input_info* info, int eol,
+                             void* userdata);
     static void onSubscribe(pa_context* c, pa_subscription_event_type_t t, uint32_t idx,
                             void* userdata);
     void queryServer();
     void querySink();
+    void querySinks();    // the full output-device list
+    void queryStreams();  // the per-app stream list
     void changed(const VolumeSnapshot& next);
+    void notify() {
+        if (onChange_) onChange_();
+    }
 
     PulseLoop pulseLoop_;
     pa_context* ctx_ = nullptr;
     std::string defaultSink_;   // internal sink name (write target)
     uint8_t channels_ = 2;
     VolumeSnapshot snap_;
+    std::vector<AudioSink> sinks_;
+    std::vector<AudioSink> sinksBuilding_;      // accumulates during enumeration
+    std::vector<AudioStream> streams_;
+    std::vector<AudioStream> streamsBuilding_;
     std::function<void()> onChange_;
 };
 
