@@ -110,11 +110,17 @@ int g_tests_failed = 0;
 #include "system/WifiBackend.hpp"
 #include "system/DndState.hpp"
 #include "system/VolumeBackend.hpp"
+#include "system/SNIBackend.hpp"
+#include "system/WorkspaceBackend.hpp"
+#include "system/ToplevelBackend.hpp"
 #include "ui/indicators/BluetoothIndicator.hpp"
 #include "ui/indicators/BrightnessIndicator.hpp"
 #include "ui/indicators/DNDIndicator.hpp"
 #include "ui/indicators/VolumeIndicator.hpp"
 #include "ui/indicators/WifiIndicator.hpp"
+#include "ui/indicators/SNITrayHost.hpp"
+#include "ui/indicators/WorkspacesIndicator.hpp"
+#include "ui/indicators/ActiveWindowIndicator.hpp"
 #include "core/App.hpp"
 
 #undef private
@@ -548,7 +554,11 @@ TEST(SeatInput) {
 
     // An output the pointer can focus, so motion/button carry a real size.
     qypr::Output out(reinterpret_cast<wl_output*>(0x5554), 42, &env);
-    seat.setOutputResolver([&](wl_surface*) { return &out; });
+    seat.setSurfaceSizer([&](wl_surface*, int& w, int& h) {
+        w = out.logicalWidth();
+        h = out.logicalHeight();
+        return true;
+    });
 
     mock_xkb_reset();
 
@@ -604,8 +614,10 @@ TEST(SeatInput) {
     qypr::Seat::onModifiers(&seat, nullptr, 0, 1, 0, 0, 0);
     qypr::Seat::onKbLeave(&seat, nullptr, 0, nullptr);
 
-    // Pointer: enter focuses the output, motion + button reach the sink, leave clears.
-    qypr::Seat::onPtrEnter(&seat, reinterpret_cast<wl_pointer*>(0x5555), 1, nullptr, 0, 0);
+    // Pointer: enter focuses a surface (the sizer resolves it), motion + button
+    // reach the sink, leave clears.
+    qypr::Seat::onPtrEnter(&seat, reinterpret_cast<wl_pointer*>(0x5555), 1,
+                           reinterpret_cast<wl_surface*>(0x5556), 0, 0);
     qypr::Seat::onPtrMotion(&seat, nullptr, 0, wl_fixed_from_int(100), wl_fixed_from_int(50));
     EXPECT_EQ(sink.motions, 1);
     qypr::Seat::onPtrButton(&seat, nullptr, 0, 0, 272 /*BTN_LEFT*/,
@@ -1374,6 +1386,202 @@ TEST(VolumeBackendConstructAndTeardown) {
     backend.start();
     // Snapshot stays unavailable until the (never-run) loop delivers READY.
     EXPECT_FALSE(backend.snapshot().available);
+}
+
+// -----------------------------------------------------------------------------
+// SNI tray host (Phase 5)
+// -----------------------------------------------------------------------------
+TEST(SNIParseItemRef) {
+    std::string service, path;
+
+    // "service/path" form (as reported by the watcher for real items).
+    qypr::SNIBackend::parseItemRef(":1.51/org/blueman/sni", service, path);
+    EXPECT_EQ(service, std::string(":1.51"));
+    EXPECT_EQ(path, std::string("/org/blueman/sni"));
+
+    qypr::SNIBackend::parseItemRef(":1.17/org/ayatana/NotificationItem/nm_applet", service, path);
+    EXPECT_EQ(service, std::string(":1.17"));
+    EXPECT_EQ(path, std::string("/org/ayatana/NotificationItem/nm_applet"));
+
+    // Bare service name: default object path per the spec.
+    qypr::SNIBackend::parseItemRef(":1.42", service, path);
+    EXPECT_EQ(service, std::string(":1.42"));
+    EXPECT_EQ(path, std::string("/StatusNotifierItem"));
+}
+
+TEST(SNITrayHostConstruction) {
+    qypr::SystemBackends backends{};  // no backend
+    qypr::SNITrayHost host(backends);
+
+    EXPECT_EQ(host.id(), std::string("sni"));
+    EXPECT_TRUE(static_cast<int>(host.zone()) == static_cast<int>(qypr::Zone::Right));
+    EXPECT_EQ(host.priority(), 600);
+    EXPECT_EQ(host.icon(), std::string(""));  // custom multi-icon draw
+
+    // No backend → hidden, zero width, click is a no-op (not a crash).
+    host.onBackendUpdate();
+    EXPECT_FALSE(host.visible);
+
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    EXPECT_EQ(host.measureWidth(p), 0.0);
+    EXPECT_FALSE(host.onClick(10, 10));
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+
+    EXPECT_EQ(host.tooltip(), std::string("System tray"));
+}
+
+TEST(SNITrayHostVisibleWithItems) {
+    // Drive the indicator from a backend whose item list we populate directly
+    // (no bus needed): the tray host mirrors item count for visibility/width.
+    qypr::EventLoop loop;
+    qypr::SystemBus session(loop, qypr::BusKind::Session);
+    qypr::SNIBackend sni(session);
+    sni.items_.push_back(qypr::SNIItem{":1.51", "/org/blueman/sni", "blueman", "blueman", "Active",
+                                       nullptr});
+    sni.items_.push_back(qypr::SNIItem{":1.17", "/org/ayatana/NotificationItem/nm_applet",
+                                       "nm-signal-75", "Network", "Active", nullptr});
+
+    qypr::SystemBackends backends{};
+    backends.sni = &sni;
+    qypr::SNITrayHost host(backends);
+
+    host.onBackendUpdate();
+    EXPECT_TRUE(host.visible);
+
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    // Two 18px icons + one 6px gap + 2*8px side pad = 68px.
+    EXPECT_NEAR(host.measureWidth(p), 2 * 18.0 + 6.0 + 2 * 8.0, 0.01);
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+
+    // Tooltip reflects the count when more than one item.
+    EXPECT_EQ(host.tooltip(), std::string("2 tray items"));
+
+    // A click within the first icon's slot resolves without a bus (the mock's
+    // async call is a no-op) and is consumed.
+    host.bounds = {100, 0, host.measureWidth(p), 36};
+    EXPECT_TRUE(host.onClick(100 + 8 + 2, 18));
+}
+
+// -----------------------------------------------------------------------------
+// Workspaces + Active window (WM widgets — session-sensitive, hidden while locked)
+// -----------------------------------------------------------------------------
+TEST(WorkspacesIndicatorConstruction) {
+    qypr::SystemBackends backends{};  // no backend
+    qypr::WorkspacesIndicator ws(backends);
+
+    EXPECT_EQ(ws.id(), std::string("workspaces"));
+    EXPECT_TRUE(static_cast<int>(ws.zone()) == static_cast<int>(qypr::Zone::Left));
+    EXPECT_EQ(ws.priority(), -100);
+    EXPECT_EQ(ws.icon(), std::string(""));
+    EXPECT_TRUE(ws.sensitive());  // must be gated off while locked
+
+    ws.onBackendUpdate();
+    EXPECT_FALSE(ws.visible);  // no backend → hidden
+    EXPECT_EQ(ws.tooltip(), std::string("Workspaces"));
+}
+
+TEST(WorkspacesIndicatorRendersAndActivates) {
+    qypr::WorkspaceBackend backend;
+    backend.snap_.available = true;
+    backend.snap_.workspaces = {{"1", true, false}, {"2", false, false}, {"3", false, true}};
+
+    qypr::SystemBackends backends{};
+    backends.workspace = &backend;
+    qypr::WorkspacesIndicator ws(backends);
+
+    ws.onBackendUpdate();
+    EXPECT_TRUE(ws.visible);
+    EXPECT_EQ(ws.tooltip(), std::string("Workspace 1"));
+
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 600, 40);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    EXPECT_TRUE(ws.measureWidth(p) > 0);
+
+    // draw populates per-pill hit rects; a click inside a pill is consumed
+    // (activate is a no-op without a live compositor, but must not crash).
+    ws.bounds = {0, 0, ws.measureWidth(p), 36};
+    ws.draw(p, qypr::nowMs());
+    EXPECT_TRUE(ws.onClick(ws.bounds.x + 10, 18));
+    EXPECT_FALSE(ws.onClick(9000, 18));  // outside all pills
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+TEST(ActiveWindowIndicatorConstruction) {
+    qypr::SystemBackends backends{};
+    qypr::ActiveWindowIndicator aw(backends);
+
+    EXPECT_EQ(aw.id(), std::string("active-window"));
+    EXPECT_TRUE(static_cast<int>(aw.zone()) == static_cast<int>(qypr::Zone::Center));
+    EXPECT_TRUE(aw.sensitive());
+    EXPECT_EQ(aw.icon(), std::string(""));
+
+    aw.onBackendUpdate();
+    EXPECT_FALSE(aw.visible);
+    EXPECT_EQ(aw.label(), std::string(""));
+}
+
+TEST(ActiveWindowIndicatorShowsFocused) {
+    qypr::ToplevelBackend backend;
+    backend.snap_.available = true;
+    backend.snap_.hasActive = true;
+    backend.snap_.appId = "kitty";
+    backend.snap_.title = "vim — file.cpp";
+
+    qypr::SystemBackends backends{};
+    backends.toplevel = &backend;
+    qypr::ActiveWindowIndicator aw(backends);
+
+    aw.onBackendUpdate();
+    EXPECT_TRUE(aw.visible);
+    EXPECT_EQ(aw.label(), std::string("vim — file.cpp"));  // title preferred
+    EXPECT_EQ(aw.tooltip(), std::string("kitty — vim — file.cpp"));
+
+    // Falls back to app id when the title is empty.
+    backend.snap_.title = "";
+    aw.onBackendUpdate();
+    EXPECT_EQ(aw.label(), std::string("kitty"));
+}
+
+TEST(ActiveWindowIndicatorTruncatesUtf8) {
+    qypr::ToplevelBackend backend;
+    backend.snap_.available = true;
+    backend.snap_.hasActive = true;
+    // 70 multibyte codepoints (each "→" is 3 bytes): must cut on a codepoint
+    // boundary and append the ellipsis — never split a character.
+    std::string title;
+    for (int i = 0; i < 70; ++i) title += "\xE2\x86\x92";  // U+2192
+    backend.snap_.title = title;
+
+    qypr::SystemBackends backends{};
+    backends.toplevel = &backend;
+    qypr::ActiveWindowIndicator aw(backends);
+    aw.onBackendUpdate();
+
+    std::string shown = aw.label();
+    // 60 codepoints kept (60*3 bytes) + "…" (3 bytes).
+    EXPECT_EQ(shown.size(), static_cast<size_t>(60 * 3 + 3));
+    EXPECT_TRUE(shown.size() < title.size());
+}
+
+TEST(SensitiveIndicatorsGatedByDefault) {
+    // The privacy contract: workspace/active-window are sensitive; the common
+    // indicators are not. StatusBar hides sensitive ones unless session content
+    // is explicitly enabled (never on the lock screen).
+    qypr::SystemBackends b{};
+    qypr::WorkspacesIndicator ws(b);
+    qypr::ActiveWindowIndicator aw(b);
+    qypr::BatteryIndicator bat(b);
+    EXPECT_TRUE(ws.sensitive());
+    EXPECT_TRUE(aw.sensitive());
+    EXPECT_FALSE(bat.sensitive());  // default: not sensitive
 }
 
 // -----------------------------------------------------------------------------

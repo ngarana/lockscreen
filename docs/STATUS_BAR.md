@@ -134,6 +134,35 @@ Shell (Root UI Compositor — coordinates inputs, layouts, and global idle dimmi
         └── DetailedPopover          only one open at a time
 ```
 
+### Hosts: `qypr-lock` and `qypr-bar`
+
+`StatusBar` depends only on `Invalidator` (repaint) and the `SystemBackends`
+aggregate — never on the lock session, video, or PAM. That makes it hostable by
+two separate binaries that share the whole object set and differ only in their
+entry point and platform surface:
+
+| | `qypr-lock` | `qypr-bar` |
+|---|---|---|
+| Host class | `App` (implements `RenderHost`) | `BarApp` (implements `Invalidator` + `InputSink`) |
+| Platform | `WaylandDisplay` + `Output` on **ext-session-lock-v1** (fullscreen, secure) | `BarDisplay` + `BarWindow` on **wlr-layer-shell** (top-anchored panel, exclusive zone) |
+| Composition | `Shell` (LockScreen ⟂ StatusBar peers) | StatusBar only — no LockScreen, video, or PAM |
+| Session content | `setSessionContentVisible(false)` — WM widgets **hidden**, backends **not started** | `setSessionContentVisible(true)` — workspaces + active window **shown**, backends started |
+| Chrome | chromeless (draws over the dark, dimmed lock video) | chromeless **+ subtle backdrop** (`setBackdrop`) so glyphs stay legible over any wallpaper |
+
+`BarDisplay`/`BarWindow` are deliberate parallels of `WaylandDisplay`/`Output`
+(the lock path is left untouched); they reuse the shared lower layers —
+`ShmBuffer`, `Seat`, `Cursor`, `OutputEnv` and the throttled frame-callback
+render loop. `Seat` was decoupled from the concrete `Output` via a
+surface→logical-size resolver (`setSurfaceSizer`) so it feeds either host.
+
+**Overlay grow.** The bar's layer surface is only the reserved strip tall
+(`kReserved = 66px`) while idle, so the desktop below keeps its clicks. When
+`StatusBar::hasOpenOverlay()` flips true (Quick Settings or a popover),
+`BarApp` grows every `BarWindow` to the full output height so the overlay —
+drawn at absolute coordinates, exactly as on the lock screen — is visible and
+grabs input; it shrinks back on close. The exclusive zone stays at `kReserved`
+throughout, so the overlay floats without reshuffling windows.
+
 ### Component Relationships
 
 ```mermaid
@@ -835,46 +864,102 @@ struct DNDSnapshot {
 
 ---
 
-### 8. SNI Tray Host (StatusNotifierItem)
+### 8. SNI Tray Host (StatusNotifierItem)  — implemented (host mode)
 
-Support for the freedesktop/KDE **StatusNotifierItem** D-Bus protocol.
-This allows third-party applications to display tray icons in the status bar.
+Support for the freedesktop/KDE **StatusNotifierItem** D-Bus protocol, so
+third-party applications can display tray icons in the status bar.
 
 *(The `org.kde.*` bus names are the protocol's historical spelling — SNI is
 the de facto cross-desktop tray standard implemented by waybar, Plasma, etc.
-qypr acts as the **host**; third-party apps register with it. This adds no
-dependency on KDE or any other desktop component.)*
+It is a shared protocol, **not** a specific daemon's private interface, so
+hosting it adds no dependency on KDE or any other desktop component — the same
+native-only rule that governs the rest of the bar.)*
 
-**Architecture** (following KDE's three-component model):
+**Host mode.** SNI has three roles: Watcher, Host, and Item. Exactly one
+Watcher may own `org.kde.StatusNotifierWatcher` per session; on a typical
+setup another bar (waybar here) already owns it. `SNIBackend` therefore runs
+purely as a **Host**: it claims `org.kde.StatusNotifierHost-<pid>-1`, calls
+`RegisterStatusNotifierHost` on the existing Watcher, reads the Watcher's
+`RegisteredStatusNotifierItems`, and mirrors that list. Claiming the Watcher
+name ourselves is deferred to the standalone `qypr-bar` phase (where no other
+bar is running); a `NameOwnerChanged` watch re-registers if the Watcher
+restarts. This keeps two bars coexisting without fighting over the name.
 
-1. **StatusNotifierWatcher** — qypr registers as a Watcher on the session bus
-   at `org.kde.StatusNotifierWatcher`, tracking all registered items.
-2. **StatusNotifierHost** — qypr registers as a Host, receiving signals when
-   items are added/removed.
-3. **StatusNotifierItem** — each third-party app registers at
-   `org.kde.StatusNotifierItem-{PID}-{N}` with icon, tooltip, and optional
-   `com.canonical.dbusmenu` menu.
+**Push, one shared session connection.** `SNIBackend` lives on the shared
+`SystemBus(BusKind::Session)` connection (the same object the future
+session-bus backends use — one connection per bus). It subscribes to the
+Watcher's `StatusNotifierItemRegistered`/`Unregistered` and to each item's
+`org.kde.StatusNotifierItem` change signals; a per-item change refetches only
+the signalling item (matched by sender + path), never the whole list.
 
 ```cpp
 struct SNIItem {
-    std::string serviceName;    // D-Bus bus name
-    std::string objectPath;     // usually /StatusNotifierItem
-    std::string id;
-    std::string title;
-    std::string iconName;       // freedesktop icon name or embedded pixmap
-    std::string tooltip;
-    bool hasMenu = false;       // has com.canonical.dbusmenu
-    // Pixmap data (if icon is embedded, not a named icon)
-    struct IconPixmap {
-        int width = 0, height = 0;
-        std::vector<uint8_t> argbData;
-    };
-    std::vector<IconPixmap> iconPixmaps;
+    std::string service;   // owning bus name (e.g. ":1.48")
+    std::string path;      // item object path (e.g. "/org/blueman/sni")
+    std::string iconName;  // themed IconName ("" if only a pixmap is shipped)
+    std::string title;     // Title (tooltip text)
+    std::string status;    // "Active" | "Passive" | "NeedsAttention"
+    cairo_surface_t* pixmap = nullptr;  // best IconPixmap → premultiplied cairo
 };
 ```
 
-SNI items are rendered in the right zone between built-in indicators and the
-Quick Settings button, separated by a subtle vertical divider.
+**Icons.** The item's themed `IconName` is resolved through the shared
+`IconResolver`, which now performs a proper freedesktop lookup — the active
+icon theme plus its full `Inherits=` chain, searching every context
+(`apps`/`status`/`devices`/`panel`/…) via each theme's `Directories=`. This is
+what lets a tray status icon like nm-applet's `nm-signal-75` resolve through
+theme inheritance (candy-icons → breeze) rather than only app icons. When a
+name does not resolve, the app-supplied `IconPixmap` (ARGB, network byte
+order) is converted to a premultiplied cairo surface as a fallback.
+
+**Activation.** Left-click issues the item's `Activate(x, y)` (fire-and-forget
+async). This works for items that implement it (e.g. blueman). Menu-only
+items (nm-applet exposes only `SecondaryActivate`/`Scroll` + a
+`com.canonical.dbusmenu`) need context-menu support, which is deferred to
+Phase 6 polish along with async item fetch.
+
+`SNITrayHost` renders one small icon per item in the right zone, just left of
+the Quick Settings gear (chromeless, like every other indicator — no divider),
+and maps a click to the icon under the pointer via the base
+`StatusIndicator::onClick` hook.
+
+---
+
+### 9. Workspaces + 10. Active Window (WM widgets)  — session-sensitive
+
+Compositor state widgets, built on standard Wayland protocols only — **no
+`hyprctl`, no per-WM IPC**, so they work on Hyprland, Sway, river, and any
+other compositor that implements the protocols.
+
+| Widget | Protocol | Shows |
+|--------|----------|-------|
+| Workspaces (`WorkspacesIndicator`, left zone) | `ext-workspace-v1` (standard) | a pill per workspace, the active one accented, urgent tinted; click switches (`activate` + `commit`). Hidden workspaces are filtered per spec. |
+| Active window (`ActiveWindowIndicator`, center) | `wlr-foreign-toplevel-management` (vendored) | the focused window's title (app id fallback), following keyboard focus |
+
+The active window uses the wlr protocol, not the standard
+`ext-foreign-toplevel-list-v1`, because the latter is list-only — it carries no
+per-window *focus/activated* state, so it cannot answer "which window is
+focused". The wlr protocol is the only broadly supported one that does.
+
+Both backends (`WorkspaceBackend`, `ToplevelBackend`) bind their own registry
+on the host's `wl_display`, so the same classes serve the lock screen and the
+standalone `qypr-bar` — each just passes its display. Only `qypr-bar` actually
+starts them (see below). Push only: the compositor streams workspace/toplevel
+events on the existing display fd; a single startup roundtrip binds + seeds,
+then everything is event-driven (no polling, no threads, no extra fd).
+
+**Privacy gate (session-sensitive).** These widgets reveal what you are doing —
+your workspace layout and the title of your focused window. Both override
+`StatusIndicator::sensitive()` to return `true`, and `StatusBar` hides every
+sensitive indicator unless the host opts in via `setSessionContentVisible(true)`
+(all layout/draw/hit-testing goes through `StatusBar::isShown`). The lock screen
+**never** enables it — and `qypr-lock` does not even start the WM backends — so
+nothing about the session leaks on the locked bar. The unlocked `qypr-bar`
+turns the gate on (`setSessionContentVisible(true)`) and starts the backends, so
+the widgets appear there and only there. This is the one place a bar widget is
+deliberately *absent* while locked. Verified live: the locked bar shows neither
+widget; the qypr-bar shows workspaces `1 2 3 …` with the active one accented and
+the focused window's title.
 
 ---
 
@@ -1028,14 +1113,20 @@ panel skeleton. Pure UI, no system backends yet.
 
 ---
 
-### Phase 5 — SNI Tray Host (Third-Party Icons)
+### Phase 5 — SNI Tray Host (Third-Party Icons)  ✅
 
 | File | Purpose |
 |------|---------|
-| `src/system/SNIBackend.hpp` | StatusNotifierWatcher + Host D-Bus service |
-| `src/system/SNIBackend.cpp` | Register watcher, track items, pixmap loading |
-| `src/ui/indicators/SNITrayHost.hpp` | Renders SNI icons in bar |
-| `src/ui/indicators/SNITrayHost.cpp` | Per-item icon rendering, activation forwarding |
+| `src/system/SNIBackend.hpp/.cpp` | Host-mode StatusNotifierItem client on the shared session bus: register host, mirror the Watcher's items, per-item `GetAll` + `IconPixmap` → cairo, `Activate(ii)` |
+| `src/system/SystemBus.*` | `BusKind::Session` opens the user session bus with the same push/one-connection semantics as the system bus |
+| `src/ui/indicators/SNITrayHost.hpp/.cpp` | Renders one themed icon per item in the right zone; per-icon click → `activate()` via the `StatusIndicator::onClick` hook |
+| `src/ui/IconResolver.*` | Inheritance-aware freedesktop lookup (active theme + `Inherits=` chain, all contexts) so tray status/device icons resolve |
+
+Verified live against waybar's Watcher with nm-applet + blueman: both icons
+render (nm-applet `nm-signal-75` resolves via candy-icons → breeze), and
+blueman's real `Activate(ii)` is the click target. Context menus
+(`com.canonical.dbusmenu`, required by menu-only items like nm-applet) and
+async item fetch are Phase 6.
 
 ---
 
@@ -1111,6 +1202,15 @@ panel skeleton. Pure UI, no system backends yet.
 | `src/system/WifiBackend.hpp/.cpp` | NetworkManager D-Bus |
 | `src/system/BluetoothBackend.hpp/.cpp` | BlueZ D-Bus |
 | `src/system/SNIBackend.hpp/.cpp` | StatusNotifierWatcher + Host |
+| `src/ui/indicators/WorkspacesIndicator.hpp/.cpp` | Workspaces pills (session-sensitive) |
+| `src/ui/indicators/ActiveWindowIndicator.hpp/.cpp` | Focused-window title (session-sensitive) |
+| `src/system/WorkspaceBackend.hpp/.cpp` | `ext-workspace-v1` client |
+| `src/system/ToplevelBackend.hpp/.cpp` | `wlr-foreign-toplevel-management` client |
+| `src/core/BarApp.hpp/.cpp` | Standalone bar host (`Invalidator` + `InputSink`); enables session content + backdrop, starts WM backends |
+| `src/bar_main.cpp` | `qypr-bar` entry point |
+| `src/wayland/BarDisplay.hpp/.cpp` | wlr-layer-shell connection/binder (sibling of `WaylandDisplay`) |
+| `src/wayland/BarWindow.hpp/.cpp` | Per-output layer surface + render loop + overlay grow (sibling of `Output`) |
+| `protocols/wlr-layer-shell-unstable-v1.xml` | Vendored layer-shell protocol |
 
 ### Modified Files
 
@@ -1122,6 +1222,10 @@ panel skeleton. Pure UI, no system backends yet.
 | `src/core/App.hpp` | Replace `LockScreen` member with `Shell` |
 | `src/core/App.cpp` | Wire backends and Wayland listeners to `Shell` |
 | `src/core/EventLoop.hpp` | Backend tick slots |
+| `src/ui/statusbar/StatusBar.hpp/.cpp` | `hasOpenOverlay()`, `setBackdrop()`; wire workspace/toplevel backends |
+| `src/wayland/Seat.hpp/.cpp` | Decouple from `Output`: `setSurfaceSizer` (serves both hosts) |
+| `src/wayland/WaylandDisplay.cpp` | Use the new `setSurfaceSizer` resolver |
+| `CMakeLists.txt` | Generate xdg-shell + wlr-layer-shell; `qypr-bar` target |
 
 ---
 
@@ -1136,6 +1240,10 @@ panel skeleton. Pure UI, no system backends yet.
 | `libpulse` | Yes (VolumeBackend via PulseLoop) | Event-driven volume via pipewire-pulse (no CLI spawning — principle 2) |
 | `sysfs` | No (new) | Backlight brightness fallback |
 | SNI D-Bus protocol | No (new) | Third-party tray icon hosting |
+| `ext-workspace-v1` | No (new; system wayland-protocols) | Workspaces widget (standard, compositor-agnostic) |
+| `wlr-foreign-toplevel-management` | No (new; vendored in `protocols/`) | Active-window widget — the only broadly supported protocol with per-window focus state |
+| `wlr-layer-shell-unstable-v1` | No (new; vendored in `protocols/`) | Standalone `qypr-bar` panel surface (anchored, exclusive zone) |
+| `xdg-shell` | No (new; system wayland-protocols) | Generated only to satisfy layer-shell's `xdg_popup` symbol; `qypr-bar` uses no popups |
 
 ---
 

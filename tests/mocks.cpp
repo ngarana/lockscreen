@@ -544,4 +544,32 @@ WAYLAND_EXPORT int sd_bus_send(struct sd_bus *bus, struct sd_bus_message *m, uin
     return 0;
 }
 
+// The session bus is mocked to "succeed" (open_user returns a fake pointer),
+// so any session-bus backend (e.g. SNIBackend) must find every sd-bus call it
+// makes mocked here — otherwise it reaches real libsystemd on the fake pointer
+// and crashes. The system-bus backends never hit these because open_system is
+// left unmocked and genuinely fails, leaving their bus null.
+WAYLAND_EXPORT int sd_bus_add_match(struct sd_bus *bus, struct sd_bus_slot **slot,
+                                    const char *match,
+                                    int (*callback)(struct sd_bus_message *, void *, struct sd_bus_error *),
+                                    void *userdata) {
+    if (slot) *slot = nullptr;
+    return 0;
+}
+
+WAYLAND_EXPORT int sd_bus_get_property(struct sd_bus *bus, const char *destination,
+                                       const char *path, const char *interface,
+                                       const char *member, struct sd_bus_error *error,
+                                       struct sd_bus_message **reply, const char *type) {
+    return -1; // no property available in the mock environment
+}
+
+WAYLAND_EXPORT int sd_bus_call_method_async(struct sd_bus *bus, struct sd_bus_slot **slot,
+                                            const char *destination, const char *path,
+                                            const char *interface, const char *member,
+                                            void *callback, void *userdata,
+                                            const char *types, ...) {
+    return 0; // fire-and-forget no-op
+}
+
 } // extern "C"

@@ -12,6 +12,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace qypr {
 
@@ -42,7 +43,19 @@ private:
     cairo_surface_t* resolveName(const std::string& name);
     std::string findFile(const std::string& name);
 
+    // Freedesktop icon-theme lookup: active theme + its inheritance chain,
+    // searching every context (apps/status/devices/panel/…). This is what lets
+    // tray (SNI) status icons like "nm-signal-75" resolve, not just app icons.
+    // All three are lazy and cached; the per-icon result is cached in cache_.
+    cairo_surface_t* lookupThemed(const std::string& name);
+    const std::vector<std::string>& themeChain();
+    const std::vector<std::string>& themeSubdirs(const std::string& themeDir);
+
     std::unordered_map<std::string, cairo_surface_t*> cache_;
+    std::vector<std::string> themeChain_;
+    std::vector<std::string> baseDirs_;
+    bool themeChainBuilt_ = false;
+    std::unordered_map<std::string, std::vector<std::string>> themeSubdirsCache_;
     static IconResolver* instance_;
 };
 

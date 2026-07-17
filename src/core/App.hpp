@@ -15,6 +15,7 @@
 #include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
 #include "system/DndState.hpp"
+#include "system/SNIBackend.hpp"
 #include "system/SystemBus.hpp"
 #include "system/VolumeBackend.hpp"
 #include "system/WifiBackend.hpp"
@@ -58,20 +59,24 @@ private:
     VideoPlayer video_;
     NotificationMonitor notifications_{loop_};
 
-    // Status bar backends: one shared system-bus connection; the aggregate
-    // is handed to Shell → StatusBar (indicators consume snapshots only).
+    // Status bar backends: one shared connection per bus (system + session);
+    // the aggregate is handed to Shell → StatusBar (indicators consume
+    // snapshots only).
     SystemBus systemBus_{loop_};
+    SystemBus sessionBus_{loop_, BusKind::Session};
     BatteryBackend battery_{systemBus_};
     BrightnessBackend brightness_{loop_, systemBus_};
     WifiBackend wifi_{systemBus_};
     BluetoothBackend bluetooth_{systemBus_};
     VolumeBackend volume_{loop_};
+    SNIBackend sni_{sessionBus_};
     DndState dnd_;
     SystemBackends backends_{.battery = &battery_,
                              .volume = &volume_,
                              .brightness = &brightness_,
                              .wifi = &wifi_,
                              .bluetooth = &bluetooth_,
+                             .sni = &sni_,
                              .dnd = &dnd_};
 
     Shell shell_;

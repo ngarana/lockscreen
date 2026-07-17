@@ -71,6 +71,7 @@ int App::run() {
     wifi_.start();
     bluetooth_.start();
     volume_.start();
+    sni_.start();
 
     // Start video playback (non-fatal if it fails).
     if (video_.init()) {
@@ -85,14 +86,16 @@ int App::run() {
 
 int App::preview(const std::string& path, int width, int height) {
     shell_.setNotifications(demoNotifications());  // sample cards, preview only
-    battery_.start();     // live status bar state: battery, backlight,
-    brightness_.start();  // WiFi, Bluetooth, and volume
+    battery_.start();     // live status bar state: battery, backlight, WiFi,
+    brightness_.start();  // Bluetooth, volume, and the SNI tray
     wifi_.start();
     bluetooth_.start();
     volume_.start();
+    sni_.start();
 
-    // Volume connects asynchronously; pump the loop briefly so the preview
-    // renders real sink state (the locked app runs the loop anyway).
+    // Volume connects asynchronously and the tray host fetches items over the
+    // session bus; pump the loop briefly so the preview renders real state
+    // (the locked app runs the loop anyway).
     loop_.addTimer(400, false, [this] { loop_.quit(); });
     loop_.run();
 

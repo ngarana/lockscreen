@@ -11,8 +11,11 @@
 #include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
 #include "system/DndState.hpp"
+#include "system/SNIBackend.hpp"
+#include "system/ToplevelBackend.hpp"
 #include "system/VolumeBackend.hpp"
 #include "system/WifiBackend.hpp"
+#include "system/WorkspaceBackend.hpp"
 #include "ui/Theme.hpp"
 #include "ui/statusbar/IndicatorRegistry.hpp"
 
@@ -21,6 +24,11 @@ namespace qypr {
 namespace {
 constexpr const char* kGearGlyph = "󰒓";  // nf-md-cog
 constexpr double kGearWidth = 32.0;
+// Standalone-bar backdrop opacity (setBackdrop). Solid enough that the
+// chromeless glyphs stay legible over any wallpaper, still slightly translucent
+// so it reads as a light panel rather than an opaque block. Tune to taste
+// (0 = invisible → pure chromeless; 1 = fully opaque).
+constexpr double kBackdropAlpha = 0.80;
 }  // namespace
 
 StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& backends)
@@ -65,6 +73,16 @@ StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& b
     if (backends.volume) {
         backends.volume->setOnChange([this] { notifyBackendUpdate(); });
     }
+    if (backends.sni) {
+        backends.sni->setOnChange([this] { notifyBackendUpdate(); });
+    }
+    // Session-sensitive WM widgets (only ever started by the unlocked bar).
+    if (backends.workspace) {
+        backends.workspace->setOnChange([this] { notifyBackendUpdate(); });
+    }
+    if (backends.toplevel) {
+        backends.toplevel->setOnChange([this] { notifyBackendUpdate(); });
+    }
     if (backends.dnd) {
         backends.dnd->addListener([this] { notifyBackendUpdate(); });
     }
@@ -90,6 +108,16 @@ StatusBar::~StatusBar() {
     if (measureSurface_) cairo_surface_destroy(measureSurface_);
 }
 
+void StatusBar::setSessionContentVisible(bool v) {
+    if (v == sessionContentVisible_) return;
+    sessionContentVisible_ = v;
+    host_.invalidate();
+}
+
+bool StatusBar::hasOpenOverlay() const {
+    return popovers_.active() != nullptr || popovers_.isTransitioning();
+}
+
 void StatusBar::notifyBackendUpdate() {
     for (auto& ind : leftIndicators_) ind->onBackendUpdate();
     for (auto& ind : centerIndicators_) ind->onBackendUpdate();
@@ -112,7 +140,7 @@ void StatusBar::layout(int screenW, int screenH) {
     // 1. Layout Left Zone (flows right)
     double lx = bounds.x + pad;
     for (auto& ind : leftIndicators_) {
-        if (!ind->visible) {
+        if (!isShown(*ind)) {
             ind->bounds = {0, 0, 0, 0};
             continue;
         }
@@ -127,7 +155,7 @@ void StatusBar::layout(int screenW, int screenH) {
     // 3. Layout Right Zone (flows left from gear button)
     double rx = qsButtonBounds_.x - sp;
     for (auto it = rightIndicators_.rbegin(); it != rightIndicators_.rend(); ++it) {
-        if (!(*it)->visible) {
+        if (!isShown(**it)) {
             (*it)->bounds = {0, 0, 0, 0};
             continue;
         }
@@ -141,14 +169,14 @@ void StatusBar::layout(int screenW, int screenH) {
     double totalCenterW = 0;
     int visibleCenter = 0;
     for (auto& ind : centerIndicators_) {
-        if (!ind->visible) continue;
+        if (!isShown(*ind)) continue;
         totalCenterW += ind->measureWidth(meas);
         ++visibleCenter;
     }
     if (visibleCenter > 1) totalCenterW += (visibleCenter - 1) * sp;
     double cx = bounds.x + (bounds.w - totalCenterW) / 2.0;
     for (auto& ind : centerIndicators_) {
-        if (!ind->visible) {
+        if (!isShown(*ind)) {
             ind->bounds = {0, 0, 0, 0};
             continue;
         }
@@ -167,11 +195,19 @@ void StatusBar::layout(int screenW, int screenH) {
 void StatusBar::draw(Painter& p, int64_t now) {
     if (!visible) return;
 
-    // No chrome of its own — no strip, no border. Indicators sit directly on
-    // the lockscreen background so bar and lockscreen read as one surface.
+    // On the lock screen the bar has no chrome of its own — indicators sit
+    // directly on the (controlled, dark) lockscreen background so the two read
+    // as one surface. The standalone desktop bar opts into a subtle backdrop
+    // (setBackdrop) so the chromeless glyphs stay legible over an arbitrary
+    // wallpaper; the lock screen never enables it.
+    if (backdrop_ && bounds.w > 0) {
+        p.fillRoundedRect(bounds, theme::statusbar::cornerRadius,
+                          theme::color::background.withAlpha(kBackdropAlpha));
+    }
+
     auto drawZone = [&](auto& list) {
         for (auto& ind : list) {
-            if (!ind->visible) continue;
+            if (!isShown(*ind)) continue;
             ind->hoverAlpha_.animateTo(ind->hovered ? 1.0 : 0.0, theme::anim::fast,
                                        ease::inOutQuad);
             ind->hoverScale_.animateTo(ind->hovered ? 1.05 : 1.0, theme::anim::fast,
@@ -228,7 +264,7 @@ bool StatusBar::handlePointerMotion(double x, double y, int64_t now) {
     auto checkHover = [&](auto& list) {
         for (auto& ind : list) {
             bool prev = ind->hovered;
-            ind->hovered = ind->visible && ind->bounds.contains(x, y);
+            ind->hovered = isShown(*ind) && ind->bounds.contains(x, y);
             if (ind->hovered != prev) host_.invalidate();
         }
     };
@@ -282,11 +318,16 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
         return true;
     }
 
-    // Indicator click
+    // Indicator click. onClick() gets first refusal (e.g. the tray host maps
+    // the click to a sub-icon); otherwise the default activate runs.
     auto checkClick = [&](auto& list) {
         for (auto& ind : list) {
-            if (ind->visible && ind->bounds.contains(x, y)) {
-                activateIndicator(*ind);
+            if (isShown(*ind) && ind->bounds.contains(x, y)) {
+                if (ind->onClick(x, y)) {
+                    host_.invalidate();
+                } else {
+                    activateIndicator(*ind);
+                }
                 return true;
             }
         }
@@ -319,7 +360,7 @@ bool StatusBar::handleScroll(double x, double y, double dx, double dy) {
     // Scroll-to-adjust indicators (volume, brightness)
     auto checkScroll = [&](auto& list) {
         for (auto& ind : list) {
-            if (ind->visible && ind->bounds.contains(x, y) && ind->onScroll(dx, dy)) {
+            if (isShown(*ind) && ind->bounds.contains(x, y) && ind->onScroll(dx, dy)) {
                 host_.invalidate();
                 return true;
             }
@@ -379,7 +420,7 @@ bool StatusBar::cycleFocus(bool reverse) {
     std::vector<StatusIndicator*> inds;
     auto collect = [&](auto& list) {
         for (auto& ind : list)
-            if (ind->visible) inds.push_back(ind.get());
+            if (isShown(*ind)) inds.push_back(ind.get());
     };
     collect(leftIndicators_);
     collect(centerIndicators_);

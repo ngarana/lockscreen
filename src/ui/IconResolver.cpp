@@ -4,13 +4,110 @@
 
 #include <librsvg/rsvg.h>
 
+#include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace qypr {
+
+namespace {
+
+bool fileExists(const std::string& p) {
+    FILE* f = std::fopen(p.c_str(), "r");
+    if (f) {
+        std::fclose(f);
+        return true;
+    }
+    return false;
+}
+
+std::string trimStr(const std::string& in) {
+    size_t a = 0, b = in.size();
+    while (a < b && std::isspace(static_cast<unsigned char>(in[a]))) ++a;
+    while (b > a && std::isspace(static_cast<unsigned char>(in[b - 1]))) --b;
+    return in.substr(a, b - a);
+}
+
+// Split a comma-separated list, trimming each element.
+std::vector<std::string> splitCsv(const std::string& s) {
+    std::vector<std::string> out;
+    size_t pos = 0;
+    while (pos <= s.size()) {
+        size_t nx = s.find(',', pos);
+        std::string part = trimStr(s.substr(pos, nx == std::string::npos ? std::string::npos : nx - pos));
+        if (!part.empty()) out.push_back(part);
+        if (nx == std::string::npos) break;
+        pos = nx + 1;
+    }
+    return out;
+}
+
+// First "key=value" match in an INI-ish file; trimmed value, "" if absent.
+std::string iniValue(const std::string& path, const char* key) {
+    FILE* f = std::fopen(path.c_str(), "r");
+    if (!f) return {};
+    char line[2048];
+    std::string result;
+    while (std::fgets(line, sizeof line, f)) {
+        std::string l(line);
+        auto eq = l.find('=');
+        if (eq == std::string::npos) continue;
+        if (trimStr(l.substr(0, eq)) == key) {
+            result = trimStr(l.substr(eq + 1));
+            break;
+        }
+    }
+    std::fclose(f);
+    return result;
+}
+
+// The configured icon theme, best-effort and without spawning a process
+// (GTK settings.ini is the reliable file source), else "hicolor".
+std::string activeIconTheme() {
+    const char* home = std::getenv("HOME");
+    std::string h = home ? home : "";
+    if (!h.empty()) {
+        for (const std::string& p : {h + "/.config/gtk-4.0/settings.ini",
+                                     h + "/.config/gtk-3.0/settings.ini"}) {
+            std::string v = iniValue(p, "gtk-icon-theme-name");
+            if (!v.empty()) return v;
+        }
+    }
+    if (const char* e = std::getenv("XDG_ICON_THEME")) {
+        if (*e) return e;
+    }
+    return "hicolor";
+}
+
+// Freedesktop icon base directories in search order.
+std::vector<std::string> iconBaseDirs() {
+    std::vector<std::string> dirs;
+    const char* home = std::getenv("HOME");
+    if (home) dirs.push_back(std::string(home) + "/.icons");
+    if (const char* xdgData = std::getenv("XDG_DATA_HOME"); xdgData && *xdgData) {
+        dirs.push_back(std::string(xdgData) + "/icons");
+    } else if (home) {
+        dirs.push_back(std::string(home) + "/.local/share/icons");
+    }
+    std::string dataDirs =
+        std::getenv("XDG_DATA_DIRS") ? std::getenv("XDG_DATA_DIRS") : "/usr/local/share:/usr/share";
+    size_t pos = 0;
+    while (pos <= dataDirs.size()) {
+        size_t nx = dataDirs.find(':', pos);
+        std::string d = dataDirs.substr(pos, nx == std::string::npos ? std::string::npos : nx - pos);
+        if (!d.empty()) dirs.push_back(d + "/icons");
+        if (nx == std::string::npos) break;
+        pos = nx + 1;
+    }
+    return dirs;
+}
+
+}  // namespace
 
 IconResolver* IconResolver::instance_ = nullptr;
 
@@ -235,7 +332,94 @@ std::string IconResolver::findFile(const std::string& name) {
 // Name resolution
 // ---------------------------------------------------------------------------
 
+// The active theme followed by its Inherits chain (breadth-first, de-duped),
+// always ending with hicolor. Built once.
+const std::vector<std::string>& IconResolver::themeChain() {
+    if (themeChainBuilt_) return themeChain_;
+    themeChainBuilt_ = true;
+    baseDirs_ = iconBaseDirs();
+
+    std::vector<std::string> queue{activeIconTheme()};
+    std::unordered_set<std::string> seen;
+    for (size_t i = 0; i < queue.size(); ++i) {
+        const std::string t = queue[i];
+        if (t.empty() || seen.count(t)) continue;
+        seen.insert(t);
+        themeChain_.push_back(t);
+        // Pull Inherits from the first base dir that carries this theme.
+        for (const auto& base : baseDirs_) {
+            std::string inh = iniValue(base + "/" + t + "/index.theme", "Inherits");
+            if (!inh.empty()) {
+                for (auto& parent : splitCsv(inh)) queue.push_back(parent);
+                break;
+            }
+        }
+    }
+    if (!seen.count("hicolor")) themeChain_.push_back("hicolor");
+    return themeChain_;
+}
+
+// A theme directory's context subdirs (from index.theme Directories=), ordered
+// for our use: scalable first (clean vector scaling), then raster sizes nearest
+// 48px. Parsed once per theme dir.
+const std::vector<std::string>& IconResolver::themeSubdirs(const std::string& themeDir) {
+    auto it = themeSubdirsCache_.find(themeDir);
+    if (it != themeSubdirsCache_.end()) return it->second;
+
+    std::vector<std::string> subdirs = splitCsv(iniValue(themeDir + "/index.theme", "Directories"));
+
+    auto sizeHint = [](const std::string& s) -> int {
+        int val = 0;
+        bool in = false;
+        for (char c : s) {
+            if (c >= '0' && c <= '9') {
+                val = val * 10 + (c - '0');
+                in = true;
+            } else if (in) {
+                break;
+            }
+        }
+        return in ? val : -1;
+    };
+    std::stable_sort(subdirs.begin(), subdirs.end(),
+                     [&](const std::string& a, const std::string& b) {
+                         bool sa = a.find("scalable") != std::string::npos;
+                         bool sb = b.find("scalable") != std::string::npos;
+                         if (sa != sb) return sa;  // scalable first
+                         int ha = sizeHint(a), hb = sizeHint(b);
+                         int da = ha < 0 ? 999 : std::abs(ha - 48);
+                         int db = hb < 0 ? 999 : std::abs(hb - 48);
+                         return da < db;
+                     });
+
+    auto& slot = themeSubdirsCache_[themeDir];
+    slot = std::move(subdirs);
+    return slot;
+}
+
+// Full freedesktop lookup across the theme chain and every context subdir.
+cairo_surface_t* IconResolver::lookupThemed(const std::string& name) {
+    static const char* kExts[] = {".png", ".svg", ".svgz"};
+    for (const auto& theme : themeChain()) {
+        for (const auto& base : baseDirs_) {
+            std::string themeDir = base + "/" + theme;
+            const auto& subdirs = themeSubdirs(themeDir);
+            for (const auto& sub : subdirs) {
+                for (const char* ext : kExts) {
+                    std::string p = themeDir + "/" + sub + "/" + name + ext;
+                    if (fileExists(p)) return loadFile(p);
+                }
+            }
+        }
+    }
+    return nullptr;
+}
+
 cairo_surface_t* IconResolver::resolveName(const std::string& name) {
+    // Proper themed lookup first (active theme + inheritance + all contexts):
+    // this is what resolves tray status/device icons, not just app icons.
+    if (cairo_surface_t* s = lookupThemed(name)) return s;
+
     std::string path = findFile(name);
     if (!path.empty()) return loadFile(path);
 
@@ -297,13 +481,16 @@ cairo_surface_t* IconResolver::get(const std::string& icon) {
         s = resolveName(icon);
     }
 
-    if (s && cache_.size() >= kMaxCached) {
+    // Cache the result — including a miss (nullptr) — so a name that does not
+    // resolve is not re-scanned across the whole theme chain on every call
+    // (the resolve path now walks many contexts). A given item's icon name is
+    // stable until it signals a new name, which is a different cache key.
+    if (cache_.size() >= kMaxCached) {
         auto it = cache_.begin();
-        cairo_surface_destroy(it->second);
+        if (it->second) cairo_surface_destroy(it->second);  // no-op on nullptr
         cache_.erase(it);
     }
-
-    if (s) cache_[icon] = s;
+    cache_[icon] = s;
     return s;
 }
 

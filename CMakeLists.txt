@@ -50,29 +50,54 @@ pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
 set(GEN_DIR "${CMAKE_BINARY_DIR}/wayland-generated")
 file(MAKE_DIRECTORY "${GEN_DIR}")
 
-set(SESSION_LOCK_XML
+# Generate client-header + private-code for a protocol XML, appending the two
+# outputs to PROTO_SOURCES. <name> is the file stem (without -v1.xml).
+set(PROTO_SOURCES "")
+function(qypr_gen_protocol name xml)
+    set(hdr "${GEN_DIR}/${name}-client-protocol.h")
+    set(src "${GEN_DIR}/${name}-protocol.c")
+    # wlr-layer-shell's get_layer_surface has an argument literally named
+    # `namespace` — a C++ keyword that breaks the generated header when included
+    # from C++. Rename the identifier (whole-word; a no-op for other protocols).
+    add_custom_command(OUTPUT "${hdr}"
+        COMMAND "${WAYLAND_SCANNER}" client-header "${xml}" "${hdr}"
+        COMMAND sed -i "s/\\bnamespace\\b/wl_namespace/g" "${hdr}"
+        DEPENDS "${xml}" VERBATIM)
+    add_custom_command(OUTPUT "${src}"
+        COMMAND "${WAYLAND_SCANNER}" private-code "${xml}" "${src}"
+        DEPENDS "${xml}" VERBATIM)
+    set(PROTO_SOURCES ${PROTO_SOURCES} "${hdr}" "${src}" PARENT_SCOPE)
+endfunction()
+
+qypr_gen_protocol(ext-session-lock-v1
     "${WAYLAND_PROTOCOLS_DIR}/staging/ext-session-lock/ext-session-lock-v1.xml")
-
-set(PROTO_HEADER "${GEN_DIR}/ext-session-lock-v1-client-protocol.h")
-set(PROTO_CODE   "${GEN_DIR}/ext-session-lock-v1-protocol.c")
-
-add_custom_command(
-    OUTPUT "${PROTO_HEADER}"
-    COMMAND "${WAYLAND_SCANNER}" client-header "${SESSION_LOCK_XML}" "${PROTO_HEADER}"
-    DEPENDS "${SESSION_LOCK_XML}"
-    VERBATIM)
-
-add_custom_command(
-    OUTPUT "${PROTO_CODE}"
-    COMMAND "${WAYLAND_SCANNER}" private-code "${SESSION_LOCK_XML}" "${PROTO_CODE}"
-    DEPENDS "${SESSION_LOCK_XML}"
-    VERBATIM)
+# General-purpose bar widgets — compositor-agnostic protocols only:
+#   workspaces  → ext-workspace-v1 (staging, standard)
+#   active window / taskbar → wlr-foreign-toplevel-management (vendored; the only
+#     widely-supported protocol carrying per-window *focus* state — ext's
+#     foreign-toplevel-list is list-only).
+qypr_gen_protocol(ext-workspace-v1
+    "${WAYLAND_PROTOCOLS_DIR}/staging/ext-workspace/ext-workspace-v1.xml")
+qypr_gen_protocol(wlr-foreign-toplevel-management-unstable-v1
+    "${CMAKE_SOURCE_DIR}/protocols/wlr-foreign-toplevel-management-unstable-v1.xml")
+# Standalone qypr-bar host surface:
+#   wlr-layer-shell (vendored) anchors the bar as a desktop panel with an
+#   exclusive zone. xdg-shell is generated only to satisfy the xdg_popup symbol
+#   that layer-shell's get_popup request references — qypr-bar never uses popups.
+qypr_gen_protocol(xdg-shell
+    "${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml")
+qypr_gen_protocol(wlr-layer-shell-unstable-v1
+    "${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml")
 
 # -----------------------------------------------------------------------------
 # Targets
 # -----------------------------------------------------------------------------
 file(GLOB_RECURSE QYPR_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
+# Entry points carry their own main() and are added per-target below, so no
+# executable ever links two of them; NotificationLog is recorder-only.
 list(REMOVE_ITEM QYPR_SOURCES
+    "${CMAKE_SOURCE_DIR}/src/main.cpp"
+    "${CMAKE_SOURCE_DIR}/src/bar_main.cpp"
     "${CMAKE_SOURCE_DIR}/src/recorder_main.cpp"
     "${CMAKE_SOURCE_DIR}/src/notifications/NotificationLog.cpp"
 )
@@ -80,8 +105,8 @@ list(REMOVE_ITEM QYPR_SOURCES
 # 1. Main Lock Screen target (links all graphics, mpv, PAM, sdbus-c++, etc.)
 add_executable(qypr-lock
     ${QYPR_SOURCES}
-    "${PROTO_CODE}"
-    "${PROTO_HEADER}")
+    src/main.cpp
+    ${PROTO_SOURCES})
 
 target_include_directories(qypr-lock PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
@@ -89,6 +114,35 @@ target_include_directories(qypr-lock PRIVATE
     "${PAM_INCLUDE_DIR}")
 
 target_link_libraries(qypr-lock PRIVATE
+    PkgConfig::WAYLAND
+    PkgConfig::WLCURSOR
+    PkgConfig::XKB
+    PkgConfig::CAIRO
+    PkgConfig::PANGO
+    PkgConfig::SDBUS
+    PkgConfig::SYSTEMD
+    PkgConfig::UDEV
+    PkgConfig::PULSE
+    PkgConfig::MPV
+    PkgConfig::RSVG
+    "${PAM_LIBRARY}"
+    Threads::Threads)
+
+# 1b. Standalone status-bar target (qypr-bar): the unlocked-desktop bar on
+# wlr-layer-shell. Shares the whole object set with qypr-lock (only the entry
+# point differs), so it links the same libraries even though the bar itself
+# never drives video/PAM/lock.
+add_executable(qypr-bar
+    ${QYPR_SOURCES}
+    src/bar_main.cpp
+    ${PROTO_SOURCES})
+
+target_include_directories(qypr-bar PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${GEN_DIR}"
+    "${PAM_INCLUDE_DIR}")
+
+target_link_libraries(qypr-bar PRIVATE
     PkgConfig::WAYLAND
     PkgConfig::WLCURSOR
     PkgConfig::XKB
@@ -124,10 +178,10 @@ add_executable(qypr-test
     tests/unit_tests.cpp
     tests/mocks.cpp
     ${QYPR_SOURCES}
+    src/main.cpp
     src/notifications/NotificationLog.cpp
     src/recorder_main.cpp
-    "${PROTO_CODE}"
-    "${PROTO_HEADER}")
+    ${PROTO_SOURCES})
 
 target_compile_definitions(qypr-test PRIVATE TESTING)
 
@@ -155,8 +209,8 @@ target_link_libraries(qypr-test PRIVATE
     Threads::Threads)
 
 # qypr-test is a headless, mock-linked binary — build it, but never install it.
-install(TARGETS qypr-lock qypr-record RUNTIME DESTINATION bin)
+install(TARGETS qypr-lock qypr-bar qypr-record RUNTIME DESTINATION bin)
 
 # Man pages.
-install(FILES man/man1/qypr-lock.1 man/man1/qypr-record.1
+install(FILES man/man1/qypr-lock.1 man/man1/qypr-bar.1 man/man1/qypr-record.1
         DESTINATION share/man/man1)

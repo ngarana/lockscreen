@@ -19,6 +19,8 @@ class BrightnessBackend;
 class WifiBackend;
 class BluetoothBackend;
 class SNIBackend;
+class WorkspaceBackend;
+class ToplevelBackend;
 class DndState;
 
 struct SystemBackends {
@@ -28,6 +30,8 @@ struct SystemBackends {
     WifiBackend* wifi = nullptr;
     BluetoothBackend* bluetooth = nullptr;
     SNIBackend* sni = nullptr;
+    WorkspaceBackend* workspace = nullptr;  // ext-workspace-v1 (session-sensitive)
+    ToplevelBackend* toplevel = nullptr;    // active window (session-sensitive)
     DndState* dnd = nullptr;
 };
 
@@ -68,7 +72,17 @@ public:
 
     // --- Input (forwarded by StatusBar) ---
     virtual bool onScroll(double dx, double dy) { return false; }
+    // Custom per-position click handling (e.g. the tray host, which maps the
+    // click to one of several sub-icons). Return true to consume; false falls
+    // through to the default activate (tile/popover).
+    virtual bool onClick(double x, double y) { return false; }
     bool interactive() const override { return true; }
+
+    // Session-sensitive indicators reveal what you are doing (workspaces, the
+    // focused window). The host hides these unless it has opted into showing
+    // session content — so they never appear on the lock screen. See
+    // StatusBar::setSessionContentVisible.
+    virtual bool sensitive() const { return false; }
 
     // --- Getters ---
     std::string id() const { return id_; }

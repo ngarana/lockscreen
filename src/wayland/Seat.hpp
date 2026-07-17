@@ -29,9 +29,11 @@ public:
     ~Seat();
 
     void setSink(InputSink* sink) { sink_ = sink; }
-    // Resolve a focused wl_surface to the Output that owns it (for size).
-    void setOutputResolver(std::function<Output*(wl_surface*)> fn) {
-        outputForSurface_ = std::move(fn);
+    // Resolve the focused wl_surface to its logical size (fills w/h, returns
+    // false if unknown). Host-agnostic: the lock screen answers from its Output,
+    // the bar from its BarWindow — Seat needs no concrete surface type.
+    void setSurfaceSizer(std::function<bool(wl_surface*, int&, int&)> fn) {
+        surfaceSizer_ = std::move(fn);
     }
 
     // Wayland C callbacks (public so listener tables at file scope can bind them).
@@ -61,6 +63,8 @@ public:
     static void onPtrAxisDiscrete(void*, wl_pointer*, uint32_t, int32_t);
 
 private:
+    // Fill w/h with the current pointer surface's logical size; false if none.
+    bool pointerSize(int& w, int& h) const;
     void handleKey(uint32_t keycode);
     void startRepeat(uint32_t keycode);
     void stopRepeat();
@@ -72,7 +76,7 @@ private:
     EventLoop& loop_;
     const OutputEnv* env_ = nullptr;
     InputSink* sink_ = nullptr;
-    std::function<Output*(wl_surface*)> outputForSurface_;
+    std::function<bool(wl_surface*, int&, int&)> surfaceSizer_;
     std::unique_ptr<Cursor> cursor_;
     bool cursorInit_ = false;
 
@@ -84,7 +88,7 @@ private:
     xkb_state* xkbState_ = nullptr;
 
     // Pointer focus
-    Output* pointerOutput_ = nullptr;
+    wl_surface* pointerSurface_ = nullptr;
     double ptrX_ = 0, ptrY_ = 0;
 
     // Key repeat

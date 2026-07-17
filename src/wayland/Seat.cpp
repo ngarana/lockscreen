@@ -216,7 +216,7 @@ void Seat::applyCursor(wl_pointer* pointer, uint32_t serial) {
 void Seat::onPtrEnter(void* data, wl_pointer* pointer, uint32_t serial, wl_surface* surface,
                       wl_fixed_t sx, wl_fixed_t sy) {
     auto* self = static_cast<Seat*>(data);
-    self->pointerOutput_ = self->outputForSurface_ ? self->outputForSurface_(surface) : nullptr;
+    self->pointerSurface_ = surface;
     self->ptrX_ = wl_fixed_to_double(sx);
     self->ptrY_ = wl_fixed_to_double(sy);
     self->applyCursor(pointer, serial);
@@ -224,39 +224,41 @@ void Seat::onPtrEnter(void* data, wl_pointer* pointer, uint32_t serial, wl_surfa
 
 void Seat::onPtrLeave(void* data, wl_pointer*, uint32_t, wl_surface*) {
     auto* self = static_cast<Seat*>(data);
-    self->pointerOutput_ = nullptr;
+    self->pointerSurface_ = nullptr;
     if (self->sink_) self->sink_->onPointerLeave();
+}
+
+bool Seat::pointerSize(int& w, int& h) const {
+    return pointerSurface_ && surfaceSizer_ && surfaceSizer_(pointerSurface_, w, h);
 }
 
 void Seat::onPtrMotion(void* data, wl_pointer*, uint32_t, wl_fixed_t sx, wl_fixed_t sy) {
     auto* self = static_cast<Seat*>(data);
     self->ptrX_ = wl_fixed_to_double(sx);
     self->ptrY_ = wl_fixed_to_double(sy);
-    if (self->sink_ && self->pointerOutput_) {
-        self->sink_->onPointerMotion(self->pointerOutput_->logicalWidth(),
-                                     self->pointerOutput_->logicalHeight(), self->ptrX_,
-                                     self->ptrY_);
+    int w = 0, h = 0;
+    if (self->sink_ && self->pointerSize(w, h)) {
+        self->sink_->onPointerMotion(w, h, self->ptrX_, self->ptrY_);
     }
 }
 
 void Seat::onPtrButton(void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button,
                        uint32_t state) {
     auto* self = static_cast<Seat*>(data);
-    if (!self->sink_ || !self->pointerOutput_) return;
-    self->sink_->onPointerButton(self->pointerOutput_->logicalWidth(),
-                                 self->pointerOutput_->logicalHeight(), self->ptrX_, self->ptrY_,
-                                 button, state == WL_POINTER_BUTTON_STATE_PRESSED);
+    int w = 0, h = 0;
+    if (!self->sink_ || !self->pointerSize(w, h)) return;
+    self->sink_->onPointerButton(w, h, self->ptrX_, self->ptrY_, button,
+                                 state == WL_POINTER_BUTTON_STATE_PRESSED);
 }
 
 void Seat::onPtrAxis(void* data, wl_pointer*, uint32_t, uint32_t axis, wl_fixed_t value) {
     auto* self = static_cast<Seat*>(data);
-    if (!self->sink_ || !self->pointerOutput_) return;
+    int w = 0, h = 0;
+    if (!self->sink_ || !self->pointerSize(w, h)) return;
     const double v = wl_fixed_to_double(value);
     const double dx = axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL ? v : 0.0;
     const double dy = axis == WL_POINTER_AXIS_VERTICAL_SCROLL ? v : 0.0;
-    self->sink_->onPointerScroll(self->pointerOutput_->logicalWidth(),
-                                 self->pointerOutput_->logicalHeight(), self->ptrX_,
-                                 self->ptrY_, dx, dy);
+    self->sink_->onPointerScroll(w, h, self->ptrX_, self->ptrY_, dx, dy);
 }
 
 // Scroll-frame grouping events: unused, but must be handled (see header).

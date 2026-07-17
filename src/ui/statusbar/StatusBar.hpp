@@ -45,10 +45,31 @@ public:
     QuickSettingsPanel& quickSettings() { return qsPanel_; }
     PopoverManager& popovers() { return popovers_; }
 
+    // Opt into showing session-sensitive indicators (workspaces, active
+    // window). The lock screen never enables this, so those widgets stay
+    // hidden while locked; the standalone (unlocked) bar turns it on.
+    void setSessionContentVisible(bool v);
+
+    // True while Quick Settings or a popover is open (or animating closed). The
+    // layer-shell host grows its surface to full height when this is set so the
+    // overlay — drawn at absolute coordinates — is visible and interactive.
+    bool hasOpenOverlay() const;
+
+    // Draw a subtle rounded backdrop behind the strip. Off by default (the lock
+    // screen stays chromeless over its dark video); the standalone desktop bar
+    // turns it on so the glyphs stay legible over an arbitrary wallpaper.
+    void setBackdrop(bool enabled) { backdrop_ = enabled; }
+
 private:
     void toggleQuickSettings();
     void activateIndicator(StatusIndicator& ind);
     void notifyBackendUpdate();
+
+    // Effective visibility: a sensitive indicator is hidden unless session
+    // content is enabled. All layout/draw/hit-testing goes through this.
+    bool isShown(const StatusIndicator& ind) const {
+        return ind.visible && (!ind.sensitive() || sessionContentVisible_);
+    }
 
     EventLoop& loop_;
     Invalidator& host_;
@@ -65,6 +86,13 @@ private:
     // Popover Management
     QuickSettingsPanel qsPanel_;
     PopoverManager popovers_;
+
+    // Gates session-sensitive indicators (default hidden — lock screen safe).
+    bool sessionContentVisible_ = false;
+
+    // Subtle strip backdrop (standalone desktop bar only; lock screen stays
+    // chromeless). Off by default.
+    bool backdrop_ = false;
 
     // 1s tick driving indicator poll() — the bar's own timer, never
     // LockScreen's (decoupling principle 1).

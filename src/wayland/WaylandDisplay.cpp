@@ -97,8 +97,13 @@ void WaylandDisplay::onGlobal(void* data, wl_registry* registry, uint32_t name,
             wl_registry_bind(registry, name, &wl_seat_interface, std::min(version, 7u)));
         self->seat_ = std::make_unique<Seat>(seat, self->loop_, &self->env_);
         self->seat_->setSink(self->sink_);
-        self->seat_->setOutputResolver(
-            [self](wl_surface* s) { return self->outputForSurface(s); });
+        self->seat_->setSurfaceSizer([self](wl_surface* s, int& w, int& h) {
+            Output* o = self->outputForSurface(s);
+            if (!o) return false;
+            w = o->logicalWidth();
+            h = o->logicalHeight();
+            return true;
+        });
     } else if (std::strcmp(interface, wl_output_interface.name) == 0) {
         auto* output = static_cast<wl_output*>(
             wl_registry_bind(registry, name, &wl_output_interface, std::min(version, 4u)));
