@@ -1066,7 +1066,7 @@ remains is mostly *session* surface area (windows, media, notifications, power),
 | Plasmoid/applet architecture | ✅ `IndicatorRegistry` + 3-layer views | compile-time only (see below) | 1 ✅ / 9 |
 | Pager (virtual desktops) | ✅ `WorkspacesIndicator` | — | 8 ✅ |
 | System tray (SNI) | ✅ icons + left `Activate` + **right-click dbusmenu** (submenus, toggles, drill-down) + middle `SecondaryActivate` | overflow "hidden items" popup, scroll | 6 / 13 ✅ |
-| Battery / power management | ✅ UPower + QS tile | power **profiles** (`net.hadess.PowerProfiles`), charge thresholds | 14 |
+| Battery / power management | ✅ UPower + QS tile + **power-profile switching** (`net.hadess.PowerProfiles`) | charge thresholds | 14 ✅ |
 | Brightness | ✅ sysfs + logind + slider | multi-display, keyboard backlight | 14 |
 | Networks | ⚠️ WiFi status + toggle | **connection list / picker**, ethernet, VPN, per-network connect | 14 |
 | Bluetooth | ⚠️ status + toggle | **device list**, connect/disconnect, battery per device | 14 |
@@ -1469,7 +1469,7 @@ unused `DetailedPopover` slot; the gap is list UI + a few D-Bus calls.
 | **Networks** | Connection list/picker, connect/disconnect, ethernet, VPN, signal per AP |
 | **Bluetooth** | Device list, connect/disconnect, per-device battery |
 | **Audio** ✅ | **Output-device switching + per-app stream volumes** (below). Input/source switching still TODO |
-| **Power** | Power profiles (`net.hadess.PowerProfiles`), charge thresholds |
+| **Power** ✅ | **Power-profile switching** (`net.hadess.PowerProfiles`) in the battery popover (below). Charge thresholds still TODO |
 | **Brightness** | Multi-display, keyboard backlight |
 
 **Audio (first landed increment).** `VolumeBackend` gained `sinks()` /
@@ -1490,6 +1490,17 @@ live browser stream enumerated and rendered; non-destructive interaction checks
 (re-assert current default, re-set current stream volume) confirm the
 `setDefaultSink` / `setStreamVolume` write paths and the sink-row hit-test without
 changing what plays. 68/68 tests.
+
+**Power (second landed increment).** `PowerProfilesBackend`
+(`net.hadess.PowerProfiles`) reads the daemon's `Profiles` (`aa{sv}`) and
+`ActiveProfile`, pushes changes via `PropertiesChanged`, and switches via
+`Properties.Set`. The **battery popover** gains a `POWER PROFILE` segmented
+control (power-saver / balanced / performance) with the active one highlighted;
+clicking switches it. Bar-only: `qypr-lock` leaves `powerProfiles` null, so the
+lock screen keeps the plain battery detail (no profile switch from a locked
+machine). *Verified* live: active `balanced`, profiles enumerated, the popover
+renders the control, and a non-destructive re-assert of the current profile
+confirms the switch path. Degrades cleanly when the daemon is absent.
 
 ---
 

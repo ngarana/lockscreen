@@ -95,6 +95,8 @@ int BarApp::run() {
     bluetooth_.start();
     volume_.start();
     sni_.start();
+    powerProfiles_.setOnChange([this] { invalidate(); });
+    powerProfiles_.start();  // no-op/degrades if power-profiles-daemon is absent
     workspace_.start(display_.display());
     toplevel_.start(display_.display());
 

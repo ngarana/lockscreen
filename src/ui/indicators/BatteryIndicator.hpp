@@ -28,6 +28,7 @@ public:
 
 private:
     BatteryBackend* backend_ = nullptr;
+    PowerProfilesBackend* profiles_ = nullptr;  // null on the lock screen
     BatterySnapshot lastSnap_;
 };
 

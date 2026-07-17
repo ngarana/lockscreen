@@ -25,6 +25,7 @@ class ToplevelBackend;
 class DndState;
 class Config;
 class PowerManager;
+class PowerProfilesBackend;
 class NotificationMonitor;
 class NotificationActions;
 class MprisController;
@@ -48,6 +49,7 @@ struct SystemBackends {
     // and notification stack, and must never offer a shutdown button or reveal
     // notification contents from the bar.
     PowerManager* power = nullptr;
+    PowerProfilesBackend* powerProfiles = nullptr;  // net.hadess.PowerProfiles
     NotificationMonitor* notifications = nullptr;
     NotificationActions* notificationActions = nullptr;  // dismiss/clear
     MprisController* mpris = nullptr;

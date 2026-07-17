@@ -21,6 +21,7 @@
 #include "notifications/NotificationActions.hpp"
 #include "notifications/NotificationMonitor.hpp"
 #include "power/PowerManager.hpp"
+#include "system/PowerProfilesBackend.hpp"
 #include "system/BatteryBackend.hpp"
 #include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
@@ -101,6 +102,7 @@ private:
     // send); it reuses the shared session bus instead.
     NotificationActions notificationActions_{sessionBus_};
     PowerManager power_;
+    PowerProfilesBackend powerProfiles_{systemBus_};
     MprisController mpris_;
     SystemBackends backends_{.battery = &battery_,
                              .volume = &volume_,
@@ -113,6 +115,7 @@ private:
                              .toplevel = &toplevel_,
                              .dnd = &dnd_,
                              .power = &power_,
+                             .powerProfiles = &powerProfiles_,
                              .notifications = &notifications_,
                              .notificationActions = &notificationActions_,
                              .mpris = &mpris_,
