@@ -1070,10 +1070,10 @@ remains is mostly *session* surface area (windows, media, notifications, power),
 | Brightness | ✅ sysfs + logind + slider | multi-display, keyboard backlight | 14 |
 | Networks | ⚠️ WiFi status + toggle | **connection list / picker**, ethernet, VPN, per-network connect | 14 |
 | Bluetooth | ⚠️ status + toggle | **device list**, connect/disconnect, battery per device | 14 |
-| Audio volume | ⚠️ master sink only | **per-app streams**, output/input **device switching**, mute UI | 4 / 14 |
+| Audio volume | ⚠️ master sink only, QS mute toggle | **per-app streams**, output/input **device switching** | 4 / 14 |
 | Clock | ⚠️ time text only | **calendar popover**, timezones, format config | 12 |
 | **Task manager (window list)** | ❌ active window title only | **icons-only taskbar**: all toplevels, click-to-focus/minimize, grouping, pinning | 11 |
-| **Notifications applet + history** | ✅ bell + count + history popover (own monitor, any daemon) | per-app actions, dismiss-from-popover, scroll | 10a ✅ |
+| **Notifications applet + history** | ✅ bell + count + history popover; per-row **dismiss**, **Clear all**, **scroll**, relative timestamps, critical accent | per-app inline actions (buttons) | 10a ✅ |
 | **Media player (MPRIS)** | ✅ now-playing + transport popover, pushed (no poll) | album art, seek, explicit player switching | 10b ✅ |
 | **Session / power menu** | ✅ Lock/Suspend/Hibernate/Restart/Shut Down, arm-then-confirm | logout (session-manager specific) | 10a ✅ |
 | **Application launcher** | ❌ none | Kickoff-style menu, search, `.desktop` index, favourites | 15 |
@@ -1335,6 +1335,23 @@ behind the reveal. Verified: `--preview` shows no bell and no power button.
 popover lists all three newest-first with app/title/body, the `-u critical` one
 accented red; the power menu renders all five rows. Notification content comes
 from qypr's **own** daemon-agnostic monitor — no `swaync-client` (D6).
+
+**10a′ — Interaction pass (enhance QS + notifications) ✅**
+
+| File | Purpose |
+|------|---------|
+| `src/notifications/NotificationActions.hpp/.cpp` | **Send-side companion** to `NotificationMonitor`. The monitor connection is a `BecomeMonitor` — the D-Bus spec forbids it from *ever* sending — so dismissal cannot ride it. This is a normal caller on the shared **session** bus that fires `org.freedesktop.Notifications.CloseNotification` (fire-and-forget async); the daemon answers with `NotificationClosed`, which the monitor already observes, so the card leaves through the normal push path. Daemon-agnostic (D6) |
+| `src/ui/indicators/NotificationIndicator.cpp` | Popover gains a per-row **dismiss (×)** (fades in on row hover; only once the daemon has assigned an id), a **Clear all** header button (copies ids first — each close mutates the monitor's vector), **scrolling** (`kMaxRows = 6` with a "showing x–y of n" hint), **relative timestamps** (`now`/`5m`/`2h`), and a red accent for critical urgency |
+| `src/ui/statusbar/QSTile.*` | `QSSliderTile` icon becomes a **live mute button**: an optional trio (`dynamicIcon` per-frame glyph, `onIconClick`, `dimmed`) turns the speaker into a toggle that greys the row and flattens the fill while muted, without disturbing plain sliders (brightness). The icon's hit box is recorded in `draw()`; a press there toggles mute instead of scrubbing |
+| `src/ui/indicators/VolumeIndicator.cpp` | Passes that trio: glyph follows sink mute/level, click calls the existing `VolumeBackend::toggleMute()`, row greys while muted |
+
+**Verified** with offscreen render harnesses on the real objects: the slider tile
+draws both unmuted (blue fill, speaker) and muted (greyed, muted-speaker) states,
+and an icon-click toggles mute while a mid-track click scrubs; the popover renders
+the header/Clear-all/critical-red/timestamps, the × fades in on hover, and the
+dismiss/clear-all hit-tests fire `CloseNotification`. `--preview` confirms the
+locked bar still carries **no** bell/power/media applet and the QS volume tile
+renders through the new path unchanged.
 
 **10b — Media (MPRIS) ✅**
 

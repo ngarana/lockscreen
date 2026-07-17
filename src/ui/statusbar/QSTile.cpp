@@ -63,11 +63,19 @@ void QSToggleTile::draw(Painter& p, int64_t now) {
 
 // --- QSSliderTile ---
 
-void QSSliderTile::onClick(double x, double) {
+void QSSliderTile::onClick(double x, double y) {
+    // The icon is a button when the owner gave us one (mute); everything else
+    // on the row adjusts the value.
+    if (onIconClick_ && iconBounds_.contains(x, y)) {
+        onIconClick_();
+        return;
+    }
     updateValueFromCoord(x);
 }
 
-void QSSliderTile::onDrag(double x, double) {
+void QSSliderTile::onDrag(double x, double y) {
+    // Never let a drag that began on the icon scrub the value.
+    if (onIconClick_ && iconBounds_.contains(x, y)) return;
     updateValueFromCoord(x);
 }
 
@@ -82,14 +90,23 @@ void QSSliderTile::updateValueFromCoord(double x) {
 
 void QSSliderTile::draw(Painter& p, int64_t now) {
     double val = getValue_ ? getValue_() : 0.0;
+    // Muted: grey the whole row and flatten the fill, so a glance reads "off"
+    // even though the level underneath is preserved.
+    const bool dim = dimmed_ && dimmed_();
+    const Color iconColor = dim ? theme::color::textSubtle : theme::color::text;
+    const Color fillColor = dim ? theme::color::textSubtle : theme::color::primary;
 
-    // Draw icon on the left
-    TextStyle iconStyle{theme::font::iconFamily, 18.0, PANGO_WEIGHT_NORMAL, theme::color::text};
-    Size iconSz = p.measureText(icon_, iconStyle);
+    // Draw icon on the left. When the owner supplies a dynamic glyph (mute) it
+    // wins, and the icon doubles as a button — record its hit box for onClick.
+    const std::string glyph = currentIcon();
+    TextStyle iconStyle{theme::font::iconFamily, 18.0, PANGO_WEIGHT_NORMAL, iconColor};
+    Size iconSz = p.measureText(glyph, iconStyle);
 
     double iconX = bounds.x + 8.0;
     double iconY = bounds.y + (bounds.h - iconSz.h) / 2.0;
-    p.drawText(iconX, iconY, icon_, iconStyle);
+    p.drawText(iconX, iconY, glyph, iconStyle);
+    // Pad the click target vertically so it is comfortable to hit.
+    iconBounds_ = {bounds.x, bounds.y, iconX + iconSz.w + 6.0 - bounds.x, bounds.h};
 
     // Draw percentage text on the right
     int percent = static_cast<int>(std::round(val * 100.0));
@@ -116,13 +133,13 @@ void QSSliderTile::draw(Painter& p, int64_t now) {
     // Draw filled track
     Rect filledBounds = sliderTrackBounds_;
     filledBounds.w = trackW * val;
-    p.fillRoundedRect(filledBounds, trackH / 2.0, theme::color::primary);
+    p.fillRoundedRect(filledBounds, trackH / 2.0, fillColor);
 
     // Draw thumb dot
     double thumbRadius = 6.0;
     double thumbX = trackX + trackW * val;
     double thumbY = trackY + trackH / 2.0;
-    p.fillCircle(thumbX, thumbY, thumbRadius, theme::color::primary);
+    p.fillCircle(thumbX, thumbY, thumbRadius, fillColor);
 }
 
 // --- QSInfoTile ---

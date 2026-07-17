@@ -25,6 +25,7 @@ class DndState;
 class Config;
 class PowerManager;
 class NotificationMonitor;
+class NotificationActions;
 class MprisController;
 
 struct SystemBackends {
@@ -43,6 +44,7 @@ struct SystemBackends {
     // notification contents from the bar.
     PowerManager* power = nullptr;
     NotificationMonitor* notifications = nullptr;
+    NotificationActions* notificationActions = nullptr;  // dismiss/clear
     MprisController* mpris = nullptr;
     // User config, or nullptr when the host has none (qypr-lock). Indicators
     // read their own `[<id>]` section; every key must have a compiled default so

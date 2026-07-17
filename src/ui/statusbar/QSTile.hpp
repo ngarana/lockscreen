@@ -49,10 +49,20 @@ private:
 
 class QSSliderTile : public QSTile {
 public:
+    // `icon` is the static fallback. The optional trio turns the icon into a
+    // live button: `dynamicIcon` overrides the glyph per frame (e.g. speaker →
+    // speaker-muted), `onIconClick` fires when the icon itself is clicked (the
+    // track still adjusts the value), and `dimmed` greys the row to show the
+    // control is currently inert (muted). Omit them for a plain slider.
     QSSliderTile(const std::string& icon,
                  std::function<double()> getValue,
-                 std::function<void(double)> onValueChange)
-        : icon_(icon), getValue_(std::move(getValue)), onValueChange_(std::move(onValueChange)) {}
+                 std::function<void(double)> onValueChange,
+                 std::function<std::string()> dynamicIcon = nullptr,
+                 std::function<void()> onIconClick = nullptr,
+                 std::function<bool()> dimmed = nullptr)
+        : icon_(icon), getValue_(std::move(getValue)), onValueChange_(std::move(onValueChange)),
+          dynamicIcon_(std::move(dynamicIcon)), onIconClick_(std::move(onIconClick)),
+          dimmed_(std::move(dimmed)) {}
 
     Type type() const override { return Type::Slider; }
     void draw(Painter& p, int64_t now) override;
@@ -61,12 +71,17 @@ public:
 
 private:
     void updateValueFromCoord(double x);
+    std::string currentIcon() const { return dynamicIcon_ ? dynamicIcon_() : icon_; }
 
     std::string icon_;
     std::function<double()> getValue_;
     std::function<void(double)> onValueChange_;
+    std::function<std::string()> dynamicIcon_;
+    std::function<void()> onIconClick_;
+    std::function<bool()> dimmed_;
 
     Rect sliderTrackBounds_;
+    Rect iconBounds_;  // set in draw(); the icon's click target
 };
 
 class QSInfoTile : public QSTile {

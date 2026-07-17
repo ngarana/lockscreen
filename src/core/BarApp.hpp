@@ -18,6 +18,7 @@
 #include "core/EventLoop.hpp"
 #include "core/Interfaces.hpp"
 #include "mpris/MprisController.hpp"
+#include "notifications/NotificationActions.hpp"
 #include "notifications/NotificationMonitor.hpp"
 #include "power/PowerManager.hpp"
 #include "system/BatteryBackend.hpp"
@@ -93,6 +94,9 @@ private:
     // Session surface (Phase 10): already-built subsystems the lock app owns
     // too — the bar simply hosts them as applets.
     NotificationMonitor notifications_{loop_};
+    // Dismissal must not ride the monitor connection (BecomeMonitor may never
+    // send); it reuses the shared session bus instead.
+    NotificationActions notificationActions_{sessionBus_};
     PowerManager power_;
     MprisController mpris_;
     SystemBackends backends_{.battery = &battery_,
@@ -106,6 +110,7 @@ private:
                              .dnd = &dnd_,
                              .power = &power_,
                              .notifications = &notifications_,
+                             .notificationActions = &notificationActions_,
                              .mpris = &mpris_,
                              .config = &config_};
 

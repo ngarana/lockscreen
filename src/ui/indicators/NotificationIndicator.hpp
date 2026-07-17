@@ -18,6 +18,7 @@
 namespace qypr {
 
 class NotificationMonitor;
+class NotificationActions;
 class DndState;
 
 class NotificationIndicator : public StatusIndicator {
@@ -41,6 +42,7 @@ private:
     size_t count() const;
 
     NotificationMonitor* monitor_ = nullptr;
+    NotificationActions* actions_ = nullptr;  // dismiss/clear (null → read-only)
     DndState* dnd_ = nullptr;
 };
 

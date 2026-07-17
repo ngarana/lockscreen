@@ -56,7 +56,14 @@ std::unique_ptr<QSTile> VolumeIndicator::createTile() {
         [snap]() { return snap->level; },
         [backend](double v) {
             if (backend) backend->setLevel(v);
-        });
+        },
+        // Icon follows the live mute/level state; clicking it toggles mute; the
+        // row greys while muted.
+        [snap]() { return volumeIcon(*snap); },
+        [backend]() {
+            if (backend) backend->toggleMute();
+        },
+        [snap]() { return snap->muted; });
 }
 
 REGISTER_INDICATOR("volume", Zone::Right, 200, VolumeIndicator)
