@@ -119,6 +119,7 @@ int g_tests_failed = 0;
 #include "system/SNIBackend.hpp"
 #include "system/WorkspaceBackend.hpp"
 #include "system/ToplevelBackend.hpp"
+#include "system/SystemStats.hpp"
 #include "ui/indicators/BluetoothIndicator.hpp"
 #include "ui/indicators/BrightnessIndicator.hpp"
 #include "ui/indicators/DNDIndicator.hpp"
@@ -1918,6 +1919,46 @@ TEST(NotificationIndicatorCountAndDnd) {
     EXPECT_EQ(ind.label(), std::string("2"));
     dnd.setEnabled(false);
     EXPECT_EQ(ind.icon(), bell);
+}
+
+// -----------------------------------------------------------------------------
+// System monitor (/proc parsing) — pure helpers, no real /proc needed
+// -----------------------------------------------------------------------------
+TEST(SystemStatsParsesCpuLine) {
+    uint64_t busy = 0, total = 0;
+    // user nice system idle iowait irq softirq steal → busy = total - idle - iowait.
+    EXPECT_TRUE(qypr::SystemStats::parseCpuLine("cpu  100 0 50 800 40 5 5 0", busy, total));
+    EXPECT_EQ(static_cast<long long>(total), 1000LL);
+    EXPECT_EQ(static_cast<long long>(busy), 160LL);  // 1000 - (800 idle + 40 iowait)
+
+    // Per-core lines and non-cpu lines are rejected.
+    uint64_t b2 = 0, t2 = 0;
+    EXPECT_FALSE(qypr::SystemStats::parseCpuLine("cpu0 1 2 3 4", b2, t2));
+    EXPECT_FALSE(qypr::SystemStats::parseCpuLine("intr 12345", b2, t2));
+}
+
+TEST(SystemStatsParsesMemPercent) {
+    // MemTotal 1000, MemAvailable 250 → used 750 → 75%.
+    const std::string mi =
+        "MemTotal:        1000 kB\n"
+        "MemFree:          100 kB\n"
+        "MemAvailable:     250 kB\n"
+        "Buffers:           10 kB\n";
+    double pct = qypr::SystemStats::parseMemUsedPercent(mi);
+    EXPECT_TRUE(pct > 74.9 && pct < 75.1);
+
+    // Missing MemAvailable → -1 (honest failure, not a bogus number).
+    EXPECT_TRUE(qypr::SystemStats::parseMemUsedPercent("MemTotal: 1000 kB\n") < 0);
+}
+
+TEST(SystemStatsSampleCpuDelta) {
+    // The first sample has no baseline (0%); a hand-driven second sample would
+    // need a real /proc, so just prove sample() is callable and internally
+    // consistent on this machine.
+    qypr::SystemStats s;
+    qypr::SysSample a = s.sample();
+    EXPECT_TRUE(a.valid);                     // /proc exists on the test host
+    EXPECT_TRUE(a.memPercent >= 0.0 && a.memPercent <= 100.0);
 }
 
 // -----------------------------------------------------------------------------

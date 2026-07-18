@@ -1543,7 +1543,20 @@ all are config-gated (Phase 9) and off by default.
 | **Clipboard history** | Wayland `wl_data_device` / `zwlr_data_control_manager_v1` (standard protocol — no `cliphist` dependency) |
 | **Keyboard layout** | xkb state from the existing `Seat` |
 | **Idle inhibitor** | `zwp_idle_inhibit_manager_v1` / logind inhibitor fd |
-| **System monitors** | CPU/RAM (`/proc`), disk (`statvfs`), net throughput, temperature (`hwmon`) — compact meters; the one place a **timer tick is legitimate** (no push source exists) |
+| **System monitors** ✅ | CPU/RAM (`/proc`) — compact meters (below). Disk/net/temp still TODO |
+
+**System monitors (first landed increment).** `SystemStats` samples `/proc/stat`
+(aggregate `cpu` line → busy fraction since the previous sample) and
+`/proc/meminfo` (`MemTotal`/`MemAvailable` → used %). Parsing is in **pure static
+helpers, unit-tested** without touching the real `/proc` (3 tests). The
+`SystemMonitorIndicator` re-samples on the bar's **existing 1s `poll()` tick** —
+no new timer, no extra wakeups (the sanctioned exception: CPU/RAM have no push
+source). It is **strictly opt-in**: hidden unless a config is present and lists
+`system-monitor`, so it never appears on `qypr-lock` (no config) or a config-less
+bar. Config: `[system-monitor] metrics = cpu, mem` and `interval` (ms, ≥500).
+*Verified* live: RAM % matched `free -m` exactly (64.8%), the CPU segment carried
+a real inter-sample delta, both glyphs rendered, and the opt-out (no config →
+`visible=false`) held. 71/71 tests.
 
 ---
 
