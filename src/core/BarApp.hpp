@@ -22,6 +22,7 @@
 #include "notifications/NotificationMonitor.hpp"
 #include "power/PowerManager.hpp"
 #include "system/PowerProfilesBackend.hpp"
+#include "system/IdleInhibitor.hpp"
 #include "system/BatteryBackend.hpp"
 #include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
@@ -103,6 +104,7 @@ private:
     NotificationActions notificationActions_{sessionBus_};
     PowerManager power_;
     PowerProfilesBackend powerProfiles_{systemBus_};
+    IdleInhibitor idleInhibitor_;  // init()'d after display_.connect()
     MprisController mpris_;
     SystemBackends backends_{.battery = &battery_,
                              .volume = &volume_,
@@ -116,6 +118,7 @@ private:
                              .dnd = &dnd_,
                              .power = &power_,
                              .powerProfiles = &powerProfiles_,
+                             .idleInhibitor = &idleInhibitor_,
                              .notifications = &notifications_,
                              .notificationActions = &notificationActions_,
                              .mpris = &mpris_,

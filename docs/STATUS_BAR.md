@@ -1542,7 +1542,7 @@ all are config-gated (Phase 9) and off by default.
 | **Application launcher** | `.desktop` index (shared with Phase 11) + search; spawn-on-click per **D1** |
 | **Clipboard history** | Wayland `wl_data_device` / `zwlr_data_control_manager_v1` (standard protocol — no `cliphist` dependency) |
 | **Keyboard layout** | xkb state from the existing `Seat` |
-| **Idle inhibitor** | `zwp_idle_inhibit_manager_v1` / logind inhibitor fd |
+| **Idle inhibitor** ✅ | `zwp_idle_inhibit_manager_v1` — "keep awake" toggle (below) |
 | **System monitors** ✅ | CPU/RAM (`/proc`) — compact meters (below). Disk/net/temp still TODO |
 
 **System monitors (first landed increment).** `SystemStats` samples `/proc/stat`
@@ -1557,6 +1557,19 @@ bar. Config: `[system-monitor] metrics = cpu, mem` and `interval` (ms, ≥500).
 *Verified* live: RAM % matched `free -m` exactly (64.8%), the CPU segment carried
 a real inter-sample delta, both glyphs rendered, and the opt-out (no config →
 `visible=false`) held. 71/71 tests.
+
+**Idle inhibitor (second landed increment).** `IdleInhibitor` holds (or drops) a
+`zwp_idle_inhibitor_v1` on the bar's own surface via
+`zwp_idle_inhibit_manager_v1` — while held, a standards-respecting idle daemon
+(swayidle/hypridle) won't blank or lock the screen. `BarDisplay` binds the
+manager and exposes it + an anchor surface; `BarApp` `init()`s the controller
+after `connect()`. The `IdleInhibitorIndicator` is a one-click bar toggle (coffee
+glyph, accent when active) plus a Quick Settings toggle. **Bar-only** (the backend
+is null on `qypr-lock`) and it **self-hides** when the compositor lacks the
+protocol. *Verified* live against Hyprland: the compositor advertises the manager,
+`available()` flips on `init()`, and `setActive(true)`/`(false)` create and
+destroy a real inhibitor with **zero protocol error**; both glyphs render; a unit
+test covers the null/uninitialised gating. 72/72 tests.
 
 ---
 

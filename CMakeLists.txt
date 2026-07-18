@@ -92,6 +92,10 @@ qypr_gen_protocol(xdg-shell
     "${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml")
 qypr_gen_protocol(wlr-layer-shell-unstable-v1
     "${CMAKE_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml")
+# Idle inhibitor ("keep awake" toggle, Phase 15) — standard unstable protocol,
+# respected by swayidle/hypridle and any compositor implementing it.
+qypr_gen_protocol(idle-inhibit-unstable-v1
+    "${WAYLAND_PROTOCOLS_DIR}/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml")
 
 # -----------------------------------------------------------------------------
 # Version header (generated)

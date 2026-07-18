@@ -29,6 +29,7 @@ class PowerProfilesBackend;
 class NotificationMonitor;
 class NotificationActions;
 class MprisController;
+class IdleInhibitor;
 
 struct SystemBackends {
     BatteryBackend* battery = nullptr;
@@ -50,6 +51,7 @@ struct SystemBackends {
     // notification contents from the bar.
     PowerManager* power = nullptr;
     PowerProfilesBackend* powerProfiles = nullptr;  // net.hadess.PowerProfiles
+    IdleInhibitor* idleInhibitor = nullptr;         // zwp_idle_inhibit ("keep awake")
     NotificationMonitor* notifications = nullptr;
     NotificationActions* notificationActions = nullptr;  // dismiss/clear
     MprisController* mpris = nullptr;

@@ -120,6 +120,8 @@ int g_tests_failed = 0;
 #include "system/WorkspaceBackend.hpp"
 #include "system/ToplevelBackend.hpp"
 #include "system/SystemStats.hpp"
+#include "system/IdleInhibitor.hpp"
+#include "ui/indicators/IdleInhibitorIndicator.hpp"
 #include "ui/indicators/BluetoothIndicator.hpp"
 #include "ui/indicators/BrightnessIndicator.hpp"
 #include "ui/indicators/DNDIndicator.hpp"
@@ -1959,6 +1961,30 @@ TEST(SystemStatsSampleCpuDelta) {
     qypr::SysSample a = s.sample();
     EXPECT_TRUE(a.valid);                     // /proc exists on the test host
     EXPECT_TRUE(a.memPercent >= 0.0 && a.memPercent <= 100.0);
+}
+
+// -----------------------------------------------------------------------------
+// Idle inhibitor ("keep awake") — gating without a compositor
+// -----------------------------------------------------------------------------
+TEST(IdleInhibitorGating) {
+    // No backend at all (lock screen): the indicator never appears.
+    qypr::SystemBackends none{};
+    qypr::IdleInhibitorIndicator noBackend(none);
+    noBackend.onBackendUpdate();
+    EXPECT_FALSE(noBackend.visible);
+    EXPECT_EQ(noBackend.tooltip(), std::string("Keep awake"));
+
+    // Backend present but not init()'d (no compositor global): still unavailable,
+    // so still hidden, and a click is a no-op (not consumed).
+    qypr::IdleInhibitor idle;
+    EXPECT_FALSE(idle.available());
+    EXPECT_FALSE(idle.active());
+    qypr::SystemBackends b{};
+    b.idleInhibitor = &idle;
+    qypr::IdleInhibitorIndicator ind(b);
+    ind.onBackendUpdate();
+    EXPECT_FALSE(ind.visible);
+    EXPECT_FALSE(ind.onClick(0, 0));  // unavailable → not consumed
 }
 
 // -----------------------------------------------------------------------------

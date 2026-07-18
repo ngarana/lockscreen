@@ -12,6 +12,7 @@
 #include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
 #include "system/DndState.hpp"
+#include "system/IdleInhibitor.hpp"
 #include "system/SNIBackend.hpp"
 #include "system/ToplevelBackend.hpp"
 #include "system/VolumeBackend.hpp"
@@ -81,6 +82,9 @@ StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& b
     }
     if (backends.mpris) {
         backends.mpris->setOnChange([this] { notifyBackendUpdate(); });
+    }
+    if (backends.idleInhibitor) {
+        backends.idleInhibitor->setOnChange([this] { notifyBackendUpdate(); });
     }
     // Session-sensitive WM widgets (only ever started by the unlocked bar).
     if (backends.workspace) {

@@ -97,6 +97,11 @@ int BarApp::run() {
     sni_.start();
     powerProfiles_.setOnChange([this] { invalidate(); });
     powerProfiles_.start();  // no-op/degrades if power-profiles-daemon is absent
+    // Idle inhibitor ("keep awake"): the manager + a surface exist now that the
+    // display is connected. Unavailable (indicator hides) if the compositor
+    // lacks zwp_idle_inhibit.
+    idleInhibitor_.init(display_.idleInhibitManager(), display_.anchorSurface(),
+                        display_.display());
     workspace_.start(display_.display());
     toplevel_.start(display_.display());
 

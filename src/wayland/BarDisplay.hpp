@@ -20,6 +20,7 @@
 #include "wayland/Seat.hpp"
 
 struct zwlr_layer_shell_v1;
+struct zwp_idle_inhibit_manager_v1;
 
 namespace qypr {
 
@@ -51,6 +52,12 @@ public:
     wl_display* display() const { return display_; }
     void roundtrip();
 
+    // Idle-inhibit plumbing for the "keep awake" indicator (Phase 15): the bound
+    // manager (nullptr if the compositor lacks the protocol) and a surface to
+    // anchor an inhibitor on (the first bar window, or nullptr before any exist).
+    zwp_idle_inhibit_manager_v1* idleInhibitManager() const { return idleMgr_; }
+    wl_surface* anchorSurface() const;
+
     // Wayland C callbacks (public so the registry listener table can bind them).
     static void onGlobal(void*, wl_registry*, uint32_t, const char*, uint32_t);
     static void onGlobalRemove(void*, wl_registry*, uint32_t);
@@ -68,6 +75,7 @@ private:
     wl_compositor* compositor_ = nullptr;
     wl_shm* shm_ = nullptr;
     zwlr_layer_shell_v1* layerShell_ = nullptr;
+    zwp_idle_inhibit_manager_v1* idleMgr_ = nullptr;
 
     OutputEnv env_;
     std::unique_ptr<Seat> seat_;
