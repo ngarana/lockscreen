@@ -23,6 +23,10 @@ public:
 
     std::unique_ptr<QSTile> createTile() override;
 
+    // Click the icon to open the device picker (connect/disconnect, battery).
+    bool hasDetailedView() const override { return backend_ != nullptr; }
+    std::unique_ptr<DetailedPopover> createDetailedView() override;
+
 private:
     BluetoothBackend* backend_ = nullptr;
     BluetoothSnapshot lastSnap_;

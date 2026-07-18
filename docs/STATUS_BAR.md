@@ -1069,7 +1069,7 @@ remains is mostly *session* surface area (windows, media, notifications, power),
 | Battery / power management | ✅ UPower + QS tile + **power-profile switching** (`net.hadess.PowerProfiles`) | charge thresholds | 14 ✅ |
 | Brightness | ✅ sysfs + logind + slider | multi-display, keyboard backlight | 14 |
 | Networks | ⚠️ WiFi status + toggle | **connection list / picker**, ethernet, VPN, per-network connect | 14 |
-| Bluetooth | ⚠️ status + toggle | **device list**, connect/disconnect, battery per device | 14 |
+| Bluetooth | ✅ status + toggle + **device picker** (connect/disconnect, per-device battery) | — | 14 ✅ |
 | Audio volume | ✅ master sink + QS mute + **output-device switching** + **per-app stream volumes** | input/source device switching | 4 / 14 ✅ |
 | Clock | ✅ time text + **calendar popover** (month nav, week numbers, secondary timezones), format config | — | 12 ✅ |
 | **Task manager (window list)** | ✅ icons-only taskbar: all toplevels, click-to-focus, click-focused-to-minimize, minimized dimming | middle-click close, grouping, pinning | 11 ✅ |
@@ -1467,7 +1467,7 @@ unused `DetailedPopover` slot; the gap is list UI + a few D-Bus calls.
 | Widget | Added capability |
 |--------|------------------|
 | **Networks** | Connection list/picker, connect/disconnect, ethernet, VPN, signal per AP |
-| **Bluetooth** | Device list, connect/disconnect, per-device battery |
+| **Bluetooth** ✅ | **Device picker: connect/disconnect, per-device battery** (below) |
 | **Audio** ✅ | **Output-device switching + per-app stream volumes** (below). Input/source switching still TODO |
 | **Power** ✅ | **Power-profile switching** (`net.hadess.PowerProfiles`) in the battery popover (below). Charge thresholds still TODO |
 | **Brightness** | Multi-display, keyboard backlight |
@@ -1501,6 +1501,17 @@ lock screen keeps the plain battery detail (no profile switch from a locked
 machine). *Verified* live: active `balanced`, profiles enumerated, the popover
 renders the control, and a non-destructive re-assert of the current profile
 confirms the switch path. Degrades cleanly when the daemon is absent.
+
+**Bluetooth (third landed increment).** `BluetoothBackend` already parsed BlueZ
+`GetManagedObjects`; it now builds a full device list — name, freedesktop `Icon`
+category, `Connected`, `Paired`, and **per-device battery** from the separate
+`org.bluez.Battery1` interface (accumulated per object across its interface
+blocks) — pushed via the existing PropertiesChanged/ObjectManager matches
+(now also watching `Battery1.Percentage`). Added `connectDevice` /
+`disconnectDevice` (`org.bluez.Device1.Connect/Disconnect`, async). Clicking the
+Bluetooth icon opens a **device picker** (paired devices, connected first; a
+category glyph, name, and "Connected · NN%" / "Disconnected"); a row toggles the
+connection. *Verified* live against BlueZ with two paired devices.
 
 ---
 

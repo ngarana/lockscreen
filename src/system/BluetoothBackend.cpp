@@ -3,8 +3,11 @@
 
 #include <systemd/sd-bus.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
+#include <utility>
 
 #include "system/SystemBus.hpp"
 
@@ -14,6 +17,7 @@ namespace {
 constexpr const char* kBlueZ = "org.bluez";
 constexpr const char* kAdapterIface = "org.bluez.Adapter1";
 constexpr const char* kDeviceIface = "org.bluez.Device1";
+constexpr const char* kBatteryIface = "org.bluez.Battery1";
 constexpr const char* kPropsIface = "org.freedesktop.DBus.Properties";
 
 // Returns true if the a{sv} dict at the cursor contains any of the keys.
@@ -75,7 +79,9 @@ int BluetoothBackend::onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_e
     if (std::strcmp(iface, kAdapterIface) == 0) {
         if (!dictHasKey(m, {"Powered", "PowerState"})) return 0;
     } else if (std::strcmp(iface, kDeviceIface) == 0) {
-        if (!dictHasKey(m, {"Connected"})) return 0;
+        if (!dictHasKey(m, {"Connected", "Paired"})) return 0;
+    } else if (std::strcmp(iface, kBatteryIface) == 0) {
+        if (!dictHasKey(m, {"Percentage"})) return 0;
     } else {
         return 0;
     }
@@ -112,55 +118,75 @@ void BluetoothBackend::refresh() {
     BluetoothSnapshot next;
     adapter_.clear();
 
-    // a{oa{sa{sv}}}: object path → interface → properties
+    // a{oa{sa{sv}}}: object path → interface → properties. A device object can
+    // carry both Device1 and Battery1, so accumulate per object across its
+    // interface blocks and emit one BtDevice at the end.
     sd_bus_message_enter_container(reply, 'a', "{oa{sa{sv}}}");
     while (sd_bus_message_enter_container(reply, 'e', "oa{sa{sv}}") > 0) {
         const char* path = nullptr;
         sd_bus_message_read(reply, "o", &path);
+
+        BtDevice dev;
+        if (path) dev.path = path;
+        bool isDeviceObj = false;
 
         sd_bus_message_enter_container(reply, 'a', "{sa{sv}}");
         while (sd_bus_message_enter_container(reply, 'e', "sa{sv}") > 0) {
             const char* iface = nullptr;
             sd_bus_message_read(reply, "s", &iface);
 
-            bool isAdapter = iface && std::strcmp(iface, kAdapterIface) == 0;
-            bool isDevice = iface && std::strcmp(iface, kDeviceIface) == 0;
-            if (!isAdapter && !isDevice) {
+            const bool isAdapter = iface && std::strcmp(iface, kAdapterIface) == 0;
+            const bool isDevice = iface && std::strcmp(iface, kDeviceIface) == 0;
+            const bool isBattery = iface && std::strcmp(iface, kBatteryIface) == 0;
+            if (!isAdapter && !isDevice && !isBattery) {
                 sd_bus_message_skip(reply, "a{sv}");
                 sd_bus_message_exit_container(reply);
                 continue;
             }
+            if (isDevice) isDeviceObj = true;
 
-            bool connected = false;
-            std::string name;
             sd_bus_message_enter_container(reply, 'a', "{sv}");
             while (sd_bus_message_enter_container(reply, 'e', "sv") > 0) {
                 const char* key = nullptr;
                 sd_bus_message_read(reply, "s", &key);
-                if (isAdapter && key && std::strcmp(key, "Powered") == 0) {
+                auto readBool = [&](bool& out) {
                     int b = 0;
                     if (sd_bus_message_enter_container(reply, 'v', "b") >= 0) {
                         sd_bus_message_read_basic(reply, 'b', &b);
                         sd_bus_message_exit_container(reply);
-                        next.powered = b != 0;
+                        out = b != 0;
                     } else {
                         sd_bus_message_skip(reply, "v");
                     }
-                } else if (isDevice && key && std::strcmp(key, "Connected") == 0) {
-                    int b = 0;
-                    if (sd_bus_message_enter_container(reply, 'v', "b") >= 0) {
-                        sd_bus_message_read_basic(reply, 'b', &b);
-                        sd_bus_message_exit_container(reply);
-                        connected = b != 0;
-                    } else {
-                        sd_bus_message_skip(reply, "v");
-                    }
-                } else if (isDevice && key && std::strcmp(key, "Alias") == 0) {
+                };
+                auto readStr = [&](std::string& out, bool overwrite) {
                     if (sd_bus_message_enter_container(reply, 'v', "s") >= 0) {
                         const char* s = nullptr;
                         sd_bus_message_read_basic(reply, 's', &s);
                         sd_bus_message_exit_container(reply);
-                        if (s) name = s;
+                        if (s && (overwrite || out.empty())) out = s;
+                    } else {
+                        sd_bus_message_skip(reply, "v");
+                    }
+                };
+                if (isAdapter && key && std::strcmp(key, "Powered") == 0) {
+                    readBool(next.powered);
+                } else if (isDevice && key && std::strcmp(key, "Connected") == 0) {
+                    readBool(dev.connected);
+                } else if (isDevice && key && std::strcmp(key, "Paired") == 0) {
+                    readBool(dev.paired);
+                } else if (isDevice && key && std::strcmp(key, "Alias") == 0) {
+                    readStr(dev.name, /*overwrite=*/true);  // Alias beats Name
+                } else if (isDevice && key && std::strcmp(key, "Name") == 0) {
+                    readStr(dev.name, /*overwrite=*/false);
+                } else if (isDevice && key && std::strcmp(key, "Icon") == 0) {
+                    readStr(dev.icon, /*overwrite=*/true);
+                } else if (isBattery && key && std::strcmp(key, "Percentage") == 0) {
+                    uint8_t pct = 0;
+                    if (sd_bus_message_enter_container(reply, 'v', "y") >= 0) {
+                        sd_bus_message_read_basic(reply, 'y', &pct);
+                        sd_bus_message_exit_container(reply);
+                        dev.battery = pct;
                     } else {
                         sd_bus_message_skip(reply, "v");
                     }
@@ -175,19 +201,23 @@ void BluetoothBackend::refresh() {
                 next.available = true;
                 if (adapter_.empty() && path) adapter_ = path;
             }
-            if (isDevice && connected) {
-                ++next.connectedCount;
-                if (next.firstDevice.empty()) next.firstDevice = name;
-            }
             sd_bus_message_exit_container(reply);
         }
         sd_bus_message_exit_container(reply);
+
+        if (isDeviceObj) {
+            if (dev.connected) {
+                ++next.connectedCount;
+                if (next.firstDevice.empty()) next.firstDevice = dev.name;
+            }
+            next.devices.push_back(std::move(dev));
+        }
         sd_bus_message_exit_container(reply);
     }
     sd_bus_message_exit_container(reply);
     sd_bus_message_unref(reply);
 
-    snap_ = next;
+    snap_ = std::move(next);
 }
 
 void BluetoothBackend::setPowered(bool on) {
@@ -212,6 +242,20 @@ void BluetoothBackend::setPowered(bool on) {
     sd_bus_message_close_container(msg);
     sd_bus_call_async(bus_.get(), nullptr, msg, nullptr, nullptr, 0);
     sd_bus_message_unref(msg);
+}
+
+void BluetoothBackend::connectDevice(const std::string& path) {
+    if (!bus_.available() || path.empty()) return;
+    // Connect can take seconds; fire-and-forget. The Connected PropertiesChanged
+    // refreshes the list when it lands.
+    sd_bus_call_method_async(bus_.get(), nullptr, kBlueZ, path.c_str(), kDeviceIface, "Connect",
+                             nullptr, nullptr, "");
+}
+
+void BluetoothBackend::disconnectDevice(const std::string& path) {
+    if (!bus_.available() || path.empty()) return;
+    sd_bus_call_method_async(bus_.get(), nullptr, kBlueZ, path.c_str(), kDeviceIface, "Disconnect",
+                             nullptr, nullptr, "");
 }
 
 }  // namespace qypr

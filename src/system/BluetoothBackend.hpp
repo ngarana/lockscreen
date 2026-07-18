@@ -10,6 +10,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 struct sd_bus_message;
 struct sd_bus_slot;
@@ -19,11 +20,25 @@ namespace qypr {
 
 class SystemBus;
 
+// One paired/known device. `battery` is -1 when the device exposes no
+// org.bluez.Battery1 interface; `icon` is a freedesktop icon name from BlueZ.
+struct BtDevice {
+    std::string path;
+    std::string name;
+    std::string icon;
+    bool connected = false;
+    bool paired = false;
+    int battery = -1;
+
+    bool operator==(const BtDevice&) const = default;
+};
+
 struct BluetoothSnapshot {
     bool available = false;    // BlueZ reachable and an adapter exists
     bool powered = false;
     int connectedCount = 0;
     std::string firstDevice;   // name of one connected device (tile subtitle)
+    std::vector<BtDevice> devices;  // paired/known devices (for the picker)
 
     bool operator==(const BluetoothSnapshot&) const = default;
 };
@@ -46,6 +61,11 @@ public:
 
     // Toggle the adapter (async Powered write, optimistic update).
     void setPowered(bool on);
+
+    // Connect / disconnect a device by object path (async; the Connected
+    // PropertiesChanged confirms and refreshes the list).
+    void connectDevice(const std::string& path);
+    void disconnectDevice(const std::string& path);
 
 private:
     static int onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
