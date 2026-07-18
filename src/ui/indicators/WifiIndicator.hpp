@@ -22,6 +22,11 @@ public:
 
     std::unique_ptr<QSTile> createTile() override;
 
+    // Click the icon to open the network picker (nearby APs; join a saved one,
+    // or disconnect the active one).
+    bool hasDetailedView() const override { return backend_ != nullptr; }
+    std::unique_ptr<DetailedPopover> createDetailedView() override;
+
 private:
     WifiBackend* backend_ = nullptr;
     WifiSnapshot lastSnap_;

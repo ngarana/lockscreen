@@ -1068,7 +1068,7 @@ remains is mostly *session* surface area (windows, media, notifications, power),
 | System tray (SNI) | ✅ icons + left `Activate` + **right-click dbusmenu** (submenus, toggles, drill-down) + middle `SecondaryActivate` | overflow "hidden items" popup, scroll | 6 / 13 ✅ |
 | Battery / power management | ✅ UPower + QS tile + **power-profile switching** (`net.hadess.PowerProfiles`) | charge thresholds | 14 ✅ |
 | Brightness | ✅ sysfs + logind + slider | multi-display, keyboard backlight | 14 |
-| Networks | ⚠️ WiFi status + toggle | **connection list / picker**, ethernet, VPN, per-network connect | 14 |
+| Networks | ✅ WiFi status + toggle + **AP picker** (join saved / disconnect, signal + secured + saved) | new-secured-AP join (secret agent), ethernet, VPN | 14 ✅ |
 | Bluetooth | ✅ status + toggle + **device picker** (connect/disconnect, per-device battery) | — | 14 ✅ |
 | Audio volume | ✅ master sink + QS mute + **output-device switching** + **per-app stream volumes** | input/source device switching | 4 / 14 ✅ |
 | Clock | ✅ time text + **calendar popover** (month nav, week numbers, secondary timezones), format config | — | 12 ✅ |
@@ -1466,7 +1466,7 @@ unused `DetailedPopover` slot; the gap is list UI + a few D-Bus calls.
 
 | Widget | Added capability |
 |--------|------------------|
-| **Networks** | Connection list/picker, connect/disconnect, ethernet, VPN, signal per AP |
+| **Networks** ✅ | **Wi-Fi picker: nearby APs, join a saved network, disconnect** (below). New-secured-AP join (secret agent), ethernet, VPN still TODO |
 | **Bluetooth** ✅ | **Device picker: connect/disconnect, per-device battery** (below) |
 | **Audio** ✅ | **Output-device switching + per-app stream volumes** (below). Input/source switching still TODO |
 | **Power** ✅ | **Power-profile switching** (`net.hadess.PowerProfiles`) in the battery popover (below). Charge thresholds still TODO |
@@ -1512,6 +1512,23 @@ blocks) — pushed via the existing PropertiesChanged/ObjectManager matches
 Bluetooth icon opens a **device picker** (paired devices, connected first; a
 category glyph, name, and "Connected · NN%" / "Disconnected"); a row toggles the
 connection. *Verified* live against BlueZ with two paired devices.
+
+**Networks (fourth landed increment).** `WifiBackend` gains on-demand
+`scanNetworks()` — enumerates the wireless device's `AccessPoints` (SSID,
+`Strength`, secured via `Flags`/`WpaFlags`/`RsnFlags`, active), deduped by SSID
+(strongest kept) and sorted active-first — plus `requestScan()`, `connectSsid()`,
+and `disconnect()`. Joining is limited to **saved** networks: `connectSsid`
+resolves the matching profile via `Settings.ListConnections` + `GetSettings`
+(comparing `802-11-wireless.ssid`) and calls `ActivateConnection`, so **NM already
+holds the secret and no agent is needed**. An unsaved secured AP is shown (lock
+glyph) but not joinable — that path needs a NetworkManager secret agent, which is
+out of scope. Clicking the Wi-Fi icon opens the **picker** (per-row signal glyph,
+SSID, `saved`/lock/active-check, scroll past 8); a saved row connects, the active
+row disconnects. *Verified* live against NetworkManager: two saved secured
+networks enumerated (active + one more), the SSID→saved match resolved from the
+NM settings, and the picker rendered. Connect/disconnect not live-fired (it would
+move the real connection) — thin async wrappers over `ActivateConnection` /
+`Device.Disconnect`.
 
 ---
 

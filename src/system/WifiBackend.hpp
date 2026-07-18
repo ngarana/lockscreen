@@ -9,6 +9,7 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 
 struct sd_bus_message;
 struct sd_bus_slot;
@@ -26,6 +27,18 @@ struct WifiSnapshot {
     int strength = 0;         // 0-100
 
     bool operator==(const WifiSnapshot&) const = default;
+};
+
+// One nearby access point, as shown in the picker. `saved` means NM already has
+// a connection profile for this SSID, so it can be joined without a secret agent
+// (unsaved secured networks would need one — out of scope, so they are shown but
+// not joinable).
+struct WifiAp {
+    std::string ssid;
+    int strength = 0;   // 0-100
+    bool secured = false;
+    bool active = false;
+    bool saved = false;
 };
 
 class WifiBackend {
@@ -48,10 +61,24 @@ public:
     // Toggle the radio (async WirelessEnabled write, optimistic update).
     void setEnabled(bool on);
 
+    // On-demand enumeration of nearby access points for the picker (deduped by
+    // SSID keeping the strongest, sorted strength-desc, active first). Reads the
+    // bus each call — the popover fetches once on open, not per frame.
+    std::vector<WifiAp> scanNetworks() const;
+    // Ask NM to rescan (async, best-effort); results arrive on later refreshes.
+    void requestScan();
+    // Join a *saved* network by SSID (ActivateConnection — NM has the secret, so
+    // no agent). No-op when nothing saved matches. Async.
+    void connectSsid(const std::string& ssid);
+    // Drop the current wireless connection (Device.Disconnect, async).
+    void disconnect();
+
 private:
     static int onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
     void refresh();                 // targeted property reads → snapshot
     std::string findWifiDevice();   // GetDevices → DeviceType == 2
+    // Saved connection object path whose 802-11-wireless.ssid matches, or "".
+    std::string findSavedConnection(const std::string& ssid) const;
 
     SystemBus& bus_;
     sd_bus_slot* slot_ = nullptr;
