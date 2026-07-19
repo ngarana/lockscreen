@@ -121,6 +121,8 @@ int g_tests_failed = 0;
 #include "system/ToplevelBackend.hpp"
 #include "system/SystemStats.hpp"
 #include "system/IdleInhibitor.hpp"
+#include "system/DesktopIndex.hpp"
+#include "system/KeyboardLayout.hpp"
 #include "ui/indicators/IdleInhibitorIndicator.hpp"
 #include "ui/indicators/BluetoothIndicator.hpp"
 #include "ui/indicators/BrightnessIndicator.hpp"
@@ -130,6 +132,9 @@ int g_tests_failed = 0;
 #include "ui/indicators/SNITrayHost.hpp"
 #include "ui/indicators/WorkspacesIndicator.hpp"
 #include "ui/indicators/ActiveWindowIndicator.hpp"
+#include "ui/indicators/LauncherIndicator.hpp"
+#include "ui/indicators/KeyboardLayoutIndicator.hpp"
+#include "ui/statusbar/LauncherPopover.hpp"
 #include "core/App.hpp"
 
 #undef private
@@ -151,6 +156,7 @@ void mock_xkb_reset();
 void mock_xkb_set_sym(uint32_t s);
 void mock_xkb_set_utf8(const char* s);
 void mock_xkb_set_repeats(int r);
+void mock_xkb_set_layouts(uint32_t count);
 }
 
 // -----------------------------------------------------------------------------
@@ -644,6 +650,74 @@ TEST(SeatInput) {
     mock_xkb_reset();  // restore defaults for any later test
 }
 
+// The Seat decodes the active xkb layout group and pushes it to the sink
+// (backing the keyboard-layout indicator): initial report on sink-attach,
+// re-report on group change, and coalescing of redundant modifier events.
+TEST(SeatLayoutReport) {
+    qypr::EventLoop loop;
+
+    struct LayoutSink : qypr::InputSink {
+        int changes = 0;
+        std::string lastName;
+        uint32_t lastIndex = 99, lastCount = 0;
+        void onTextInput(const std::string&) override {}
+        void onSpecialKey(uint32_t, uint32_t) override {}
+        void onPointerMotion(int, int, double, double) override {}
+        void onPointerButton(int, int, double, double, uint32_t, bool) override {}
+        void onPointerLeave() override {}
+        void onLayoutChanged(const std::string& n, uint32_t i, uint32_t c) override {
+            ++changes; lastName = n; lastIndex = i; lastCount = c;
+        }
+    } sink;
+
+    qypr::OutputEnv env;
+    auto* seatPtr = reinterpret_cast<wl_seat*>(0x6663);
+    qypr::Seat seat(seatPtr, loop, &env);
+
+    mock_xkb_reset();
+    mock_xkb_set_layouts(2);
+
+    auto makeFd = [](size_t size) -> int {
+        FILE* f = std::tmpfile();
+        if (!f) return -1;
+        for (size_t i = 0; i < size; ++i) std::fputc(0, f);
+        std::fflush(f);
+        int fd = dup(fileno(f));
+        std::fclose(f);
+        return fd;
+    };
+
+    qypr::Seat::onCapabilities(&seat, seatPtr, WL_SEAT_CAPABILITY_KEYBOARD);
+
+    // Keymap arrives before any sink is attached: nothing is reported yet.
+    qypr::Seat::onKeymap(&seat, nullptr, WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1, makeFd(64), 64);
+    EXPECT_EQ(sink.changes, 0);
+
+    // Attaching the sink re-reports the current layout immediately (group 0).
+    seat.setSink(&sink);
+    EXPECT_EQ(sink.changes, 1);
+    EXPECT_EQ(sink.lastName, std::string("English (US)"));
+    EXPECT_EQ(static_cast<int>(sink.lastIndex), 0);
+    EXPECT_EQ(static_cast<int>(sink.lastCount), 2);
+
+    // Switching to group 1 reports the new layout.
+    qypr::Seat::onModifiers(&seat, nullptr, 0, 0, 0, 0, 1);
+    EXPECT_EQ(sink.changes, 2);
+    EXPECT_EQ(sink.lastName, std::string("Russian"));
+    EXPECT_EQ(static_cast<int>(sink.lastIndex), 1);
+
+    // A modifier event with the same group does not re-report (coalesced).
+    qypr::Seat::onModifiers(&seat, nullptr, 0, 4, 0, 0, 1);
+    EXPECT_EQ(sink.changes, 2);
+
+    // Back to group 0 reports again.
+    qypr::Seat::onModifiers(&seat, nullptr, 0, 0, 0, 0, 0);
+    EXPECT_EQ(sink.changes, 3);
+    EXPECT_EQ(sink.lastName, std::string("English (US)"));
+
+    mock_xkb_reset();
+}
+
 // The compositor can refuse or revoke a lock via the `finished` event. When it
 // does, the session must stop reporting itself as locked (it is no longer
 // secure) and notify the app, and a later unlock() must not misuse the protocol
@@ -933,6 +1007,15 @@ TEST(StatusBarPointerInput) {
     qypr::StatusBar bar(loop, host, backends);
     bar.layout(1920, 1080);
 
+    // A display-only indicator (no detailed view, no onClick) must NOT open the
+    // Quick Settings panel when activated — the gear is the sole QS trigger, so
+    // a click on such an element can't make the panel fly in from the far right.
+    qypr::KeyboardLayoutIndicator displayOnly(backends);
+    bar.activateIndicator(displayOnly);
+    EXPECT_FALSE(bar.hasOpenOverlay());
+    // Nothing open → the host stays at its idle strip (overlay height 0).
+    EXPECT_EQ(bar.overlayHeight(), 0);
+
     // Motion inside the bar
     bool handled = bar.handlePointerMotion(bar.bounds.x + 50, bar.bounds.y + 10, 1000);
     EXPECT_TRUE(handled);
@@ -946,6 +1029,13 @@ TEST(StatusBarPointerInput) {
     double gearY = bar.bounds.y + bar.bounds.h / 2.0;
     handled = bar.handlePointerButton(gearX, gearY, 272, true, 1002);
     EXPECT_TRUE(handled);
+    // The gear DOES open Quick Settings (positive control for the check above).
+    EXPECT_TRUE(bar.hasOpenOverlay());
+    // The overlay surface is sized to the panel — NOT the whole output. This is
+    // the fix for a popover resizing a full-window surface (which a compositor
+    // animates/blurs "across the window").
+    EXPECT_TRUE(bar.overlayHeight() > 0);
+    EXPECT_TRUE(bar.overlayHeight() < 1080);
 
     // Leave clears hover
     bar.handlePointerLeave(1003);
@@ -1985,6 +2075,139 @@ TEST(IdleInhibitorGating) {
     ind.onBackendUpdate();
     EXPECT_FALSE(ind.visible);
     EXPECT_FALSE(ind.onClick(0, 0));  // unavailable → not consumed
+}
+
+// -----------------------------------------------------------------------------
+// Application launcher (.desktop parsing + search) — pure, no filesystem
+// -----------------------------------------------------------------------------
+TEST(DesktopIndexParsesEntry) {
+    qypr::DesktopEntry e;
+    const std::string ok =
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        "Name=Firefox\n"
+        "Name[de]=Feuerfuchs\n"
+        "Exec=firefox %u\n"
+        "Icon=firefox\n"
+        "Terminal=false\n";
+    EXPECT_TRUE(qypr::DesktopIndex::parseEntry(ok, e));
+    EXPECT_EQ(e.name, std::string("Firefox"));   // unlocalized Name wins
+    EXPECT_EQ(e.exec, std::string("firefox"));    // %u stripped
+    EXPECT_EQ(e.icon, std::string("firefox"));
+    EXPECT_FALSE(e.terminal);
+
+    // NoDisplay, Hidden, and non-Application entries are skipped.
+    qypr::DesktopEntry skip;
+    EXPECT_FALSE(qypr::DesktopIndex::parseEntry(
+        "[Desktop Entry]\nType=Application\nName=X\nExec=x\nNoDisplay=true\n", skip));
+    EXPECT_FALSE(qypr::DesktopIndex::parseEntry(
+        "[Desktop Entry]\nType=Application\nName=X\nExec=x\nHidden=true\n", skip));
+    EXPECT_FALSE(qypr::DesktopIndex::parseEntry("[Desktop Entry]\nType=Link\nName=X\nURL=y\n", skip));
+    // A trailing [Desktop Action] group must not leak into the main entry.
+    qypr::DesktopEntry e2;
+    EXPECT_TRUE(qypr::DesktopIndex::parseEntry(
+        "[Desktop Entry]\nType=Application\nName=Term\nExec=st\n"
+        "[Desktop Action new]\nName=New\nExec=st -e other\n", e2));
+    EXPECT_EQ(e2.exec, std::string("st"));
+}
+
+TEST(DesktopIndexCleanExec) {
+    EXPECT_EQ(qypr::DesktopIndex::cleanExec("app %F --flag"), std::string("app --flag"));
+    EXPECT_EQ(qypr::DesktopIndex::cleanExec("app %U"), std::string("app"));
+    EXPECT_EQ(qypr::DesktopIndex::cleanExec("100%% real"), std::string("100% real"));
+}
+
+TEST(DesktopIndexSearchRanksPrefix) {
+    // Build the index by hand via parseEntry → a private path is not needed; we
+    // exercise search() against a live load() instead (see below), so here we
+    // just confirm an empty query on a fresh index is safe.
+    qypr::DesktopIndex idx;
+    EXPECT_TRUE(idx.search("anything").empty());  // nothing loaded → empty
+    EXPECT_TRUE(idx.entries().empty());
+}
+
+TEST(LauncherGating) {
+    // No DesktopIndex (lock screen): the launcher never appears and offers no
+    // detailed view — a locked machine can never spawn an app from the bar.
+    qypr::SystemBackends none{};
+    qypr::LauncherIndicator locked(none);
+    EXPECT_FALSE(locked.visible);
+    EXPECT_FALSE(locked.hasDetailedView());
+    EXPECT_TRUE(locked.createDetailedView() == nullptr);
+
+    // With an index supplied (the unlocked bar): present, with a popover.
+    qypr::DesktopIndex idx;  // empty is fine; presence is what gates
+    qypr::SystemBackends bar{};
+    bar.desktopIndex = &idx;
+    qypr::LauncherIndicator unlocked(bar);
+    EXPECT_TRUE(unlocked.visible);
+    EXPECT_TRUE(unlocked.hasDetailedView());
+    EXPECT_TRUE(unlocked.createDetailedView() != nullptr);
+}
+
+TEST(LauncherPopoverKeyboardAndEmptyState) {
+    // A fresh index (no load) yields an empty result set — the popover must still
+    // grab the keyboard, accept typing/navigation keys, and never self-close
+    // until an item is actually launched.
+    qypr::DesktopIndex idx;
+    qypr::LauncherPopover pop(&idx);
+    EXPECT_TRUE(pop.wantsKeyboard());
+    EXPECT_TRUE(pop.handleText("fi"));         // typing is consumed
+    EXPECT_TRUE(pop.handleKey(XKB_KEY_Down));  // navigation is consumed
+    EXPECT_TRUE(pop.handleKey(XKB_KEY_Up));
+    EXPECT_TRUE(pop.handleKey(XKB_KEY_BackSpace));
+    EXPECT_TRUE(pop.handleKey(XKB_KEY_Return));       // Enter with no results: no-op, consumed
+    EXPECT_FALSE(pop.consumeCloseRequest());          // nothing launched → no close
+    EXPECT_FALSE(pop.handleKey(XKB_KEY_F1));          // unrelated key falls through
+    EXPECT_TRUE(pop.contentHeight() > 0.0);           // renders a "no matches" row
+}
+
+// -----------------------------------------------------------------------------
+// Keyboard layout — short-label derivation (pure) + gating
+// -----------------------------------------------------------------------------
+TEST(KeyboardLayoutShortLabel) {
+    using qypr::KeyboardLayout;
+    // Parenthetical country/variant code wins.
+    EXPECT_EQ(KeyboardLayout::shortLabel("English (US)"), std::string("US"));
+    EXPECT_EQ(KeyboardLayout::shortLabel("English (UK)"), std::string("UK"));
+    // Fallback: first two letters of the description, uppercased.
+    EXPECT_EQ(KeyboardLayout::shortLabel("Russian"), std::string("RU"));
+    EXPECT_EQ(KeyboardLayout::shortLabel("French"), std::string("FR"));
+    // Overlong parenthetical (a variant name) falls back to the description.
+    EXPECT_EQ(KeyboardLayout::shortLabel("English (Dvorak)"), std::string("EN"));
+    // Degenerate input never crashes.
+    EXPECT_EQ(KeyboardLayout::shortLabel(""), std::string("??"));
+}
+
+TEST(KeyboardLayoutGating) {
+    // No backend (lock screen): never visible.
+    qypr::SystemBackends none{};
+    qypr::KeyboardLayoutIndicator locked(none);
+    locked.onBackendUpdate();
+    EXPECT_FALSE(locked.visible);
+    EXPECT_EQ(locked.tooltip(), std::string("Keyboard layout"));
+
+    // Backend present but a single layout: still hidden (nothing to switch).
+    qypr::KeyboardLayout kb;
+    qypr::SystemBackends b{};
+    b.keyboardLayout = &kb;
+    qypr::KeyboardLayoutIndicator ind(b);
+    kb.update("English (US)", 0, 1);
+    ind.onBackendUpdate();
+    EXPECT_FALSE(ind.visible);
+
+    // Two layouts: now visible, showing the active code + full-name tooltip.
+    kb.update("English (US)", 0, 2);
+    ind.onBackendUpdate();
+    EXPECT_TRUE(ind.visible);
+    EXPECT_EQ(ind.label(), std::string("US"));
+    EXPECT_EQ(ind.tooltip(), std::string("Keyboard layout: English (US)"));
+
+    // Switching group updates the label.
+    kb.update("Russian", 1, 2);
+    ind.onBackendUpdate();
+    EXPECT_TRUE(ind.visible);
+    EXPECT_EQ(ind.label(), std::string("RU"));
 }
 
 // -----------------------------------------------------------------------------

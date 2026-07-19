@@ -335,12 +335,16 @@ struct xkb_state;
 static uint32_t g_xkb_sym = 0;
 static char g_xkb_utf8[64] = {0};
 static int g_xkb_repeats = 0;
+// Layout set the Seat reports from (default: a single "English (US)").
+static uint32_t g_xkb_num_layouts = 1;
 
 WAYLAND_EXPORT void mock_xkb_reset() {
     g_xkb_sym = 0;
     g_xkb_utf8[0] = '\0';
     g_xkb_repeats = 0;
+    g_xkb_num_layouts = 1;
 }
+WAYLAND_EXPORT void mock_xkb_set_layouts(uint32_t count) { g_xkb_num_layouts = count; }
 WAYLAND_EXPORT void mock_xkb_set_sym(uint32_t s) { g_xkb_sym = s; }
 WAYLAND_EXPORT void mock_xkb_set_utf8(const char *s) {
     std::strncpy(g_xkb_utf8, s ? s : "", sizeof(g_xkb_utf8) - 1);
@@ -385,6 +389,17 @@ WAYLAND_EXPORT int xkb_state_mod_name_is_active(struct xkb_state *state, const c
 
 WAYLAND_EXPORT struct xkb_state *xkb_state_new(struct xkb_keymap *keymap) {
     return (struct xkb_state*)0xbbbb;
+}
+
+WAYLAND_EXPORT uint32_t xkb_keymap_num_layouts(struct xkb_keymap *keymap) {
+    return g_xkb_num_layouts;
+}
+
+WAYLAND_EXPORT const char *xkb_keymap_layout_get_name(struct xkb_keymap *keymap, uint32_t idx) {
+    // Deterministic per-group names so Seat layout tests can distinguish groups.
+    if (idx == 0) return "English (US)";
+    if (idx == 1) return "Russian";
+    return "Other";
 }
 
 WAYLAND_EXPORT void xkb_state_unref(struct xkb_state *state) {}
