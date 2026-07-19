@@ -4,10 +4,13 @@
 // surface). It anchors a chromeless strip to the top of an output, reserves an
 // exclusive zone so tiled windows never sit under it, and drives the same
 // throttled shm render loop. When the bar opens an overlay (Quick Settings or a
-// popover) the surface grows to the full output height so the overlay — drawn
-// at absolute coordinates, exactly as on the lock screen — is visible and can
-// take input; it shrinks back to the strip when the overlay closes, so the rest
-// of the screen passes clicks through to the apps below.
+// popover) the surface does NOT resize — a layer-surface resize is what the
+// compositor animates (the popover "bounce"). Instead the surface is a fixed
+// full-output-height buffer, transparent everywhere the bar isn't drawing, and
+// only its pointer input region grows to cover the open popover (and shrinks to
+// the strip when it closes) so clicks pass through to the apps below elsewhere.
+// The exclusive zone still reserves only the strip, so tiled windows tile
+// against the strip, not the full-height surface.
 
 #pragma once
 
@@ -40,11 +43,13 @@ public:
     // wl_output listener attached — before the compositor streams mode/scale.
     void createLayerSurface(zwlr_layer_shell_v1* shell);
 
-    // Resize the surface to `logicalH` (from the anchored edge) so an open
-    // popover is visible/interactive, clamped to [reserved strip, output]. A
-    // value at/under the reserved strip shrinks back to idle. Sized to the
-    // popover — never the whole output — so opening one doesn't resize a
-    // full-window surface (which a compositor would animate/blur screen-wide).
+    // Grow/shrink the pointer INPUT REGION to `logicalH` (measured from the
+    // anchored edge) so an open popover is clickable, clamped to [reserved
+    // strip, output]; a value at/under the reserved strip returns to the idle
+    // strip. The surface itself is a fixed full-output-height buffer that never
+    // resizes — resizing a layer surface is what the compositor animates (the
+    // popover "bounce"). Only the input region changes, so everywhere the bar
+    // isn't drawing stays click-through.
     void setOverlayHeight(int logicalH);
 
     // Grab (EXCLUSIVE) or release (NONE) keyboard focus for this surface — set
@@ -73,7 +78,7 @@ public:
 
 private:
     void render();
-    void requestHeight(int logicalH);
+    void applyInputRegion();  // (re)commit the pointer input region for inputHeight_
     ShmBuffer* acquireBuffer(int pxW, int pxH);
 
     wl_output* output_ = nullptr;
@@ -88,8 +93,9 @@ private:
     std::vector<std::unique_ptr<ShmBuffer>> buffers_;
 
     int reservedHeight_ = 0;    // exclusive zone + idle strip height (logical)
-    int outputHeight_ = 0;      // full output height (logical), for overlays
-    int requestedHeight_ = 0;   // current set_size height (logical)
+    int outputHeight_ = 0;      // full output height (logical); the fixed surface height
+    int inputHeight_ = 0;       // input-region height from the anchored edge (logical)
+    int appliedInputHeight_ = -1;  // last input-region height committed (avoid churn)
     bool bottom_ = false;       // anchored to the lower screen edge
     bool kbInteractive_ = false;  // keyboard grab state (launcher search)
 

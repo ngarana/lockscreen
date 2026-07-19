@@ -32,7 +32,7 @@ BarWindow::BarWindow(wl_output* output, uint32_t name, OutputEnv* env, int reser
       name_(name),
       env_(env),
       reservedHeight_(reservedHeight),
-      requestedHeight_(reservedHeight),
+      inputHeight_(reservedHeight),
       bottom_(bottom) {
     wl_output_add_listener(output_, &kOutputListener, this);
 }
@@ -55,31 +55,30 @@ void BarWindow::createLayerSurface(zwlr_layer_shell_v1* shell) {
         shell_, surface_, output_, ZWLR_LAYER_SHELL_V1_LAYER_TOP, "qypr-bar");
     zwlr_layer_surface_v1_add_listener(layerSurface_, &kLayerSurfaceListener, this);
 
-    // Anchor a full-width strip to the configured edge; width 0 stretches
-    // between the left/right anchors. Reserve the strip height so tiled windows
-    // avoid it. Anchoring to the edge (rather than positioning) is also what
-    // keeps the overlay grow correct: the surface always extends inward.
+    // Anchor a full-width surface to the configured edge; width 0 stretches
+    // between the left/right anchors. Anchoring to a single edge (plus the two
+    // perpendicular ones) — rather than to both top and bottom — is what keeps
+    // the exclusive zone effective and lets the strip/popover extend inward from
+    // that edge.
     zwlr_layer_surface_v1_set_anchor(layerSurface_,
                                      (bottom_ ? ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM
                                               : ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) |
                                          ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
                                          ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
-    zwlr_layer_surface_v1_set_size(layerSurface_, 0, requestedHeight_);
+    // Fixed full-output height: the surface is sized once and never resized,
+    // because a layer-surface resize is what the compositor animates (the
+    // popover "bounce"). The exclusive zone still reserves only the strip, so
+    // tiled windows tile against the strip; the rest of the surface is
+    // transparent and, outside the input region applied in render(), passes
+    // clicks through to the apps below.
+    const int full = outputHeight_ > 0 ? outputHeight_ : kFallbackOutputHeight;
+    zwlr_layer_surface_v1_set_size(layerSurface_, 0, full);
     zwlr_layer_surface_v1_set_exclusive_zone(layerSurface_, reservedHeight_);
     zwlr_layer_surface_v1_set_keyboard_interactivity(
         layerSurface_, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE);
 
     // First commit with no buffer: the compositor answers with a configure that
     // carries our size, and render() attaches the first frame.
-    wl_surface_commit(surface_);
-}
-
-void BarWindow::requestHeight(int logicalH) {
-    if (!layerSurface_ || logicalH == requestedHeight_) return;
-    requestedHeight_ = logicalH;
-    zwlr_layer_surface_v1_set_size(layerSurface_, 0, requestedHeight_);
-    // Commit the size change; the compositor replies with a configure and
-    // render() repaints at the new height.
     wl_surface_commit(surface_);
 }
 
@@ -96,14 +95,18 @@ void BarWindow::setKeyboardInteractive(bool on) {
 }
 
 void BarWindow::setOverlayHeight(int logicalH) {
-    // Grow the surface just enough to show an open popover (logicalH), never the
-    // whole output — a full-screen layer surface is what a compositor animates
-    // (or blurs) "across the window" when a popover opens. logicalH <= the idle
-    // strip shrinks back. Clamp to the output so a huge popover can't overflow.
+    // Grow/shrink only the pointer input region — never the surface. The region
+    // covers the strip (idle) or the strip plus the open popover (logicalH),
+    // measured from the anchored edge; everywhere else the transparent surface
+    // passes clicks through. Clamp to [strip, output].
     const int full = outputHeight_ > 0 ? outputHeight_ : kFallbackOutputHeight;
     int h = logicalH < reservedHeight_ ? reservedHeight_ : logicalH;
     if (h > full) h = full;
-    requestHeight(h);
+    if (!layerSurface_ || h == inputHeight_) return;
+    inputHeight_ = h;
+    // render() re-applies the input region (folded into the same commit as the
+    // frame that draws/undraws the popover). The surface size never changes.
+    if (configured_) render();
 }
 
 // -----------------------------------------------------------------------------
@@ -181,6 +184,10 @@ ShmBuffer* BarWindow::acquireBuffer(int pxW, int pxH) {
 void BarWindow::render() {
     if (!configured_ || width_ <= 0 || height_ <= 0) return;
 
+    // The surface is a fixed full-output-height buffer — it never resizes, so
+    // there is no size change for the compositor to animate. Popovers are drawn
+    // into this same buffer at their absolute coordinates; only the input region
+    // (below) changes as they open and close.
     const int pxW = width_ * scale_;
     const int pxH = height_ * scale_;
     ShmBuffer* buf = acquireBuffer(pxW, pxH);
@@ -196,6 +203,14 @@ void BarWindow::render() {
     buf->markBusy();
     wl_surface_damage_buffer(surface_, 0, 0, pxW, pxH);
 
+    // Keep the pointer input region in step with the open overlay so the strip
+    // (and any open popover) takes clicks while the transparent remainder stays
+    // click-through. Folded into this commit; only re-applied when it changes.
+    if (inputHeight_ != appliedInputHeight_) {
+        applyInputRegion();
+        appliedInputHeight_ = inputHeight_;
+    }
+
     frameCallback_ = wl_surface_frame(surface_);
     static const wl_callback_listener kFrameListener = {.done = BarWindow::onFrame};
     wl_callback_add_listener(frameCallback_, &kFrameListener, this);
@@ -203,6 +218,19 @@ void BarWindow::render() {
     dirty_ = false;
 
     wl_surface_commit(surface_);
+}
+
+void BarWindow::applyInputRegion() {
+    // A single rect covering inputHeight_ from the anchored edge: the strip when
+    // idle, the strip plus the open popover otherwise. Coordinates are surface-
+    // local logical px (the surface uses set_buffer_scale). Setting an empty-of-
+    // that-area region elsewhere is what lets clicks fall through to the desktop.
+    wl_region* region = wl_compositor_create_region(env_->compositor);
+    const int h = inputHeight_ < height_ ? inputHeight_ : height_;
+    const int y = bottom_ ? height_ - h : 0;
+    wl_region_add(region, 0, y, width_, h);
+    wl_surface_set_input_region(surface_, region);
+    wl_region_destroy(region);
 }
 
 }  // namespace qypr
