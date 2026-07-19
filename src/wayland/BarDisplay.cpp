@@ -78,8 +78,13 @@ void BarDisplay::invalidateAll() {
     for (auto& win : windows_) win->invalidate();
 }
 
-void BarDisplay::setOverlayActive(bool active) {
-    for (auto& win : windows_) win->setOverlayActive(active);
+void BarDisplay::setOverlayHeight(int logicalH) {
+    for (auto& win : windows_) win->setOverlayHeight(logicalH);
+}
+
+void BarDisplay::setKeyboardInteractive(bool on) {
+    for (auto& win : windows_) win->setKeyboardInteractive(on);
+    flush();
 }
 
 BarWindow* BarDisplay::windowForSurface(wl_surface* surface) {

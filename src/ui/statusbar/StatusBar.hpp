@@ -53,6 +53,11 @@ public:
     void handlePointerLeave(int64_t now);
     bool handleScroll(double x, double y, double dx, double dy);
     bool handleKey(uint32_t keysym);
+    // Committed keyboard text → the active popover (launcher search box).
+    bool handleTextInput(const std::string& utf8);
+    // True while a popover needing typed input is open (the host then grabs
+    // keyboard focus for the bar surface).
+    bool wantsKeyboard() const;
 
     // Focus navigation
     bool cycleFocus(bool reverse);
@@ -67,10 +72,17 @@ public:
     // hidden while locked; the standalone (unlocked) bar turns it on.
     void setSessionContentVisible(bool v);
 
-    // True while Quick Settings or a popover is open (or animating closed). The
-    // layer-shell host grows its surface to full height when this is set so the
-    // overlay — drawn at absolute coordinates — is visible and interactive.
+    // True while Quick Settings or a popover is open (or animating closed).
     bool hasOpenOverlay() const;
+
+    // Logical height the layer-shell host must give its surface (measured from
+    // the anchored screen edge) to show the open popover — the strip plus the
+    // tallest drawing popover, NOT the whole output. Zero when nothing is open,
+    // so the host shrinks back to its idle strip. Sizing to the popover (instead
+    // of full-screen) keeps the surface small, so opening a popover no longer
+    // resizes a full-window surface — and any compositor blur on the "qypr-bar"
+    // layer covers only the glass, not the entire screen.
+    int overlayHeight() const;
 
     // Draw a subtle rounded backdrop behind the strip. Off by default (the lock
     // screen stays chromeless over its dark video); the standalone desktop bar

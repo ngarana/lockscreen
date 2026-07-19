@@ -20,6 +20,12 @@ public:
     DetailedPopover* active() const { return active_.get() ? active_.get() : borrowed_; }
     bool isTransitioning() const { return transitioning_.get() != nullptr; }
 
+    // Tallest contentHeight() among every popover currently being drawn — the
+    // active/borrowed one plus any still fading out. Zero when nothing is drawn.
+    // The layer-shell host sizes its overlay surface to fit this (never the whole
+    // screen), so opening a popover doesn't resize a full-window surface.
+    double maxContentHeight() const;
+
     void draw(Painter& p, int64_t now);
     bool animating(int64_t now) const;
 
@@ -28,6 +34,10 @@ public:
     bool handleDrag(double x, double y);
     bool handleScroll(double dx, double dy);
     bool handleKey(uint32_t keysym);
+    bool handleText(const std::string& utf8);
+
+    // True when the active popover needs keyboard focus (launcher search).
+    bool activeWantsKeyboard() const;
 
 private:
     std::unique_ptr<DetailedPopover> active_;

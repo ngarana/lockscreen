@@ -83,11 +83,27 @@ void BarWindow::requestHeight(int logicalH) {
     wl_surface_commit(surface_);
 }
 
-void BarWindow::setOverlayActive(bool active) {
-    if (active == overlayActive_) return;
-    overlayActive_ = active;
+void BarWindow::setKeyboardInteractive(bool on) {
+    if (!layerSurface_ || on == kbInteractive_) return;
+    kbInteractive_ = on;
+    // EXCLUSIVE while a launcher/search popover is open (grab the keyboard so the
+    // user can type immediately), NONE the rest of the time so the bar never
+    // steals input from the focused application.
+    zwlr_layer_surface_v1_set_keyboard_interactivity(
+        layerSurface_, on ? ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE
+                          : ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE);
+    wl_surface_commit(surface_);
+}
+
+void BarWindow::setOverlayHeight(int logicalH) {
+    // Grow the surface just enough to show an open popover (logicalH), never the
+    // whole output — a full-screen layer surface is what a compositor animates
+    // (or blurs) "across the window" when a popover opens. logicalH <= the idle
+    // strip shrinks back. Clamp to the output so a huge popover can't overflow.
     const int full = outputHeight_ > 0 ? outputHeight_ : kFallbackOutputHeight;
-    requestHeight(active ? full : reservedHeight_);
+    int h = logicalH < reservedHeight_ ? reservedHeight_ : logicalH;
+    if (h > full) h = full;
+    requestHeight(h);
 }
 
 // -----------------------------------------------------------------------------

@@ -2,6 +2,8 @@
 #include "ui/statusbar/PopoverManager.hpp"
 #include "render/Painter.hpp"
 
+#include <algorithm>
+
 namespace qypr {
 
 void PopoverManager::open(std::unique_ptr<DetailedPopover> popover, double anchorX, double anchorY) {
@@ -81,6 +83,18 @@ void PopoverManager::draw(Painter& p, int64_t now) {
     }
 }
 
+double PopoverManager::maxContentHeight() const {
+    double h = 0.0;
+    auto consider = [&](const DetailedPopover* p) {
+        if (p) h = std::max(h, p->contentHeight());
+    };
+    consider(active_.get());
+    consider(borrowed_);
+    consider(transitioning_.get());
+    consider(borrowedClosing_);
+    return h;
+}
+
 bool PopoverManager::animating(int64_t now) const {
     if (transitioning_ && transitioning_->openProgress_.active(now)) {
         return true;
@@ -125,6 +139,16 @@ bool PopoverManager::handleKey(uint32_t keysym) {
         return cur->handleKey(keysym);
     }
     return false;
+}
+
+bool PopoverManager::handleText(const std::string& utf8) {
+    DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;
+    return cur ? cur->handleText(utf8) : false;
+}
+
+bool PopoverManager::activeWantsKeyboard() const {
+    DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;
+    return cur && cur->wantsKeyboard();
 }
 
 }  // namespace qypr

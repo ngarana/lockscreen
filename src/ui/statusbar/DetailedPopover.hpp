@@ -4,6 +4,7 @@
 #include "core/Types.hpp"
 #include "ui/Theme.hpp"
 #include <cstdint>
+#include <string>
 
 namespace qypr {
 
@@ -22,6 +23,14 @@ public:
     virtual bool handleDrag(double x, double y) { return false; }
     virtual bool handleScroll(double dx, double dy) { return false; }
     virtual bool handleKey(uint32_t keysym) { return false; }
+    // Committed text (UTF-8) from the keyboard. Only reaches a popover whose
+    // wantsKeyboard() is true and while the host holds keyboard focus.
+    virtual bool handleText(const std::string& utf8) { return false; }
+
+    // A popover that needs typed input (the launcher search box). The host
+    // (BarApp) grabs keyboard focus for the bar surface while such a popover is
+    // open, and releases it on close. Default: pointer-only.
+    virtual bool wantsKeyboard() const { return false; }
 
     // Polled by the host right after handleClick: return true (once) to ask the
     // manager to close this popover — e.g. a menu that just fired an item. The

@@ -40,9 +40,16 @@ public:
     // wl_output listener attached — before the compositor streams mode/scale.
     void createLayerSurface(zwlr_layer_shell_v1* shell);
 
-    // Grow to full-output height while an overlay is open, shrink back to the
-    // reserved strip when it closes (governs both visibility and input grab).
-    void setOverlayActive(bool active);
+    // Resize the surface to `logicalH` (from the anchored edge) so an open
+    // popover is visible/interactive, clamped to [reserved strip, output]. A
+    // value at/under the reserved strip shrinks back to idle. Sized to the
+    // popover — never the whole output — so opening one doesn't resize a
+    // full-window surface (which a compositor would animate/blur screen-wide).
+    void setOverlayHeight(int logicalH);
+
+    // Grab (EXCLUSIVE) or release (NONE) keyboard focus for this surface — set
+    // while a launcher/search popover is open so the user can type.
+    void setKeyboardInteractive(bool on);
 
     // Mark dirty and repaint as soon as the compositor allows.
     void invalidate();
@@ -84,7 +91,7 @@ private:
     int outputHeight_ = 0;      // full output height (logical), for overlays
     int requestedHeight_ = 0;   // current set_size height (logical)
     bool bottom_ = false;       // anchored to the lower screen edge
-    bool overlayActive_ = false;
+    bool kbInteractive_ = false;  // keyboard grab state (launcher search)
 
     int width_ = 0;      // logical, from configure
     int height_ = 0;     // logical, from configure

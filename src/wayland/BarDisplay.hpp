@@ -44,8 +44,13 @@ public:
 
     void invalidateAll();
 
-    // Grow/shrink every bar surface for an open overlay (Quick Settings/popover).
-    void setOverlayActive(bool active);
+    // Resize every bar surface to fit an open overlay (Quick Settings/popover),
+    // or back to the idle strip. `logicalH` is the height from the anchored edge
+    // (0/small = idle); each surface clamps it to its own output.
+    void setOverlayHeight(int logicalH);
+
+    // Grab/release keyboard focus on every bar surface (launcher search box).
+    void setKeyboardInteractive(bool on);
 
     BarWindow* windowForSurface(wl_surface* surface);
 
