@@ -25,7 +25,7 @@
 namespace qypr {
 
 namespace {
-constexpr const char* kGearGlyph = "󰒓";  // nf-md-cog
+constexpr const char* kGearGlyph = "\uf0dd";  // nf-fa-sort_desc
 constexpr double kGearWidth = 32.0;
 // Standalone-bar backdrop opacity (setBackdrop). Solid enough that the
 // chromeless glyphs stay legible over any wallpaper, still slightly translucent
