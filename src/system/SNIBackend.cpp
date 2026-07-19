@@ -1,9 +1,15 @@
-// SNIBackend.cpp - StatusNotifierItem host implementation (push-driven).
+// SNIBackend.cpp - StatusNotifierItem host + optional watcher (push-driven).
+//
+// Dual-mode operation:
+//   Host mode: connects to an external StatusNotifierWatcher, mirrors its items.
+//   Watcher+Host mode: claims the watcher name when none exists, implements the
+//   watcher D-Bus interface, and acts as both watcher and host.
 #include "system/SNIBackend.hpp"
 
 #include <systemd/sd-bus.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -18,9 +24,12 @@ constexpr const char* kWatcherPath = "/StatusNotifierWatcher";
 constexpr const char* kWatcherIface = "org.kde.StatusNotifierWatcher";
 constexpr const char* kItemIface = "org.kde.StatusNotifierItem";
 constexpr const char* kPropsIface = "org.freedesktop.DBus.Properties";
+constexpr const char* kDBusIface = "org.freedesktop.DBus";
+constexpr const char* kDBusName = "org.freedesktop.DBus";
+constexpr int kProtocolVersion = 1;
 
-// Read a variant known to hold a string. Consumes the variant either way so
-// the caller can close the surrounding dict-entry container.
+// ─── Variant readers ────────────────────────────────────────────────────────
+
 bool readVariantString(sd_bus_message* m, std::string* out) {
     if (sd_bus_message_enter_container(m, 'v', "s") < 0) {
         sd_bus_message_skip(m, "v");
@@ -32,7 +41,6 @@ bool readVariantString(sd_bus_message* m, std::string* out) {
     return true;
 }
 
-// Same, for a variant holding an object path (the item's Menu property).
 bool readVariantObjectPath(sd_bus_message* m, std::string* out) {
     if (sd_bus_message_enter_container(m, 'v', "o") < 0) {
         sd_bus_message_skip(m, "v");
@@ -44,8 +52,6 @@ bool readVariantObjectPath(sd_bus_message* m, std::string* out) {
     return true;
 }
 
-// ARGB32 in network byte order (bytes A,R,G,B per the SNI spec) → a cairo
-// CAIRO_FORMAT_ARGB32 surface (native-endian, premultiplied).
 cairo_surface_t* pixmapToSurface(const unsigned char* argb, int w, int h) {
     cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
     if (cairo_surface_status(surf) != CAIRO_STATUS_SUCCESS) {
@@ -61,7 +67,6 @@ cairo_surface_t* pixmapToSurface(const unsigned char* argb, int w, int h) {
         for (int x = 0; x < w; ++x) {
             unsigned a = src[0], r = src[1], g = src[2], b = src[3];
             src += 4;
-            // Premultiply into cairo's expected 0xAARRGGBB layout.
             r = r * a / 255;
             g = g * a / 255;
             b = b * a / 255;
@@ -72,8 +77,6 @@ cairo_surface_t* pixmapToSurface(const unsigned char* argb, int w, int h) {
     return surf;
 }
 
-// Read a variant known to hold a(iiay) and return the largest pixmap as a
-// cairo surface (owned by the caller), or nullptr. Consumes the variant.
 cairo_surface_t* readVariantPixmap(sd_bus_message* m) {
     if (sd_bus_message_enter_container(m, 'v', "a(iiay)") < 0) {
         sd_bus_message_skip(m, "v");
@@ -88,7 +91,7 @@ cairo_surface_t* readVariantPixmap(sd_bus_message* m) {
             const void* data = nullptr;
             size_t len = 0;
             sd_bus_message_read_array(m, 'y', &data, &len);
-            sd_bus_message_exit_container(m);  // (iiay)
+            sd_bus_message_exit_container(m);
             if (w > 0 && h > 0 && data && len >= static_cast<size_t>(w) * h * 4 && w > bestW) {
                 cairo_surface_t* s = pixmapToSurface(static_cast<const unsigned char*>(data), w, h);
                 if (s) {
@@ -98,12 +101,42 @@ cairo_surface_t* readVariantPixmap(sd_bus_message* m) {
                 }
             }
         }
-        sd_bus_message_exit_container(m);  // array
+        sd_bus_message_exit_container(m);
     }
-    sd_bus_message_exit_container(m);  // variant
+    sd_bus_message_exit_container(m);
     return best;
 }
+
+// ─── Watcher vtable callbacks ───────────────────────────────────────────────
+
+int watcherHandleRegisterItem(sd_bus_message* m, void* userdata, sd_bus_error*) {
+    return static_cast<SNIBackend*>(userdata)->handleRegisterItem(m);
+}
+
+int watcherHandleRegisterHost(sd_bus_message* m, void* userdata, sd_bus_error*) {
+    return static_cast<SNIBackend*>(userdata)->handleRegisterHost(m);
+}
+
+static const sd_bus_vtable kWatcherVtable[] = {
+    SD_BUS_VTABLE_START(0),
+    SD_BUS_METHOD("RegisterStatusNotifierItem", "s", "", watcherHandleRegisterItem,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_METHOD("RegisterStatusNotifierHost", "s", "", watcherHandleRegisterHost,
+                  SD_BUS_VTABLE_UNPRIVILEGED),
+    SD_BUS_PROPERTY("RegisteredStatusNotifierItems", "as", SNIBackend::getRegisteredItems, 0,
+                    SD_BUS_VTABLE_PROPERTY_EMITS_CHANGE),
+    SD_BUS_PROPERTY("IsStatusNotifierHostRegistered", "b", SNIBackend::getHostRegistered, 0, 0),
+    SD_BUS_PROPERTY("ProtocolVersion", "i", SNIBackend::getProtocolVersion, 0, 0),
+    SD_BUS_SIGNAL("StatusNotifierItemRegistered", "s", 0),
+    SD_BUS_SIGNAL("StatusNotifierItemUnregistered", "s", 0),
+    SD_BUS_SIGNAL("StatusNotifierHostRegistered", "", 0),
+    SD_BUS_SIGNAL("StatusNotifierHostUnregistered", "", 0),
+    SD_BUS_VTABLE_END,
+};
+
 }  // namespace
+
+// ─── Lifecycle ──────────────────────────────────────────────────────────────
 
 SNIBackend::SNIBackend(SystemBus& bus) : bus_(bus) {}
 
@@ -112,8 +145,12 @@ SNIBackend::~SNIBackend() {
     if (unregSlot_) sd_bus_slot_unref(unregSlot_);
     if (itemSlot_) sd_bus_slot_unref(itemSlot_);
     if (watcherSlot_) sd_bus_slot_unref(watcherSlot_);
+    if (watcherVtableSlot_) sd_bus_slot_unref(watcherVtableSlot_);
+    for (auto* s : ownerWatchSlots_) sd_bus_slot_unref(s);
     clearItems();
 }
+
+// ─── Public API ─────────────────────────────────────────────────────────────
 
 void SNIBackend::parseItemRef(const std::string& ref, std::string& service, std::string& path) {
     auto slash = ref.find('/');
@@ -126,55 +163,73 @@ void SNIBackend::parseItemRef(const std::string& ref, std::string& service, std:
     }
 }
 
+// ─── Watcher property getters (public static, called by vtable) ─────────────
+
+int SNIBackend::getRegisteredItems(sd_bus*, const char*, const char*, const char*,
+                                   sd_bus_message* reply, void* userdata, sd_bus_error*) {
+    auto* self = static_cast<SNIBackend*>(userdata);
+    sd_bus_message_open_container(reply, 'a', "s");
+    for (const auto& s : self->registeredItems_) sd_bus_message_append(reply, "s", s.c_str());
+    sd_bus_message_close_container(reply);
+    return 1;
+}
+
+int SNIBackend::getHostRegistered(sd_bus*, const char*, const char*, const char*,
+                                  sd_bus_message* reply, void* userdata, sd_bus_error*) {
+    auto* self = static_cast<SNIBackend*>(userdata);
+    sd_bus_message_append(reply, "b", !self->registeredHosts_.empty());
+    return 1;
+}
+
+int SNIBackend::getProtocolVersion(sd_bus*, const char*, const char*, const char*,
+                                   sd_bus_message* reply, void*, sd_bus_error*) {
+    sd_bus_message_append(reply, "i", kProtocolVersion);
+    return 1;
+}
+
 bool SNIBackend::start() {
     if (!bus_.available()) return false;
 
     hostName_ = "org.kde.StatusNotifierHost-" + std::to_string(getpid()) + "-1";
-    registerHost();
 
-    // Watcher item add/remove.
-    regSlot_ = bus_.addMatch(
-        "type='signal',interface='org.kde.StatusNotifierWatcher',"
-        "member='StatusNotifierItemRegistered'",
-        &SNIBackend::onItemRegistered, this);
-    unregSlot_ = bus_.addMatch(
-        "type='signal',interface='org.kde.StatusNotifierWatcher',"
-        "member='StatusNotifierItemUnregistered'",
-        &SNIBackend::onItemUnregistered, this);
-    // Per-item NewIcon/NewTitle/NewStatus/… — the handler refetches only the
-    // signalling item (matched by sender+path), so this is not a storm.
+    if (detectExternalWatcher()) {
+        registerHost();
+        mode_ = Mode::Host;
+    } else {
+        switchToWatcherMode();
+        mode_ = Mode::WatcherHost;
+    }
+
     itemSlot_ = bus_.addMatch("type='signal',interface='org.kde.StatusNotifierItem'",
                               &SNIBackend::onItemChanged, this);
-    // Watcher (re)appearing (e.g. bar restart) → re-register and re-sync.
-    watcherSlot_ = bus_.addMatch(
-        "type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',"
-        "member='NameOwnerChanged',arg0='org.kde.StatusNotifierWatcher'",
-        &SNIBackend::onWatcherOwnerChanged, this);
 
     refresh();
-    // Host mode never truly fails: items may arrive later. Keep the indicator
-    // alive (it stays hidden until items_ is non-empty).
     return true;
 }
+
+void SNIBackend::activate(size_t index, int x, int y) {
+    if (!bus_.available() || index >= items_.size()) return;
+    const SNIItem& it = items_[index];
+    sd_bus_call_method_async(bus_.get(), nullptr, it.service.c_str(), it.path.c_str(), kItemIface,
+                             "Activate", nullptr, nullptr, "ii", x, y);
+}
+
+void SNIBackend::secondaryActivate(size_t index, int x, int y) {
+    if (!bus_.available() || index >= items_.size()) return;
+    const SNIItem& it = items_[index];
+    sd_bus_call_method_async(bus_.get(), nullptr, it.service.c_str(), it.path.c_str(), kItemIface,
+                             "SecondaryActivate", nullptr, nullptr, "ii", x, y);
+}
+
+// ─── Host mode helpers ──────────────────────────────────────────────────────
 
 void SNIBackend::registerHost() {
     sd_bus* bus = bus_.get();
     if (!bus) return;
-    // Own the well-known host name (best-effort) and tell the watcher.
     sd_bus_request_name(bus, hostName_.c_str(), 0);
     sd_bus_call_method_async(bus, nullptr, kWatcher, kWatcherPath, kWatcherIface,
                              "RegisterStatusNotifierHost", nullptr, nullptr, "s",
                              hostName_.c_str());
-}
-
-int SNIBackend::onItemRegistered(sd_bus_message*, void* ud, sd_bus_error*) {
-    static_cast<SNIBackend*>(ud)->refresh();
-    return 0;
-}
-
-int SNIBackend::onItemUnregistered(sd_bus_message*, void* ud, sd_bus_error*) {
-    static_cast<SNIBackend*>(ud)->refresh();
-    return 0;
 }
 
 int SNIBackend::onItemChanged(sd_bus_message* m, void* ud, sd_bus_error*) {
@@ -187,12 +242,11 @@ int SNIBackend::onItemChanged(sd_bus_message* m, void* ud, sd_bus_error*) {
         if (it.service == sender && it.path == path) {
             SNIItem fresh = self->fetchItem(it.service, it.path);
             if (it.pixmap) cairo_surface_destroy(it.pixmap);
-            it = std::move(fresh);  // raw pixmap ptr transfers; no dtor, no double free
+            it = std::move(fresh);
             self->notify();
             return 0;
         }
     }
-    // Signal from an item we do not track yet (registration race): full resync.
     self->refresh();
     return 0;
 }
@@ -206,6 +260,157 @@ int SNIBackend::onWatcherOwnerChanged(sd_bus_message* m, void* ud, sd_bus_error*
     return 0;
 }
 
+// ─── Watcher mode ───────────────────────────────────────────────────────────
+
+bool SNIBackend::detectExternalWatcher() {
+    sd_bus* bus = bus_.get();
+    if (!bus) return false;
+
+    // Call org.freedesktop.DBus.NameHasOwner (not available in all systemd versions).
+    sd_bus_error err = SD_BUS_ERROR_NULL;
+    sd_bus_message* reply = nullptr;
+    int r = sd_bus_call_method(bus, kDBusName, "/", kDBusIface, "NameHasOwner", &err, &reply, "s",
+                               kWatcher);
+    sd_bus_error_free(&err);
+    if (r < 0 || !reply) {
+        if (reply) sd_bus_message_unref(reply);
+        return false;
+    }
+    int has = 0;
+    sd_bus_message_read_basic(reply, 'b', &has);
+    sd_bus_message_unref(reply);
+    return has;
+}
+
+void SNIBackend::switchToWatcherMode() {
+    sd_bus* bus = bus_.get();
+    if (!bus) return;
+
+    int r = sd_bus_request_name(bus, kWatcher, 0);
+    if (r < 0) {
+        std::fprintf(stderr, "sni: cannot own %s (%d) — another watcher running?\n", kWatcher, r);
+        registerHost();
+        mode_ = Mode::Host;
+        return;
+    }
+
+    registerWatcherVtable();
+    sd_bus_request_name(bus, hostName_.c_str(), 0);
+}
+
+void SNIBackend::registerWatcherVtable() {
+    sd_bus* bus = bus_.get();
+    if (!bus) return;
+    sd_bus_add_object_vtable(bus, &watcherVtableSlot_, kWatcherPath, kWatcherIface, kWatcherVtable,
+                             this);
+}
+
+int SNIBackend::handleRegisterItem(sd_bus_message* m) {
+    const char* service = nullptr;
+    if (sd_bus_message_read_basic(m, 's', &service) < 0 || !service) return -EINVAL;
+
+    // Some items (e.g. blueman) register with a path instead of a bus name.
+    // Per the SNI spec the argument should be a bus name; if it starts with '/'
+    // it is a path and we must use the sender's unique bus name as the service.
+    std::string ref;
+    if (service[0] == '/') {
+        const char* sender = sd_bus_message_get_sender(m);
+        if (sender && *sender)
+            ref = std::string(sender) + service;
+        else
+            ref = service;
+    } else {
+        ref = service;
+    }
+
+    if (std::find(registeredItems_.begin(), registeredItems_.end(), ref) ==
+        registeredItems_.end()) {
+        registeredItems_.push_back(ref);
+        watchItemOwnership(ref);
+        emitItemRegistered(ref);
+        refresh();
+    }
+
+    sd_bus* bus = bus_.get();
+    if (bus) {
+        sd_bus_message* reply = nullptr;
+        sd_bus_message_new_method_return(m, &reply);
+        sd_bus_send(nullptr, reply, nullptr);
+        sd_bus_message_unref(reply);
+    }
+    return 1;
+}
+
+int SNIBackend::handleRegisterHost(sd_bus_message* m) {
+    const char* service = nullptr;
+    if (sd_bus_message_read_basic(m, 's', &service) < 0 || !service) return -EINVAL;
+
+    if (std::find(registeredHosts_.begin(), registeredHosts_.end(), service) ==
+        registeredHosts_.end()) {
+        registeredHosts_.push_back(service);
+    }
+
+    sd_bus* bus = bus_.get();
+    if (bus) {
+        sd_bus_message* reply = nullptr;
+        sd_bus_message_new_method_return(m, &reply);
+        sd_bus_send(nullptr, reply, nullptr);
+        sd_bus_message_unref(reply);
+    }
+    return 1;
+}
+
+void SNIBackend::emitItemRegistered(const std::string& service) {
+    sd_bus* bus = bus_.get();
+    if (!bus) return;
+    sd_bus_message* sig = nullptr;
+    sd_bus_message_new_signal(bus, &sig, kWatcherPath, kWatcherIface,
+                              "StatusNotifierItemRegistered");
+    sd_bus_message_append(sig, "s", service.c_str());
+    sd_bus_send(nullptr, sig, nullptr);
+    sd_bus_message_unref(sig);
+}
+
+void SNIBackend::emitItemUnregistered(const std::string& service) {
+    sd_bus* bus = bus_.get();
+    if (!bus) return;
+    sd_bus_message* sig = nullptr;
+    sd_bus_message_new_signal(bus, &sig, kWatcherPath, kWatcherIface,
+                              "StatusNotifierItemUnregistered");
+    sd_bus_message_append(sig, "s", service.c_str());
+    sd_bus_send(nullptr, sig, nullptr);
+    sd_bus_message_unref(sig);
+}
+
+void SNIBackend::watchItemOwnership(const std::string& service) {
+    sd_bus* bus = bus_.get();
+    if (!bus) return;
+    std::string match = "type='signal',sender='" + std::string(kDBusIface) +
+                        "',interface='" + std::string(kDBusIface) +
+                        "',member='NameOwnerChanged',arg0='" + service + "'";
+    sd_bus_slot* slot = bus_.addMatch(match.c_str(), &SNIBackend::onItemOwnerChanged, this);
+    if (slot) ownerWatchSlots_.push_back(slot);
+}
+
+int SNIBackend::onItemOwnerChanged(sd_bus_message* m, void* ud, sd_bus_error*) {
+    auto* self = static_cast<SNIBackend*>(ud);
+    const char *name = nullptr, *oldOwner = nullptr, *newOwner = nullptr;
+    sd_bus_message_read(m, "sss", &name, &oldOwner, &newOwner);
+
+    if (newOwner && !*newOwner && name) {
+        std::string svc = name;
+        auto it = std::find(self->registeredItems_.begin(), self->registeredItems_.end(), svc);
+        if (it != self->registeredItems_.end()) {
+            self->registeredItems_.erase(it);
+            self->emitItemUnregistered(svc);
+            self->refresh();
+        }
+    }
+    return 0;
+}
+
+// ─── Refresh (dual-mode) ───────────────────────────────────────────────────
+
 void SNIBackend::refresh() {
     sd_bus* bus = bus_.get();
     if (!bus) {
@@ -214,13 +419,26 @@ void SNIBackend::refresh() {
         return;
     }
 
+    if (mode_ == Mode::WatcherHost) {
+        std::vector<SNIItem> next;
+        for (const auto& ref : registeredItems_) {
+            std::string service, path;
+            parseItemRef(ref, service, path);
+            next.push_back(fetchItem(service, path));
+        }
+        clearItems();
+        items_ = std::move(next);
+        notify();
+        return;
+    }
+
+    // Host mode: query the external watcher.
     sd_bus_error err = SD_BUS_ERROR_NULL;
     sd_bus_message* reply = nullptr;
     int r = sd_bus_get_property(bus, kWatcher, kWatcherPath, kWatcherIface,
-                               "RegisteredStatusNotifierItems", &err, &reply, "as");
+                                "RegisteredStatusNotifierItems", &err, &reply, "as");
     sd_bus_error_free(&err);
     if (r < 0 || !reply) {
-        // No watcher (or none yet): clear to empty.
         if (reply) sd_bus_message_unref(reply);
         clearItems();
         notify();
@@ -243,6 +461,8 @@ void SNIBackend::refresh() {
     items_ = std::move(next);
     notify();
 }
+
+// ─── Item fetch / clear ─────────────────────────────────────────────────────
 
 SNIItem SNIBackend::fetchItem(const std::string& service, const std::string& path) {
     SNIItem item;
@@ -289,20 +509,6 @@ SNIItem SNIBackend::fetchItem(const std::string& service, const std::string& pat
     }
     sd_bus_message_unref(reply);
     return item;
-}
-
-void SNIBackend::activate(size_t index, int x, int y) {
-    if (!bus_.available() || index >= items_.size()) return;
-    const SNIItem& it = items_[index];
-    sd_bus_call_method_async(bus_.get(), nullptr, it.service.c_str(), it.path.c_str(), kItemIface,
-                             "Activate", nullptr, nullptr, "ii", x, y);
-}
-
-void SNIBackend::secondaryActivate(size_t index, int x, int y) {
-    if (!bus_.available() || index >= items_.size()) return;
-    const SNIItem& it = items_[index];
-    sd_bus_call_method_async(bus_.get(), nullptr, it.service.c_str(), it.path.c_str(), kItemIface,
-                             "SecondaryActivate", nullptr, nullptr, "ii", x, y);
 }
 
 void SNIBackend::clearItems() {

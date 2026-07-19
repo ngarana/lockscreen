@@ -35,7 +35,10 @@ std::string SNITrayHost::tooltip() const {
 
 double SNITrayHost::measureWidth(Painter&) {
     if (!backend_) return 0;
-    size_t n = backend_->items().size();
+    size_t n = 0;
+    for (const auto& it : backend_->items()) {
+        if (!it.iconName.empty() || it.pixmap) ++n;
+    }
     if (n == 0) return 0;
     return n * kIconPx + (n - 1) * kGap + 2 * kSidePad;
 }
@@ -64,35 +67,46 @@ void SNITrayHost::draw(Painter& p, int64_t now) {
     double x = bounds.x + kSidePad;
     double y = bounds.y + (bounds.h - kIconPx) / 2.0;
     for (const auto& it : items) {
-        // Prefer the themed IconName; fall back to the app-supplied pixmap.
         cairo_surface_t* s = nullptr;
         if (!it.iconName.empty()) s = IconResolver::instance().get(it.iconName);
         if (!s) s = it.pixmap;
+        if (!s) continue;  // skip items with no renderable icon
 
-        if (s) {
-            p.drawSurface(s, {x, y, kIconPx, kIconPx});
-        } else {
-            TextStyle st{theme::font::iconFamily, kIconPx, PANGO_WEIGHT_NORMAL,
-                         theme::color::text};
-            p.drawTextShadowed(x, y, kFallbackGlyph, st, HAlign::Left,
-                               theme::effects::shadowOpacity, theme::effects::shadowOffset);
-        }
+        p.drawSurface(s, {x, y, kIconPx, kIconPx});
         x += kIconPx + kGap;
     }
 }
 
 void SNITrayHost::onBackendUpdate() {
-    visible = backend_ && !backend_->items().empty();
+    if (!backend_) {
+        visible = false;
+        return;
+    }
+    for (const auto& it : backend_->items()) {
+        if (!it.iconName.empty() || it.pixmap) {
+            visible = true;
+            return;
+        }
+    }
+    visible = false;
 }
 
 int SNITrayHost::iconIndexAt(double x) const {
     if (!backend_ || !visible) return -1;
-    const size_t n = backend_->items().size();
-    if (n == 0) return -1;
+    const auto& items = backend_->items();
+    if (items.empty()) return -1;
     const double localX = x - (bounds.x + kSidePad);
     if (localX < 0) return -1;
-    const int idx = static_cast<int>(localX / (kIconPx + kGap));
-    return (idx >= 0 && idx < static_cast<int>(n)) ? idx : -1;
+    // Walk items, skipping those without a renderable icon, to find the one
+    // at the visual position.
+    double cx = 0;
+    for (size_t i = 0; i < items.size(); ++i) {
+        const auto& it = items[i];
+        if (it.iconName.empty() && !it.pixmap) continue;
+        if (localX >= cx && localX < cx + kIconPx) return static_cast<int>(i);
+        cx += kIconPx + kGap;
+    }
+    return -1;
 }
 
 bool SNITrayHost::onClick(double x, double y) {
