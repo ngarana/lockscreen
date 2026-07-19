@@ -71,8 +71,7 @@ public:
         // Slide down 6px while opening (fade is applied by PopoverManager).
         b.y -= (1.0 - openProgress_.value(now)) * 6.0;
 
-        p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::glass);
-        p.strokeRoundedRect(b, theme::statusbar::popoverRadius, theme::color::glassBorder, 1.0);
+        p.fillGlass(b, theme::statusbar::popoverRadius, theme::color::glass, theme::color::glassBorder);
         drawProfiles(p, b);
 
         const double pad = theme::statusbar::popoverPadding;

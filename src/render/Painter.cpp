@@ -43,6 +43,40 @@ void Painter::strokeRoundedRect(const Rect& r, double radius, const Color& c, do
     cairo_stroke(cr_);
 }
 
+void Painter::fillGlass(const Rect& r, double radius, const Color& base, const Color& border) {
+    double rad = std::min(radius, std::min(r.w, r.h) / 2.0);
+
+    // 1. Translucent base fill.
+    roundedPath(cr_, r, radius);
+    setSource(cr_, base);
+    cairo_fill(cr_);
+
+    // 2. Frosted sheen: a soft white highlight fading down from the top edge,
+    //    clipped to the rounded shape. This is a light effect, not a theme
+    //    colour, so white-with-low-alpha is deliberate.
+    cairo_save(cr_);
+    roundedPath(cr_, r, radius);
+    cairo_clip(cr_);
+    cairo_pattern_t* sheen = cairo_pattern_create_linear(0, r.y, 0, r.y + r.h);
+    cairo_pattern_add_color_stop_rgba(sheen, 0.0, 1, 1, 1, 0.10);
+    cairo_pattern_add_color_stop_rgba(sheen, 0.35, 1, 1, 1, 0.02);
+    cairo_pattern_add_color_stop_rgba(sheen, 1.0, 1, 1, 1, 0.0);
+    cairo_set_source(cr_, sheen);
+    cairo_rectangle(cr_, r.x, r.y, r.w, r.h);
+    cairo_fill(cr_);
+    cairo_pattern_destroy(sheen);
+    // A crisp 1px highlight along the very top, inset past the corner radius.
+    cairo_set_source_rgba(cr_, 1, 1, 1, 0.14);
+    cairo_set_line_width(cr_, 1.0);
+    cairo_move_to(cr_, r.x + rad, r.y + 0.5);
+    cairo_line_to(cr_, r.x + r.w - rad, r.y + 0.5);
+    cairo_stroke(cr_);
+    cairo_restore(cr_);
+
+    // 3. Hairline border.
+    strokeRoundedRect(r, radius, border, 1.0);
+}
+
 void Painter::fillCircle(double cx, double cy, double radius, const Color& c) {
     setSource(cr_, c);
     cairo_arc(cr_, cx, cy, radius, 0, 2 * M_PI);

@@ -45,6 +45,14 @@ public:
     void fillRect(const Rect& r, const Color& c);
     void fillRoundedRect(const Rect& r, double radius, const Color& c);
     void strokeRoundedRect(const Rect& r, double radius, const Color& c, double lineWidth);
+    // Frosted-glass panel: the translucent `base` fill, a soft light sheen that
+    // fades from the top edge (the frosted-glass highlight), a bright hairline
+    // along the very top, and the `border` stroke — the shared card look for the
+    // status bar strip and every popover. Theme-agnostic: callers pass the glass
+    // colours. On a blur-capable compositor (the bar's layer namespace is
+    // "qypr-bar") the translucency reads as real frost; without blur the sheen +
+    // border still give a glassy panel.
+    void fillGlass(const Rect& r, double radius, const Color& base, const Color& border);
     void fillCircle(double cx, double cy, double radius, const Color& c);
     void strokeCircle(double cx, double cy, double radius, const Color& c, double lineWidth);
 

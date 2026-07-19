@@ -13,6 +13,7 @@
 #include "system/BrightnessBackend.hpp"
 #include "system/DndState.hpp"
 #include "system/IdleInhibitor.hpp"
+#include "system/KeyboardLayout.hpp"
 #include "system/SNIBackend.hpp"
 #include "system/ToplevelBackend.hpp"
 #include "system/VolumeBackend.hpp"
@@ -86,6 +87,9 @@ StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& b
     if (backends.idleInhibitor) {
         backends.idleInhibitor->setOnChange([this] { notifyBackendUpdate(); });
     }
+    if (backends.keyboardLayout) {
+        backends.keyboardLayout->setOnChange([this] { notifyBackendUpdate(); });
+    }
     // Session-sensitive WM widgets (only ever started by the unlocked bar).
     if (backends.workspace) {
         backends.workspace->setOnChange([this] { notifyBackendUpdate(); });
@@ -126,6 +130,18 @@ void StatusBar::setSessionContentVisible(bool v) {
 
 bool StatusBar::hasOpenOverlay() const {
     return popovers_.active() != nullptr || popovers_.isTransitioning();
+}
+
+int StatusBar::overlayHeight() const {
+    // Height (from the anchored edge) needed to contain the strip and the open
+    // popover. The popover sits a 6px gap past the strip; add a little breathing
+    // room past its bottom. Uses the tallest *drawing* popover so the surface
+    // stays big enough through the close fade, then returns 0 (idle strip) once
+    // nothing is drawn. Symmetric for top/bottom bars: the popover always grows
+    // away from the anchored edge, so the extent from that edge is the same.
+    const double popH = popovers_.maxContentHeight();
+    if (popH <= 0.0) return 0;
+    return static_cast<int>(geom_.edgeMargin + geom_.height + 6.0 + popH + 8.0 + 0.5);
 }
 
 void StatusBar::setBackdrop(bool enabled, double alpha) {
@@ -235,8 +251,13 @@ void StatusBar::draw(Painter& p, int64_t now) {
     // wallpaper; the lock screen never enables it.
     if (backdrop_ && bounds.w > 0) {
         const double a = backdropAlpha_ >= 0.0 ? backdropAlpha_ : kBackdropAlpha;
-        p.fillRoundedRect(bounds, theme::statusbar::cornerRadius,
-                          theme::color::background.withAlpha(a));
+        // Frosted-glass strip: the surface tint at the configured opacity plus
+        // the shared sheen + hairline border, matching the popovers. On a
+        // blur-capable compositor (layer namespace "qypr-bar") it reads as real
+        // frost. The lock screen never enables the backdrop, so its bar stays
+        // chromeless over the controlled dark background.
+        p.fillGlass(bounds, theme::statusbar::cornerRadius,
+                    theme::color::surface.withAlpha(a), theme::color::glassBorder);
     }
 
     auto drawZone = [&](auto& list) {
@@ -325,9 +346,13 @@ void StatusBar::activateIndicator(StatusIndicator& ind) {
             popovers_.open(std::move(view), anchorX, 0);
             anchorPopoverY(*p);  // opens away from the anchored screen edge
         }
-    } else {
-        toggleQuickSettings();
     }
+    // A display-only indicator (active window, keyboard layout, system monitor)
+    // has no popover: activating it is a no-op. It must NOT fall back to opening
+    // Quick Settings — that panel spawns at the far-right gear, so a click on an
+    // unrelated element would make it appear to fly across the bar. Quick
+    // Settings is reached only via the gear button (or an indicator's own
+    // toggle/scroll).
     host_.invalidate();
 }
 
@@ -428,7 +453,13 @@ bool StatusBar::handleKey(uint32_t keysym) {
             host_.invalidate();
             return true;
         }
-        return popovers_.handleKey(keysym);
+        const bool handled = popovers_.handleKey(keysym);
+        // A keyboard action may fire an item (launcher Enter) and ask to close.
+        if (popovers_.active() && popovers_.active()->consumeCloseRequest()) {
+            popovers_.closeActive();
+        }
+        host_.invalidate();
+        return handled;
     }
 
     if (!hasFocusedChild()) return false;
@@ -456,6 +487,14 @@ bool StatusBar::handleKey(uint32_t keysym) {
             return cycleFocus(false);
     }
     return false;
+}
+
+bool StatusBar::handleTextInput(const std::string& utf8) {
+    return popovers_.handleText(utf8);
+}
+
+bool StatusBar::wantsKeyboard() const {
+    return popovers_.activeWantsKeyboard();
 }
 
 void StatusBar::toggleQuickSettings() {

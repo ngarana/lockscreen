@@ -51,8 +51,7 @@ public:
     void draw(Painter& p, int64_t now) override {
         Rect b = getBounds();
         b.y += (growUp ? 1.0 : -1.0) * (1.0 - openProgress_.value(now)) * 6.0;
-        p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::glass);
-        p.strokeRoundedRect(b, theme::statusbar::popoverRadius, theme::color::glassBorder, 1.0);
+        p.fillGlass(b, theme::statusbar::popoverRadius, theme::color::glass, theme::color::glassBorder);
 
         sinkRows_.clear();
         streamTracks_.clear();

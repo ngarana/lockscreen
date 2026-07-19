@@ -99,9 +99,8 @@ void QuickSettingsPanel::draw(Painter& p, int64_t now) {
 
     Rect popBounds = getBounds();
 
-    // Draw card popover background (glass-morphism)
-    p.fillRoundedRect(popBounds, 16.0, theme::color::glass);
-    p.strokeRoundedRect(popBounds, 16.0, theme::color::glassBorder, 1.0);
+    // Draw card popover background (frosted glass)
+    p.fillGlass(popBounds, 16.0, theme::color::glass, theme::color::glassBorder);
 
     // Draw popover arrow pointing up at top right of the card
     double arrowX = anchorX - 24.0;
