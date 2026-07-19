@@ -164,7 +164,7 @@ entry point and platform surface:
 | Platform | `WaylandDisplay` + `Output` on **ext-session-lock-v1** (fullscreen, secure) | `BarDisplay` + `BarWindow` on **wlr-layer-shell** (top-anchored panel, exclusive zone) |
 | Composition | `Shell` (LockScreen ⟂ StatusBar peers) | StatusBar only — no LockScreen, video, or PAM |
 | Session content | `setSessionContentVisible(false)` — WM widgets **hidden**, backends **not started** | `setSessionContentVisible(true)` — workspaces + active window **shown**, backends started |
-| Chrome | chromeless (draws over the dark, dimmed lock video) | chromeless **+ subtle backdrop** (`setBackdrop`) so glyphs stay legible over any wallpaper |
+| Chrome | chromeless (draws over the dark, dimmed lock video) | **frosted-glass strip** (`setBackdrop`) — translucent surface tint + light sheen + hairline border (the shared `Painter::fillGlass` card, same as the popovers); opacity is the `backdrop` key, and the `qypr-bar` layer namespace lets a compositor add real blur |
 
 `BarDisplay`/`BarWindow` are deliberate parallels of `WaylandDisplay`/`Output`
 (the lock path is left untouched); they reuse the shared lower layers —
@@ -173,12 +173,16 @@ render loop. `Seat` was decoupled from the concrete `Output` via a
 surface→logical-size resolver (`setSurfaceSizer`) so it feeds either host.
 
 **Overlay grow.** The bar's layer surface is only the reserved strip tall
-(`kReserved = 66px`) while idle, so the desktop below keeps its clicks. When
-`StatusBar::hasOpenOverlay()` flips true (Quick Settings or a popover),
-`BarApp` grows every `BarWindow` to the full output height so the overlay —
-drawn at absolute coordinates, exactly as on the lock screen — is visible and
-grabs input; it shrinks back on close. The exclusive zone stays at `kReserved`
-throughout, so the overlay floats without reshuffling windows.
+(`kReserved = 66px`) while idle, so the desktop below keeps its clicks. When a
+popover or Quick Settings opens, `BarApp` grows every `BarWindow` to
+`StatusBar::overlayHeight()` — the strip plus the tallest drawing popover, sized
+to fit that popover and **never the whole output** — so the overlay (drawn at
+absolute coordinates, exactly as on the lock screen) is visible and grabs input;
+it shrinks back on close. Sizing to the popover, not full-screen, is deliberate:
+a full-window layer surface is what a compositor animates or blurs *across the
+whole screen* when a popover opens (and would put frost over the entire desktop
+rather than just the glass). The exclusive zone stays at `kReserved` throughout,
+so the overlay floats without reshuffling windows.
 
 ### Component Relationships
 
@@ -1010,7 +1014,11 @@ Focus ring: 2px `theme::color::primary` outline with 2px offset, rounded.
                                      Escape dismisses
 3. Detailed popover (if open)      — clicks route to popover content
                                      Escape dismisses
-4. Status bar indicators           — click activates indicator
+4. Status bar indicators           — click activates indicator (own popover or
+                                     toggle); the gear is the ONLY Quick Settings
+                                     trigger — a display-only indicator (active
+                                     window, keyboard layout, system monitor)
+                                     does nothing, it must not spawn the panel
                                      scroll adjusts (volume/brightness)
 5. Notifications                   — click expand/dismiss
 6. Audio panel                     — transport buttons, volume slider
@@ -1076,9 +1084,9 @@ remains is mostly *session* surface area (windows, media, notifications, power),
 | **Notifications applet + history** | ✅ bell + count + history popover; per-row **dismiss**, **Clear all**, **scroll**, relative timestamps, critical accent | per-app inline actions (buttons) | 10a ✅ |
 | **Media player (MPRIS)** | ✅ now-playing + transport popover, pushed (no poll) | album art, seek, explicit player switching | 10b ✅ |
 | **Session / power menu** | ✅ Lock/Suspend/Hibernate/Restart/Shut Down, arm-then-confirm | logout (session-manager specific) | 10a ✅ |
-| **Application launcher** | ❌ none | Kickoff-style menu, search, `.desktop` index, favourites | 15 |
+| **Application launcher** | 🚧 keyboard-search launcher, `.desktop` index, spawn-on-click (D1), bar-only — **shelved** (built, tested, off by default) | favourites, icons, recent/frequent | 15 🚧 |
 | Clipboard history (Klipper) | ❌ none | applet + history popover | 15 |
-| Keyboard layout indicator | ❌ none | layout display + switch | 15 |
+| Keyboard layout indicator | ✅ active xkb layout code (push from `Seat`); hides with a single layout, bar-only | switch (not possible as a pure Wayland client — compositor keybind) | 15 ✅ |
 | Idle inhibitor | ❌ none | toggle (idle-inhibit protocol / logind) | 15 |
 | System monitors (CPU/RAM/net/disk/temp) | ❌ none | compact meters + tooltips | 15 |
 | **User configuration** | ✅ `bar.conf` (INI): modules per zone, geometry, backdrop, clock formats | per-module `spawn-on-click` (D1) lands with the launcher | 9 ✅ |
@@ -1539,9 +1547,9 @@ all are config-gated (Phase 9) and off by default.
 
 | Indicator | Backend |
 |-----------|---------|
-| **Application launcher** | `.desktop` index (shared with Phase 11) + search; spawn-on-click per **D1** |
+| **Application launcher** 🚧 | `.desktop` index + keyboard search; spawn-on-click per **D1** — **shelved** (below) |
 | **Clipboard history** | Wayland `wl_data_device` / `zwlr_data_control_manager_v1` (standard protocol — no `cliphist` dependency) |
-| **Keyboard layout** | xkb state from the existing `Seat` |
+| **Keyboard layout** ✅ | xkb state from the existing `Seat` — active-layout code (below) |
 | **Idle inhibitor** ✅ | `zwp_idle_inhibit_manager_v1` — "keep awake" toggle (below) |
 | **System monitors** ✅ | CPU/RAM (`/proc`) — compact meters (below). Disk/net/temp still TODO |
 
@@ -1570,6 +1578,59 @@ protocol. *Verified* live against Hyprland: the compositor advertises the manage
 `available()` flips on `init()`, and `setActive(true)`/`(false)` create and
 destroy a real inhibitor with **zero protocol error**; both glyphs render; a unit
 test covers the null/uninitialised gating. 72/72 tests.
+
+**Application launcher (third increment — 🚧 shelved).** `DesktopIndex` scans the XDG
+application dirs (`$XDG_DATA_HOME` + `$XDG_DATA_DIRS` `/applications`) once at
+startup, dedups by desktop-file id (earlier dirs win, per spec), and answers
+case-insensitive `search()` queries (prefix matches first, then substring, each
+alphabetical). Parsing (`parseEntry`: skips `NoDisplay`/`Hidden`/non-`Application`/
+no-`Name`/no-`Exec`, main `[Desktop Entry]` group only; `cleanExec`: strips Exec
+field codes) is in **pure static helpers, unit-tested** without a real filesystem.
+The `LauncherPopover` is **keyboard-first**: opening it grabs keyboard focus (the
+bar flips its `wlr-layer-shell` surface to `KEYBOARD_INTERACTIVITY_EXCLUSIVE` via
+`BarApp::syncKeyboard`, releasing it on close), so the user just types — the search
+box filters live, ↑/↓ moves the selection, Enter (or a row click) launches. A
+launch is a **user-initiated one-shot** `spawnDetached` (fork + `setsid` +
+double-fork + `execl sh -c`, fully detached) — exactly the **D1** carve-out, never
+a poll. The whole feature is **bar-only**: `SystemBackends::desktopIndex` is null
+on `qypr-lock`, so `LauncherIndicator` self-hides (`visible=false`,
+`hasDetailedView()==false`) and a locked machine can never spawn an application
+from the bar. *Verified* live: 90 apps indexed from the real system, `wantsKeyboard`
+true, typing a 1-match query shrank the popover from 8 rows to 1 (332→94px),
+navigation/backspace/passthrough all behaved, and no launch fired without Enter;
+two unit tests cover the null-backend gating and the popover's keyboard/empty
+state. 77/77 tests.
+
+> **🚧 Shelved — not shipped.** The code above is built, gated bar-only, and
+> tested, but the launcher is **off by default**: it is no longer listed in
+> `modules-left`, so a stock bar never shows it (add `launcher` to a `modules-`
+> line to try it). Deferred pending a decision on whether a keyboard-grabbing
+> search box is the right UX for a panel, and pending the polish that would make
+> it competitive: **app icons** (needs an icon-theme lookup), **favourites +
+> recent/frequent** ranking, **fuzzy matching** (currently prefix-then-substring),
+> and a **scroll indicator** for long result lists. Revisit as its own phase.
+
+**Keyboard layout (fourth landed increment).** The `Seat` already decodes the
+compositor's active xkb layout group (from `wl_keyboard.modifiers` + the compiled
+keymap); it now also **pushes** it — `reportLayout()` reads the group's name via
+`xkb_keymap_layout_get_name` and the layout count via `xkb_keymap_num_layouts`,
+coalesces the frequent modifier events (only fires when the group actually
+changed), and hands `(name, index, count)` to the sink through a new
+**default-no-op** `InputSink::onLayoutChanged` — so the lock screen needs no
+change and ignores it. `BarApp` mirrors that into a tiny `KeyboardLayout` state
+holder (the same `setOnChange` → repaint pattern as every other backend), and
+`KeyboardLayoutIndicator` renders a keyboard glyph + the **compact code** (e.g.
+`US`, `RU`) with the full description in the tooltip. The code comes from
+`KeyboardLayout::shortLabel` — a **pure static helper, unit-tested** without a
+keymap (parenthetical country code first, "English (US)" → `US`; else the first
+two letters of the description). It is **display-only** — a Wayland client cannot
+switch the compositor's layout — and **self-hides** with fewer than two layouts
+(nothing to show) or on `qypr-lock` (the backend is null). *Verified* live via a
+render harness: both states drew the glyph + code, the tooltip carried the full
+name, and the null-backend / single-layout cases stayed hidden; three unit tests
+cover the label derivation, the indicator gating, and the `Seat`'s push/coalesce
+path (initial report on sink-attach, re-report on group change, dedup on repeat).
+80/80 tests.
 
 ---
 
