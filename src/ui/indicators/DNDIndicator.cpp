@@ -22,6 +22,14 @@ void DNDIndicator::onBackendUpdate() {
     visible = dnd_ && dnd_->enabled();
 }
 
+bool DNDIndicator::onClick(double, double) {
+    // The tray icon only shows while DND is active, so a click is a request to
+    // switch it back off. Toggle directly instead of opening Quick Settings.
+    if (!dnd_) return false;
+    dnd_->toggle();
+    return true;  // consume — no popover/panel
+}
+
 std::unique_ptr<QSTile> DNDIndicator::createTile() {
     auto dnd = dnd_;
     return std::make_unique<QSToggleTile>(

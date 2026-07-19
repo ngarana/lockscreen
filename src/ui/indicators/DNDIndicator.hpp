@@ -19,6 +19,7 @@ public:
     Color iconColor() const override;
 
     void onBackendUpdate() override;
+    bool onClick(double x, double y) override;  // click toggles DND directly
 
     std::unique_ptr<QSTile> createTile() override;
 
