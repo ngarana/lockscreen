@@ -30,6 +30,12 @@ public:
     virtual void onTextInput(const std::string& utf8) = 0;
     virtual void onSpecialKey(uint32_t keysym, uint32_t modifiers) = 0;
 
+    // The active xkb keyboard layout changed (name is the full description, e.g.
+    // "English (US)"; index is the group; count is the number of layouts).
+    // Default no-op: only the bar's keyboard-layout indicator cares — the lock
+    // screen ignores it.
+    virtual void onLayoutChanged(const std::string& name, uint32_t index, uint32_t count) {}
+
     virtual void onPointerMotion(int surfaceW, int surfaceH, double x, double y) = 0;
     virtual void onPointerButton(int surfaceW, int surfaceH, double x, double y,
                                  uint32_t button, bool pressed) = 0;

@@ -52,6 +52,8 @@ struct SystemBackends {
     PowerManager* power = nullptr;
     PowerProfilesBackend* powerProfiles = nullptr;  // net.hadess.PowerProfiles
     IdleInhibitor* idleInhibitor = nullptr;         // zwp_idle_inhibit ("keep awake")
+    DesktopIndex* desktopIndex = nullptr;
+    KeyboardLayout* keyboardLayout = nullptr;
     NotificationMonitor* notifications = nullptr;
     NotificationActions* notificationActions = nullptr;  // dismiss/clear
     MprisController* mpris = nullptr;

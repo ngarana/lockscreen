@@ -28,7 +28,14 @@ public:
     Seat(wl_seat* seat, EventLoop& loop, const OutputEnv* env);
     ~Seat();
 
-    void setSink(InputSink* sink) { sink_ = sink; }
+    void setSink(InputSink* sink) {
+        sink_ = sink;
+        // A sink can be attached after the keymap has already arrived (the bar
+        // sets it post-connect). Re-report so the new sink learns the current
+        // layout immediately instead of waiting for the next modifier event.
+        lastReportedGroup_ = kNoGroup;
+        reportLayout(currentGroup_);
+    }
     // Resolve the focused wl_surface to its logical size (fills w/h, returns
     // false if unknown). Host-agnostic: the lock screen answers from its Output,
     // the bar from its BarWindow — Seat needs no concrete surface type.
@@ -66,6 +73,10 @@ private:
     // Fill w/h with the current pointer surface's logical size; false if none.
     bool pointerSize(int& w, int& h) const;
     void handleKey(uint32_t keycode);
+    // Push the active layout (group) to the sink if it changed since the last
+    // report. Names/count come from the compiled keymap. Cheap no-op when the
+    // group is unchanged or no keymap/sink is present.
+    void reportLayout(uint32_t group);
     void startRepeat(uint32_t keycode);
     void stopRepeat();
     // Give the pointer a visible cursor (lazily built on first enter, once the
@@ -86,6 +97,12 @@ private:
     xkb_context* xkbContext_ = nullptr;
     xkb_keymap* xkbKeymap_ = nullptr;
     xkb_state* xkbState_ = nullptr;
+
+    // Active xkb layout group, and the last group actually reported to the sink
+    // (so reportLayout() coalesces the frequent modifier events).
+    static constexpr uint32_t kNoGroup = 0xffffffffu;
+    uint32_t currentGroup_ = 0;
+    uint32_t lastReportedGroup_ = kNoGroup;
 
     // Pointer focus
     wl_surface* pointerSurface_ = nullptr;

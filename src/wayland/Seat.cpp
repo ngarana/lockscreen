@@ -126,6 +126,9 @@ void Seat::onKeymap(void* data, wl_keyboard*, uint32_t format, int32_t fd, uint3
     if (self->xkbKeymap_) xkb_keymap_unref(self->xkbKeymap_);
     self->xkbKeymap_ = keymap;
     self->xkbState_ = xkb_state_new(keymap);
+    // A fresh keymap may carry a different layout set: force a re-report.
+    self->lastReportedGroup_ = kNoGroup;
+    self->reportLayout(self->currentGroup_);
 }
 
 void Seat::onKbEnter(void*, wl_keyboard*, uint32_t, wl_surface*, wl_array*) {}
@@ -174,6 +177,19 @@ void Seat::onModifiers(void* data, wl_keyboard*, uint32_t, uint32_t depressed, u
     auto* self = static_cast<Seat*>(data);
     if (self->xkbState_)
         xkb_state_update_mask(self->xkbState_, depressed, latched, locked, 0, 0, group);
+    self->currentGroup_ = group;
+    self->reportLayout(group);
+}
+
+void Seat::reportLayout(uint32_t group) {
+    if (!xkbKeymap_ || !sink_) return;
+    if (group == lastReportedGroup_) return;
+    uint32_t count = xkb_keymap_num_layouts(xkbKeymap_);
+    if (count == 0) return;
+    if (group >= count) group = 0;  // stale group after a keymap swap
+    lastReportedGroup_ = group;
+    const char* name = xkb_keymap_layout_get_name(xkbKeymap_, group);
+    sink_->onLayoutChanged(name ? name : "", group, count);
 }
 
 void Seat::onRepeatInfo(void* data, wl_keyboard*, int32_t rate, int32_t delay) {
