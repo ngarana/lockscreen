@@ -30,6 +30,8 @@ class NotificationMonitor;
 class NotificationActions;
 class MprisController;
 class IdleInhibitor;
+class DesktopIndex;
+class KeyboardLayout;
 
 struct SystemBackends {
     BatteryBackend* battery = nullptr;

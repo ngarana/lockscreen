@@ -23,6 +23,8 @@
 #include "power/PowerManager.hpp"
 #include "system/PowerProfilesBackend.hpp"
 #include "system/IdleInhibitor.hpp"
+#include "system/DesktopIndex.hpp"
+#include "system/KeyboardLayout.hpp"
 #include "system/BatteryBackend.hpp"
 #include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
@@ -51,6 +53,7 @@ public:
     // InputSink
     void onTextInput(const std::string& utf8) override;
     void onSpecialKey(uint32_t keysym, uint32_t modifiers) override;
+    void onLayoutChanged(const std::string& name, uint32_t index, uint32_t count) override;
     void onPointerMotion(int w, int h, double x, double y) override;
     void onPointerButton(int w, int h, double x, double y, uint32_t button, bool pressed) override;
     void onPointerScroll(int w, int h, double x, double y, double dx, double dy) override;
@@ -60,6 +63,8 @@ private:
     void draw(cairo_t* cr, int w, int h, int scale);
     // Grow/shrink the layer surfaces when the open-overlay state flips.
     void syncOverlay();
+    // Grab/release keyboard focus when a search popover (launcher) opens/closes.
+    void syncKeyboard();
 
     // --- config helpers (used in the member-init list; see the ctor) ---
     static Config loadConfig();
@@ -106,6 +111,12 @@ private:
     PowerProfilesBackend powerProfiles_{systemBus_};
     IdleInhibitor idleInhibitor_;  // init()'d after display_.connect()
     MprisController mpris_;
+    // Application launcher index (bar-only). load()'ed in run(); the lock app
+    // never constructs this, so its launcher never appears while locked.
+    DesktopIndex desktopIndex_;
+    // Active keyboard-layout state (bar-only), fed by the Seat via
+    // onLayoutChanged(); the lock app never constructs this.
+    KeyboardLayout kbLayout_;
     SystemBackends backends_{.battery = &battery_,
                              .volume = &volume_,
                              .brightness = &brightness_,
@@ -119,6 +130,8 @@ private:
                              .power = &power_,
                              .powerProfiles = &powerProfiles_,
                              .idleInhibitor = &idleInhibitor_,
+                             .desktopIndex = &desktopIndex_,
+                             .keyboardLayout = &kbLayout_,
                              .notifications = &notifications_,
                              .notificationActions = &notificationActions_,
                              .mpris = &mpris_,
@@ -126,7 +139,8 @@ private:
                              .sessionSurface = true};
 
     StatusBar statusBar_{loop_, *this, backends_, modules_ ? &*modules_ : nullptr};
-    bool overlayActive_ = false;
+    int overlayHeight_ = 0;  // last surface height requested (logical px)
+    bool kbActive_ = false;  // current keyboard-grab state (launcher search box)
 };
 
 }  // namespace qypr

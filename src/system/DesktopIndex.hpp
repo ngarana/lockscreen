@@ -1,0 +1,50 @@
+// DesktopIndex.hpp - Freedesktop .desktop application index for the launcher.
+//
+// Scans the XDG application directories once, parses each entry, and answers
+// case-insensitive search queries. Parsing is in pure static helpers so it
+// unit-tests without a real filesystem. Launching a result is a user-initiated
+// one-shot spawn (decision D1) — see spawnDetached().
+#pragma once
+
+#include <string>
+#include <vector>
+
+namespace qypr {
+
+struct DesktopEntry {
+    std::string name;   // display name
+    std::string exec;   // command, field codes (%f/%U/…) stripped
+    std::string icon;   // freedesktop icon name ("" if none)
+    bool terminal = false;
+};
+
+class DesktopIndex {
+public:
+    // Scan $XDG_DATA_HOME + $XDG_DATA_DIRS "/applications" (with sensible
+    // fallbacks). Later duplicates by desktop-file id are ignored (earlier dirs
+    // win, per the spec). Idempotent — clears and rebuilds.
+    void load();
+
+    const std::vector<DesktopEntry>& entries() const { return entries_; }
+
+    // Entries whose name matches `query` (case-insensitive), prefix matches
+    // first, then substring, each alphabetical. Empty query → all, alphabetical.
+    std::vector<const DesktopEntry*> search(const std::string& query) const;
+
+    // --- pure helpers (static; unit-tested without the filesystem) ---
+    // Parse one .desktop file body. False (skip) when it is NoDisplay/Hidden,
+    // not Type=Application, or has no Name/Exec.
+    static bool parseEntry(const std::string& body, DesktopEntry& out);
+    // Strip Exec field codes (%f %F %u %U %i %c %k %v %m) and surrounding space.
+    static std::string cleanExec(const std::string& exec);
+
+private:
+    std::vector<DesktopEntry> entries_;
+};
+
+// Fork + setsid + exec `sh -c <cmd>`, fully detached (no zombie, no controlling
+// terminal). `terminal` wraps the command in the user's $TERMINAL when set.
+// User-initiated only (D1); returns false if the fork failed.
+bool spawnDetached(const std::string& cmd, bool terminal);
+
+}  // namespace qypr

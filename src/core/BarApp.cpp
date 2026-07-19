@@ -118,6 +118,10 @@ int BarApp::run() {
     // PropertiesChanged and dispatches the bus from this loop instead.
     mpris_.enablePush(loop_);  // StatusBar subscribed to it like any other backend
 
+    // Application launcher: scan the .desktop index once at startup (pure
+    // filesystem read, no daemon). The launcher indicator is otherwise inert.
+    desktopIndex_.load();
+
     loop_.run();
     return 0;
 }
@@ -143,18 +147,38 @@ void BarApp::draw(cairo_t* cr, int w, int h, int scale) {
 }
 
 void BarApp::syncOverlay() {
-    const bool want = statusBar_.hasOpenOverlay();
-    if (want == overlayActive_) return;
-    overlayActive_ = want;
+    // Size the surface to exactly fit the open popover (0 → back to the idle
+    // strip), never the whole output. A full-window layer surface is what a
+    // compositor animates/blurs "across the window" when a popover opens.
+    const int overlay = statusBar_.overlayHeight();
+    const int want = overlay > 0 ? overlay : reservedFor(geom_);
+    if (want == overlayHeight_) return;
+    overlayHeight_ = want;
     // Defer the resize+commit off the current dispatch/render so we never
     // double-commit a surface that is mid-frame.
-    loop_.post([this, want] { display_.setOverlayActive(want); });
+    loop_.post([this, want] { display_.setOverlayHeight(want); });
+}
+
+void BarApp::syncKeyboard() {
+    // Grab keyboard focus (layer-shell EXCLUSIVE) only while a popover that needs
+    // typed input is open — the launcher search box — and release it otherwise so
+    // the bar never steals keys from the focused application. Called from the
+    // input handlers (not draw), so a direct commit is safe here.
+    const bool want = statusBar_.wantsKeyboard();
+    if (want == kbActive_) return;
+    kbActive_ = want;
+    display_.setKeyboardInteractive(want);
 }
 
 // -----------------------------------------------------------------------------
 // InputSink — route straight to StatusBar (no LockScreen peer to arbitrate).
 // -----------------------------------------------------------------------------
-void BarApp::onTextInput(const std::string&) {}
+void BarApp::onTextInput(const std::string& utf8) {
+    // Committed text only reaches here while we hold the keyboard grab (launcher
+    // open) — route it to the active search box and repaint.
+    statusBar_.handleTextInput(utf8);
+    invalidate();
+}
 
 void BarApp::onSpecialKey(uint32_t keysym, uint32_t modifiers) {
     if (keysym == XKB_KEY_Tab || keysym == XKB_KEY_ISO_Left_Tab) {
@@ -165,6 +189,13 @@ void BarApp::onSpecialKey(uint32_t keysym, uint32_t modifiers) {
     }
     invalidate();
     syncOverlay();
+    syncKeyboard();  // Enter/Escape may have closed the launcher — drop the grab.
+}
+
+void BarApp::onLayoutChanged(const std::string& name, uint32_t index, uint32_t count) {
+    // The Seat observed a layout change (or the initial layout). Mirror it into
+    // the backend; update() fires onChange → the indicator refreshes + repaints.
+    kbLayout_.update(name, index, count);
 }
 
 void BarApp::onPointerMotion(int, int, double x, double y) {
@@ -176,6 +207,7 @@ void BarApp::onPointerButton(int, int, double x, double y, uint32_t button, bool
     statusBar_.handlePointerButton(x, y, button, pressed, nowMs());
     invalidate();
     syncOverlay();
+    syncKeyboard();  // opening/closing the launcher flips the keyboard grab.
 }
 
 void BarApp::onPointerScroll(int, int, double x, double y, double dx, double dy) {
