@@ -1107,6 +1107,17 @@ TEST(StatusBarThemeConstants) {
     EXPECT_TRUE(qsTileHeight > 0);
 }
 
+TEST(ThemeLoadThemeDefaults) {
+    qypr::Config c;
+    c.load("/nonexistent");
+    qypr::theme::loadTheme(c);
+    EXPECT_EQ(qypr::theme::font::family, std::string("Inter"));
+    EXPECT_EQ(qypr::theme::font::iconFamily, std::string("CaskaydiaCove Nerd Font"));
+    EXPECT_EQ(qypr::theme::font::size, 16);
+    EXPECT_NEAR(qypr::theme::color::primary.r, 0.537, 0.01);
+    EXPECT_NEAR(qypr::theme::statusbar::height, 36.0, 0.01);
+}
+
 // =============================================================================
 // Phase 2: Clock + Battery Indicator Tests
 // =============================================================================
@@ -1696,6 +1707,24 @@ static std::string writeTempConfig(const std::string& body) {
     f << body;
     f.close();
     return path;
+}
+
+TEST(ThemeLoadThemeOverrides) {
+    const std::string path = writeTempConfig(
+        "[theme]\n"
+        "font-family = JetBrains Mono\n"
+        "font-size = 20\n"
+        "primary = #ff0000\n"
+        "bar-height = 42.0\n");
+    qypr::Config c;
+    c.load(path);
+    qypr::theme::loadTheme(c);
+    EXPECT_EQ(qypr::theme::font::family, std::string("JetBrains Mono"));
+    EXPECT_EQ(qypr::theme::font::size, 20);
+    EXPECT_NEAR(qypr::theme::color::primary.r, 1.0, 0.01);
+    EXPECT_NEAR(qypr::theme::color::primary.g, 0.0, 0.01);
+    EXPECT_NEAR(qypr::theme::statusbar::height, 42.0, 0.01);
+    ::unlink(path.c_str());
 }
 
 TEST(ConfigParsing) {

@@ -8,6 +8,7 @@
 
 #include "core/Types.hpp"
 #include "render/Painter.hpp"
+#include "ui/Theme.hpp"
 #include "wayland/Seat.hpp"  // Mod bits
 
 namespace qypr {
@@ -21,6 +22,7 @@ Config BarApp::loadConfig() {
     if (c.load()) {
         std::fprintf(stderr, "qypr-bar: config %s\n", c.path().c_str());
     }
+    theme::loadTheme(c);
     return c;
 }
 
