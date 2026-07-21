@@ -29,6 +29,9 @@ public:
     bool busy() const { return busy_; }
     void markBusy() { busy_ = true; }
 
+    int drawnHeight() const { return drawnHeight_; }
+    void setDrawnHeight(int h) { drawnHeight_ = h; }
+
     // Wayland C callback (public so the listener table can bind it).
     static void handleRelease(void* data, wl_buffer* buffer);
 
@@ -42,6 +45,7 @@ private:
     int width_ = 0;
     int height_ = 0;
     bool busy_ = false;
+    int drawnHeight_ = 0;
 };
 
 }  // namespace qypr

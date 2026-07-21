@@ -195,13 +195,29 @@ void BarWindow::render() {
 
     cairo_t* cr = cairo_create(buf->cairoSurface());
     cairo_scale(cr, scale_, scale_);
+
+    // Clear only the active and previously drawn regions to keep memory sparse.
+    cairo_save(cr);
+    cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
+    const int clear_h = std::max(inputHeight_, buf->drawnHeight());
+    const int clear_y = bottom_ ? (height_ - clear_h) : 0;
+    cairo_rectangle(cr, 0, clear_y, width_, clear_h);
+    cairo_fill(cr);
+    cairo_restore(cr);
+
+    buf->setDrawnHeight(inputHeight_);
+
     if (env_->render) env_->render(cr, width_, height_, scale_);
     cairo_destroy(cr);
     cairo_surface_flush(buf->cairoSurface());
 
     wl_surface_attach(surface_, buf->buffer(), 0, 0);
     buf->markBusy();
-    wl_surface_damage_buffer(surface_, 0, 0, pxW, pxH);
+
+    // Damage only the active/previously active region to save compositor resource consumption.
+    const int dmgH = clear_h;
+    const int dmgY = bottom_ ? (height_ - dmgH) * scale_ : 0;
+    wl_surface_damage_buffer(surface_, 0, dmgY, pxW, dmgH * scale_);
 
     // Keep the pointer input region in step with the open overlay so the strip
     // (and any open popover) takes clicks while the transparent remainder stays

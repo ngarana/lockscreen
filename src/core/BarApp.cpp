@@ -131,14 +131,6 @@ int BarApp::run() {
 void BarApp::invalidate() { display_.invalidateAll(); }
 
 void BarApp::draw(cairo_t* cr, int w, int h, int scale) {
-    // Transparent surface. Reused shm buffers keep old pixels, so clear first,
-    // then let StatusBar paint its chromeless strip (and any open overlay). The
-    // desktop shows through everywhere the bar does not draw.
-    cairo_save(cr);
-    cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
-    cairo_paint(cr);
-    cairo_restore(cr);
-
     Painter p(cr);
     statusBar_.layout(w, h);
     statusBar_.draw(p, nowMs());
