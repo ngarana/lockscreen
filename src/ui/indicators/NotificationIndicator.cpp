@@ -21,7 +21,7 @@ constexpr const char* kBellOff = "󰂛";  // nf-md-bell_off (DND)
 constexpr const char* kClose = "󰅖";    // nf-md-close
 constexpr double kRowH = 54.0;
 constexpr double kPad = 10.0;
-constexpr double kMenuW = 340.0;
+constexpr double kMenuW = 380.0;
 constexpr double kHeaderH = 26.0;
 constexpr size_t kMaxRows = 6;  // one page; scroll reaches the rest
 
@@ -44,8 +44,23 @@ public:
 
     double contentWidth() const override { return kMenuW; }
     double contentHeight() const override {
+        const auto& notes = list();
         const size_t n = std::min(visibleCount(), kMaxRows);
-        double h = kPad * 2.0 + kHeaderH + (n == 0 ? 28.0 : n * kRowH);
+        double h = kPad * 2.0 + kHeaderH;
+        if (n == 0) {
+            h += 28.0;
+        } else {
+            const size_t total = notes.size();
+            const size_t first = std::min(scroll_, total > kMaxRows ? total - kMaxRows : size_t{0});
+            for (size_t i = first; i < std::min(first + kMaxRows, total); ++i) {
+                const Notification& n = notes[total - 1 - i];
+                int customCount = 0;
+                for (const auto& act : n.actions) {
+                    if (act.first != "default") customCount++;
+                }
+                h += (customCount > 0) ? 78.0 : 54.0;
+            }
+        }
         if (visibleCount() > kMaxRows) h += 20.0;  // scroll hint
         return h;
     }
@@ -88,8 +103,15 @@ public:
         const size_t first = std::min(scroll_, total > kMaxRows ? total - kMaxRows : size_t{0});
         for (size_t i = first; i < std::min(first + kMaxRows, total); ++i) {
             const Notification& n = notes[total - 1 - i];
-            const Rect row{b.x + kPad, y, b.w - kPad * 2.0, kRowH};
-            rows_.push_back({row, n.daemonId});
+
+            std::vector<std::pair<std::string, std::string>> customActions;
+            for (const auto& act : n.actions) {
+                if (act.first != "default") customActions.push_back(act);
+            }
+
+            const double curRowH = customActions.empty() ? 54.0 : 78.0;
+            const Rect row{b.x + kPad, y, b.w - kPad * 2.0, curRowH};
+            Row rowItem{row, n.daemonId, n.actions, {}, {}};
 
             const bool hot = row.contains(hoverX_, hoverY_);
             if (hot) p.fillRoundedRect(row, 8.0, theme::color::glassHover.withAlpha(0.35));
@@ -129,7 +151,27 @@ public:
                                theme::color::textSubtle};
                 p.drawText(row.x + 12.0, row.y + 35.0, n.body, body, HAlign::Left, row.w - 40.0);
             }
-            y += kRowH;
+
+            // Render custom action buttons if present
+            if (!customActions.empty()) {
+                const double availW = row.w - 24.0;
+                const double btnW = (availW - (customActions.size() - 1) * 6.0) / customActions.size();
+                double bx = row.x + 12.0;
+                for (const auto& act : customActions) {
+                    Rect btnRect{bx, row.y + 52.0, btnW, 20.0};
+                    bool bhot = btnRect.contains(hoverX_, hoverY_);
+                    p.fillRoundedRect(btnRect, 4.0, bhot ? theme::color::glassHover : theme::color::surface.withAlpha(0.6));
+                    TextStyle btnTxt{theme::font::family, 10.0, PANGO_WEIGHT_BOLD, bhot ? theme::color::text : theme::color::textSubtle};
+                    const Size bsz = p.measureText(act.second, btnTxt);
+                    p.drawText(btnRect.x + (btnRect.w - bsz.w) / 2.0, btnRect.y + (btnRect.h - bsz.h) / 2.0 + 1.0, act.second, btnTxt);
+                    rowItem.buttonBounds.push_back(btnRect);
+                    rowItem.buttonKeys.push_back(act.first);
+                    bx += btnW + 6.0;
+                }
+            }
+
+            rows_.push_back(std::move(rowItem));
+            y += curRowH;
         }
 
         // Scroll hint: how many are above/below this page.
@@ -162,6 +204,25 @@ public:
                 actions_->close(r.daemonId);
                 return true;
             }
+            for (size_t k = 0; k < r.buttonBounds.size(); ++k) {
+                if (r.buttonBounds[k].contains(x, y) && r.daemonId != 0) {
+                    actions_->invoke(r.daemonId, r.buttonKeys[k]);
+                    return true;
+                }
+            }
+            if (r.bounds.contains(x, y) && r.daemonId != 0) {
+                bool hasDefault = false;
+                for (const auto& act : r.actions) {
+                    if (act.first == "default") {
+                        hasDefault = true;
+                        break;
+                    }
+                }
+                if (hasDefault) {
+                    actions_->invoke(r.daemonId, "default");
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -186,6 +247,9 @@ private:
     struct Row {
         Rect bounds;
         uint32_t daemonId;
+        std::vector<std::pair<std::string, std::string>> actions;
+        std::vector<Rect> buttonBounds;
+        std::vector<std::string> buttonKeys;
     };
 
     const std::vector<Notification>& list() const {

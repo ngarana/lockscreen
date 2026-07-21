@@ -33,6 +33,7 @@ struct Notification {
     uint32_t daemonId = 0;  // id assigned by the notification daemon (0 = not yet known)
     uint8_t urgency = 1;    // freedesktop urgency hint: 0 low, 1 normal, 2 critical
     bool sensitive = false; // true if the notification contains sensitive content
+    std::vector<std::pair<std::string, std::string>> actions;
 };
 
 class NotificationView {

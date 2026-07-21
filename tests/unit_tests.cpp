@@ -2042,6 +2042,27 @@ TEST(NotificationIndicatorCountAndDnd) {
     EXPECT_EQ(ind.icon(), bell);
 }
 
+TEST(NotificationActionsAndInteractivity) {
+    qypr::EventLoop loop;
+    qypr::NotificationMonitor mon(loop);
+    qypr::SystemBackends b{};
+    b.notifications = &mon;
+    qypr::NotificationIndicator ind(b);
+
+    qypr::Notification note;
+    note.id = 1;
+    note.daemonId = 100;
+    note.app = "TestApp";
+    note.title = "Test Title";
+    note.body = "Test Body";
+    note.actions = {{"default", "Open"}, {"reply", "Reply"}, {"dismiss", "Ignore"}};
+    mon.notes_.push_back(note);
+
+    auto popover = ind.createDetailedView();
+    EXPECT_TRUE(popover != nullptr);
+    EXPECT_TRUE(popover->contentHeight() > 54.0);
+}
+
 // -----------------------------------------------------------------------------
 // System monitor (/proc parsing) — pure helpers, no real /proc needed
 // -----------------------------------------------------------------------------

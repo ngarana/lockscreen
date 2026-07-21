@@ -253,7 +253,21 @@ void NotificationMonitor::handleNotify(sd_bus_message* m) {
     const char *app = nullptr, *icon = nullptr, *summary = nullptr, *body = nullptr;
     uint32_t replaces = 0;
     if (sd_bus_message_read(m, "susss", &app, &replaces, &icon, &summary, &body) < 0) return;
-    if (sd_bus_message_skip(m, "as") < 0) return;  // actions: not rendered
+    std::vector<std::pair<std::string, std::string>> actions;
+    if (sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "s") >= 0) {
+        const char* actKey = nullptr;
+        while (sd_bus_message_read(m, "s", &actKey) > 0) {
+            const char* actLabel = nullptr;
+            if (sd_bus_message_read(m, "s", &actLabel) > 0) {
+                actions.push_back({actKey ? actKey : "", actLabel ? actLabel : ""});
+            } else {
+                break;
+            }
+        }
+        sd_bus_message_exit_container(m);
+    } else {
+        if (sd_bus_message_skip(m, "as") < 0) return;
+    }
 
     uint8_t urgency = 1;  // normal
     bool transient = false;
@@ -299,6 +313,7 @@ void NotificationMonitor::handleNotify(sd_bus_message* m) {
     n.icon = icon ? icon : "";
     n.urgency = urgency;
     n.sensitive = sensitive;
+    n.actions = std::move(actions);
 
     // replaces_id: update the existing card in place (same key, so the view
     // reconciles without re-animating).

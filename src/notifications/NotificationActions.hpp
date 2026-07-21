@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace qypr {
 
@@ -28,6 +29,9 @@ public:
     // Ask the daemon to close `daemonId` (the id it assigned via its Notify
     // reply). A zero id means the reply has not landed yet — nothing to close.
     void close(uint32_t daemonId);
+
+    // Ask the daemon to invoke a specific action on `daemonId`.
+    void invoke(uint32_t daemonId, const std::string& actionKey);
 
 private:
     SystemBus& bus_;

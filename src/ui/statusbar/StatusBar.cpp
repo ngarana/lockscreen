@@ -226,12 +226,14 @@ void StatusBar::layout(int screenW, int screenH) {
         cx += w + sp;
     }
 
-    // 5. Anchor the Quick Settings panel to the right edge of the bar, opening
-    //    away from the anchored screen edge (down for a top bar, up for a
-    //    bottom bar).
-    if (popovers_.active() == &qsPanel_) {
-        qsPanel_.anchorX = bounds.x + bounds.w;
-        anchorPopoverY(qsPanel_);
+    // 5. Anchor active popovers (Quick Settings or right-zone popovers) to the
+    //    right edge of the bar, opening away from the anchored screen edge.
+    if (popovers_.active()) {
+        DetailedPopover* p = popovers_.active();
+        if (p == &qsPanel_ || p->contentWidth() >= 300.0) {
+            p->anchorX = bounds.x + bounds.w;
+        }
+        anchorPopoverY(*p);
     }
 }
 
@@ -342,7 +344,8 @@ void StatusBar::activateIndicator(StatusIndicator& ind) {
             // instead, opening rightward.
             const double anchorX = ind.zone() == Zone::Left
                                        ? ind.bounds.x + p->contentWidth()
-                                       : ind.bounds.x + ind.bounds.w;
+                                       : (ind.zone() == Zone::Right ? bounds.x + bounds.w
+                                                                    : ind.bounds.x + ind.bounds.w);
             popovers_.open(std::move(view), anchorX, 0);
             anchorPopoverY(*p);  // opens away from the anchored screen edge
         }
