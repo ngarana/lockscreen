@@ -66,6 +66,9 @@ void loadTheme(const Config& cfg) {
     overrideInt(anim::slow, cfg, s, "anim-slow");
     overrideInt(anim::reveal, cfg, s, "anim-reveal");
 
+    // ─── Style ───────────────────────────────────────────────────────
+    if (cfg.has(s, "style")) style::mode = cfg.getString(s, "style", "glass");
+
     // ─── Effects ─────────────────────────────────────────────────────
     overrideDouble(effects::shadowOpacity, cfg, s, "shadow-opacity");
     overrideInt(effects::shadowOffset, cfg, s, "shadow-offset");

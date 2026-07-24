@@ -221,6 +221,17 @@ void SNIBackend::secondaryActivate(size_t index, int x, int y) {
                              "SecondaryActivate", nullptr, nullptr, "ii", x, y);
 }
 
+void SNIBackend::scroll(size_t index, int dx, int dy) {
+    // The SNI spec's Scroll(dx, dy) takes signed deltas; an item with no
+    // scroll handler is a no-op on the bus side (we already fire-and-forget,
+    // so there's nothing more to do). xkb scanline scrolls arrive with dy
+    // representing pixels — that's fine as a raw pass-through.
+    if (!bus_.available() || index >= items_.size()) return;
+    const SNIItem& it = items_[index];
+    sd_bus_call_method_async(bus_.get(), nullptr, it.service.c_str(), it.path.c_str(), kItemIface,
+                             "Scroll", nullptr, nullptr, "ii", dx, dy);
+}
+
 // ─── Host mode helpers ──────────────────────────────────────────────────────
 
 void SNIBackend::registerHost() {

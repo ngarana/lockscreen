@@ -89,6 +89,14 @@ inline double shadowOpacity = 0.6;
 inline int shadowOffset = 2;
 }  // namespace effects
 
+// Style toggle: "glass" (frosted translucent + sheen + hairline) or "solid"
+// (opaque card with the same hue, no translucency). Every fillGlass() call
+// reads this branch at runtime, so switching between builds is a single
+// bar.conf line (style = solid).
+namespace style {
+inline std::string mode = "glass";
+}  // namespace style
+
 namespace audio {
 inline int buttonSize = 48;
 inline int buttonIconSize = 20;

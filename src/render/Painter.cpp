@@ -1,5 +1,7 @@
 #include "render/Painter.hpp"
 
+#include "ui/Theme.hpp"
+
 #include <cmath>
 
 namespace qypr {
@@ -44,6 +46,15 @@ void Painter::strokeRoundedRect(const Rect& r, double radius, const Color& c, do
 }
 
 void Painter::fillGlass(const Rect& r, double radius, const Color& base, const Color& border) {
+    if (theme::style::mode == "solid") {
+        // Solid card: opaque rounded rect with the same hue (no alpha), no
+        // sheen, no top highlight — just the border.  The caller still passes
+        // the translucent glass colour; we make it opaque here.
+        fillRoundedRect(r, radius, base.withAlpha(1.0));
+        strokeRoundedRect(r, radius, border, 1.0);
+        return;
+    }
+
     double rad = std::min(radius, std::min(r.w, r.h) / 2.0);
 
     // 1. Translucent base fill.

@@ -73,6 +73,10 @@ public:
     // Middle-click: the spec's SecondaryActivate. Fire-and-forget async.
     void secondaryActivate(size_t index, int x, int y);
 
+    // Scroll-on-tray-item: forwards the spec's Scroll(dx, dy). Fire-and-forget
+    // async; an item with no scroll handler simply ignores it on its side.
+    void scroll(size_t index, int dx, int dy);
+
     // Split a watcher item reference ("service/path" or a bare "service") into
     // its parts; the default path is "/StatusNotifierItem". Static + pure so
     // the parsing is unit-testable without a bus.
