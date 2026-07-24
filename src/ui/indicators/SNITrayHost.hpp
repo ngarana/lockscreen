@@ -21,6 +21,7 @@ public:
 
     std::string icon() const override { return ""; }  // custom multi-icon draw
     std::string tooltip() const override;
+    bool qsOnly() const override { return true; }
 
     double measureWidth(Painter& p) override;
     void draw(Painter& p, int64_t now) override;

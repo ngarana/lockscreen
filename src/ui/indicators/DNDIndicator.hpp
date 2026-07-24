@@ -17,6 +17,7 @@ public:
     std::string icon() const override { return "󰽥"; }
     std::string tooltip() const override { return "Do Not Disturb"; }
     Color iconColor() const override;
+    bool qsOnly() const override { return true; }
 
     void onBackendUpdate() override;
     bool onClick(double x, double y) override;  // click toggles DND directly

@@ -26,6 +26,7 @@ public:
     std::string icon() const override { return "󰐥"; }  // nf-md-power
     std::string tooltip() const override { return "Session"; }
     Color iconColor() const override;
+    bool qsOnly() const override { return true; }
 
     bool hasDetailedView() const override { return true; }
     std::unique_ptr<DetailedPopover> createDetailedView() override;

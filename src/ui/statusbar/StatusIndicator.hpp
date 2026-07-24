@@ -136,6 +136,11 @@ public:
     // StatusBar::setSessionContentVisible.
     virtual bool sensitive() const { return false; }
 
+    // QS-only indicators live only in the Quick Settings panel and never appear
+    // as bar applets.  The StatusBar skips them during layout/draw while still
+    // calling createTile() so their QS toggle is present.
+    virtual bool qsOnly() const { return false; }
+
     // --- Getters ---
     std::string id() const { return id_; }
     Zone zone() const { return zone_; }

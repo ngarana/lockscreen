@@ -103,9 +103,10 @@ private:
     void anchorPopoverY(DetailedPopover& pop) const;
 
     // Effective visibility: a sensitive indicator is hidden unless session
-    // content is enabled. All layout/draw/hit-testing goes through this.
+    // content is enabled. QS-only indicators never appear in the bar.
+    // All layout/draw/hit-testing goes through this.
     bool isShown(const StatusIndicator& ind) const {
-        return ind.visible && (!ind.sensitive() || sessionContentVisible_);
+        return ind.visible && !ind.qsOnly() && (!ind.sensitive() || sessionContentVisible_);
     }
 
     EventLoop& loop_;
