@@ -2,9 +2,18 @@
 #include "ui/statusbar/QSTile.hpp"
 #include "render/Painter.hpp"
 #include "ui/Theme.hpp"
+#include <xkbcommon/xkbcommon-keysyms.h>
 #include <cmath>
 
 namespace qypr {
+
+// ─────────────────────────────────────────────────────────────────────────
+// Slider keyboard fine-adjust step. The spec calls out ±5%; kept as a
+// constant so callers and tests share the exact value.
+// ─────────────────────────────────────────────────────────────────────────
+namespace {
+constexpr double kSliderArrowStep = 0.05;  // ±5%
+}  // namespace
 
 // --- QSToggleTile ---
 
@@ -77,6 +86,32 @@ void QSSliderTile::onDrag(double x, double y) {
     // Never let a drag that began on the icon scrub the value.
     if (onIconClick_ && iconBounds_.contains(x, y)) return;
     updateValueFromCoord(x);
+}
+
+bool QSSliderTile::handleKey(uint32_t keysym) {
+    if (dimmed_ && dimmed_()) {
+        // While muted we still let arrows adjust the level underneath (so
+        // the next unmute is already at a comfortable setting), matching the
+        // drag-on-track behaviour.
+    }
+    switch (keysym) {
+        case XKB_KEY_Up:
+        case XKB_KEY_Right:
+            return stepValue(true);
+        case XKB_KEY_Down:
+        case XKB_KEY_Left:
+            return stepValue(false);
+    }
+    return false;
+}
+
+bool QSSliderTile::stepValue(bool up) {
+    if (!getValue_ || !onValueChange_) return false;
+    const double cur = getValue_();
+    const double next = clamp01(cur + (up ? kSliderArrowStep : -kSliderArrowStep));
+    if (std::abs(next - cur) < 1e-9) return false;
+    onValueChange_(next);
+    return true;
 }
 
 void QSSliderTile::updateValueFromCoord(double x) {

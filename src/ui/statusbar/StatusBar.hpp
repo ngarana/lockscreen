@@ -142,6 +142,17 @@ private:
     // Offscreen 1x1 context so layout() can measure text without a frame.
     cairo_surface_t* measureSurface_ = nullptr;
     cairo_t* measureCr_ = nullptr;
+
+    // ── Tooltips ─────────────────────────────────────────────────────────
+    // After the pointer sits over one indicator for `kTooltipDelayMs` we paint
+    // a small glass-card label below (or above, on a bottom-anchored bar) it.
+    // Switching the hovered indicator or opening any popover cancels it.
+    constexpr static int kTooltipDelayMs = 500;
+    StatusIndicator* tooltipTarget_ = nullptr;
+    int64_t tooltipHoverStartMs_ = 0;
+    Animated tooltipAlpha_{0.0};
+
+    void drawTooltip(Painter& p, int64_t now) const;
 };
 
 }  // namespace qypr

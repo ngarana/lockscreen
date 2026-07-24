@@ -2,6 +2,7 @@
 #pragma once
 
 #include "core/Types.hpp"
+#include <cstdint>
 #include <string>
 #include <functional>
 
@@ -21,6 +22,8 @@ public:
     // Input handlers
     virtual void onClick(double x, double y) {}
     virtual void onDrag(double x, double y) {}
+    // Keyboard (only Slider responds today). Returns true when consumed.
+    virtual bool handleKey(uint32_t keysym) { return false; }
 
     Rect bounds;
     bool hovered = false;
@@ -68,9 +71,13 @@ public:
     void draw(Painter& p, int64_t now) override;
     void onClick(double x, double y) override;
     void onDrag(double x, double y) override;
+    bool handleKey(uint32_t keysym) override;
 
 private:
     void updateValueFromCoord(double x);
+    // Bump by ±kArrowStep, clamped; respects the dimmed (muted) state by leaving
+    // the level where the user left it.
+    bool stepValue(bool up);
     std::string currentIcon() const { return dynamicIcon_ ? dynamicIcon_() : icon_; }
 
     std::string icon_;

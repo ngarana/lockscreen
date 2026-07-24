@@ -136,6 +136,7 @@ void QuickSettingsPanel::draw(Painter& p, int64_t now) {
 
 bool QuickSettingsPanel::handleClick(double x, double y) {
     activeDragTile_ = nullptr;
+    curX_ = x; curY_ = y;
     for (const auto& tile : tiles_) {
         if (tile->bounds.contains(x, y)) {
             tile->onClick(x, y);
@@ -149,10 +150,30 @@ bool QuickSettingsPanel::handleClick(double x, double y) {
 }
 
 bool QuickSettingsPanel::handleDrag(double x, double y) {
+    curX_ = x; curY_ = y;
     if (activeDragTile_) {
         activeDragTile_->onDrag(x, y);
         return true;
     }
+    return false;
+}
+
+bool QuickSettingsPanel::handleKey(uint32_t keysym) {
+    // Up/Down (and arrows in general) fine-adjust the slider the cursor is
+    // currently over — or the active drag slider if a drag is in progress.
+    // Anything else is not ours; the host lets it bubble to Escape handling.
+    QSSliderTile* target = nullptr;
+    if (activeDragTile_ && activeDragTile_->type() == QSTile::Type::Slider) {
+        target = static_cast<QSSliderTile*>(activeDragTile_);
+    } else {
+        for (const auto& tile : tiles_) {
+            if (tile->type() == QSTile::Type::Slider && tile->bounds.contains(curX_, curY_)) {
+                target = static_cast<QSSliderTile*>(tile.get());
+                break;
+            }
+        }
+    }
+    if (target && target->handleKey(keysym)) return true;
     return false;
 }
 

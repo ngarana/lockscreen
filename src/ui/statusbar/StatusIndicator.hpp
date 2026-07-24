@@ -23,6 +23,8 @@ class DbusMenuBackend;
 class WorkspaceBackend;
 class ToplevelBackend;
 class DndState;
+class DndState;
+class NightLightBackend;
 class Config;
 class PowerManager;
 class PowerProfilesBackend;
@@ -47,6 +49,7 @@ struct SystemBackends {
     WorkspaceBackend* workspace = nullptr;  // ext-workspace-v1 (session-sensitive)
     ToplevelBackend* toplevel = nullptr;    // active window (session-sensitive)
     DndState* dnd = nullptr;
+    NightLightBackend* nightLight = nullptr;
     // Session surface (Phase 10): supplied only by the unlocked qypr-bar. The
     // lock screen leaves these null — it has its own in-lockscreen power dialog
     // and notification stack, and must never offer a shutdown button or reveal
@@ -105,8 +108,16 @@ public:
     virtual void onBackendUpdate() {}
     virtual void onActivate() {}
 
+    // True while this indicator still owes the frame loop an animation (hover
+    // scale/alpha, charging pulse, …). The host asks every frame and keeps the
+    // loops alive while any indicator returns true.
+    virtual bool animating(int64_t now) const;
+
     // --- Input (forwarded by StatusBar) ---
-    virtual bool onScroll(double dx, double dy) { return false; }
+    // `x,y` are pointer coordinates, so multi-element indicators (the tray host)
+    // can route the gesture to the specific sub-item under the cursor. Indicators
+    // that don't use the position can leave the args bound but unused.
+    virtual bool onScroll(double dx, double dy, double x, double y) { (void)x; (void)y; (void)dx; (void)dy; return false; }
     // Custom per-position click handling (e.g. the tray host, which maps the
     // click to one of several sub-icons). Return true to consume; false falls
     // through to the default activate (tile/popover).
@@ -143,6 +154,17 @@ protected:
     std::string id_;
     Zone zone_;
     int priority_;
+
+    // ── Icon crossfade (Phase 6 polish) ─────────────────────────────────
+    // When icon() changes between draws, the base draws the outgoing glyph
+    // fading out under the incoming one over `theme::anim::medium` (300ms,
+    // ease-in-out). Both share the icon footprint so the swap reads as a
+    // dissolve, not a hard cut. Battery (level/charging) and WiFi (signal
+    // tiers) get this for free by going through the base draw.
+    std::string lastDrawnIcon_;     // most-recent icon() the base has rendered
+    std::string prevDrawnIcon_;     // outgoing glyph during a crossfade
+    int64_t crossfadeStartMs_ = 0;  // wall clock the swap started
+    static constexpr int kCrossfadeMs = 300;  // cf. theme::anim::medium
 };
 
 }  // namespace qypr

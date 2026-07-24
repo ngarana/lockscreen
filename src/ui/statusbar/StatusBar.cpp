@@ -290,13 +290,17 @@ void StatusBar::draw(Painter& p, int64_t now) {
 
     // Popovers
     popovers_.draw(p, now);
+
+    // Hover tooltip — last so it floats over the bar but below nothing else.
+    drawTooltip(p, now);
 }
 
 bool StatusBar::animating(int64_t now) const {
     if (popovers_.animating(now)) return true;
+    if (tooltipAlpha_.active(now)) return true;
     auto zoneAnimating = [&](const auto& list) {
         for (const auto& ind : list) {
-            if (ind->hoverAlpha_.active(now) || ind->hoverScale_.active(now)) return true;
+            if (ind->animating(now)) return true;
         }
         return false;
     };
@@ -305,29 +309,44 @@ bool StatusBar::animating(int64_t now) const {
 }
 
 bool StatusBar::handlePointerMotion(double x, double y, int64_t now) {
-    (void)now;
     if (popovers_.active() == &qsPanel_ && qsPanel_.activeDragTile_) {
         popovers_.handleDrag(x, y);
         host_.invalidate();
         return true;
     }
+    // An open popover hides the hover-tooltip (the popover's own title serves).
+    if (popovers_.active()) tooltipTarget_ = nullptr;
 
     // Hit test gear button
     bool lastGearHover = qsButtonHovered_;
     qsButtonHovered_ = qsButtonBounds_.contains(x, y);
     if (qsButtonHovered_ != lastGearHover) host_.invalidate();
 
-    // Hit test indicators
+    // Hit test indicators. The hovered indicator also drives the hover-tooltip
+    // (Phase 6 polish): we record the one pointer is over, and the timestamp
+    // at which it *first* became so; the draw pass reveals its tooltip once
+    // the dwell hits kTooltipDelayMs.
+    StatusIndicator* newTooltipTarget = nullptr;
     auto checkHover = [&](auto& list) {
         for (auto& ind : list) {
             bool prev = ind->hovered;
             ind->hovered = isShown(*ind) && ind->bounds.contains(x, y);
+            if (ind->hovered) newTooltipTarget = ind.get();
             if (ind->hovered != prev) host_.invalidate();
         }
     };
     checkHover(leftIndicators_);
     checkHover(centerIndicators_);
     checkHover(rightIndicators_);
+
+    if (newTooltipTarget != tooltipTarget_) {
+        tooltipTarget_ = newTooltipTarget;
+        tooltipHoverStartMs_ = now;
+        tooltipAlpha_.set(0.0);
+        host_.invalidate();
+    } else if (tooltipTarget_) {
+        host_.invalidate();  // keep ticking so the fade can run
+    }
 
     return bounds.contains(x, y) || (popovers_.active() && popovers_.active()->contains(x, y));
 }
@@ -364,6 +383,15 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
     (void)now;
     // Linux evdev button codes as delivered by wl_pointer.
     constexpr uint32_t kBtnLeft = 0x110, kBtnRight = 0x111, kBtnMiddle = 0x112;
+    // A button press always cancels the hover-tooltip: the click either
+    // activates an indicator (and opens its popover) or dismisses the open
+    // popover, and the lingering label would otherwise sit under the new
+    // surface. It re-pops after kTooltipDelayMs of fresh dwell if the cursor
+    // stays put.
+    if (pressed) {
+        tooltipTarget_ = nullptr;
+        tooltipAlpha_.set(0.0);
+    }
     if (popovers_.active()) {
         if (popovers_.active()->contains(x, y)) {
             if (pressed) {
@@ -428,6 +456,8 @@ void StatusBar::handlePointerLeave(int64_t now) {
     clear(leftIndicators_);
     clear(centerIndicators_);
     clear(rightIndicators_);
+    tooltipTarget_ = nullptr;
+    tooltipAlpha_.set(0.0);
     host_.invalidate();
 }
 
@@ -439,7 +469,7 @@ bool StatusBar::handleScroll(double x, double y, double dx, double dy) {
     // Scroll-to-adjust indicators (volume, brightness)
     auto checkScroll = [&](auto& list) {
         for (auto& ind : list) {
-            if (isShown(*ind) && ind->bounds.contains(x, y) && ind->onScroll(dx, dy)) {
+            if (isShown(*ind) && ind->bounds.contains(x, y) && ind->onScroll(dx, dy, x, y)) {
                 host_.invalidate();
                 return true;
             }
@@ -568,6 +598,61 @@ bool StatusBar::hasFocusedChild() const {
     };
     return anyFocused(leftIndicators_) || anyFocused(centerIndicators_) ||
            anyFocused(rightIndicators_);
+}
+
+// Phase 6 polish: per-indicator hover tooltip. After the pointer dwells on one
+// indicator for kTooltipDelayMs the bar fades in a small glass-card label
+// completing the spec's "per-indicator tooltips" entry. It opens *away from
+// the anchored edge* (down on a top bar, up on a bottom bar) — the same direction
+// every other popover opens — and is anchored under the indicator's centre.
+void StatusBar::drawTooltip(Painter& p, int64_t now) const {
+    if (!tooltipTarget_) {
+        if (tooltipAlpha_.target() > 0.01) {
+            const_cast<StatusBar*>(this)->tooltipAlpha_.animateTo(0.0, theme::anim::fast,
+                                                                  ease::inOutQuad);
+        }
+        return;
+    }
+    const std::string text = tooltipTarget_->tooltip();
+    if (text.empty()) return;
+
+    const int64_t dwell = now - tooltipHoverStartMs_;
+    if (dwell >= kTooltipDelayMs && tooltipAlpha_.target() < 0.99) {
+        const_cast<StatusBar*>(this)->tooltipAlpha_.animateTo(1.0, theme::anim::fast,
+                                                               ease::inOutQuad);
+    }
+
+    const double alpha = tooltipAlpha_.value(now);
+    if (alpha < 0.01) return;
+
+    // Geometry: measure once, place below (or above on a bottom bar) the
+    // indicator. We mirror the popover screen-edge behaviour so the label
+    // never gets cropped at the anchored edge.
+    constexpr double kPadX = 10.0;
+    constexpr double kPadY = 6.0;
+    constexpr double kRadius = 8.0;
+    constexpr double kGap = 8.0;  // gap from the indicator bounds
+
+    TextStyle style{theme::font::family, 12.0, PANGO_WEIGHT_NORMAL, theme::color::text};
+    Size ts = p.measureText(text, style);
+    double w = ts.w + kPadX * 2.0;
+    double h = ts.h + kPadY * 2.0;
+
+    double cx = tooltipTarget_->bounds.cx();
+    double x = cx - w / 2.0;
+    // Open away from the anchored edge.
+    double y = geom_.bottom ? tooltipTarget_->bounds.y - kGap - h
+                            : tooltipTarget_->bounds.y + tooltipTarget_->bounds.h + kGap;
+
+    // Clamp horizontal to the bar's slab so a near-edge indicator never clips.
+    x = std::clamp(x, bounds.x + 2.0, bounds.x + bounds.w - w - 2.0);
+
+    Rect r{x, y, w, h};
+    p.pushGroup();
+    p.fillRoundedRect(r, kRadius, theme::color::glass);
+    p.strokeRoundedRect(r, kRadius, theme::color::glassBorder, 1.0);
+    p.drawText(r.x + kPadX, r.y + kPadY, text, style);
+    p.popGroupWithAlpha(alpha);
 }
 
 }  // namespace qypr
