@@ -1,8 +1,9 @@
 // Config.hpp - Tiny INI-style configuration reader.
 //
 // qypr's one user-facing config surface. Deliberately hand-rolled (~150 LOC, no
-// new dependency — see STATUS_BAR.md decision D2) and read once at startup (D3:
-// no live reload; restarting a 1MB bar is cheap).
+// new dependency — see STATUS_BAR.md decision D2) and read at startup (D3).
+// The [theme] section is live-reloaded via ConfigWatcher (inotify); structural
+// keys (modules, position) still require a restart.
 //
 // Format:
 //   # full-line comments (# or //)

@@ -15,6 +15,7 @@
 #include <string>
 
 #include "core/Config.hpp"
+#include "core/ConfigWatcher.hpp"
 #include "core/EventLoop.hpp"
 #include "core/Interfaces.hpp"
 #include "mpris/MprisController.hpp"
@@ -30,6 +31,7 @@
 #include "system/BrightnessBackend.hpp"
 #include "system/DbusMenuBackend.hpp"
 #include "system/DndState.hpp"
+#include "system/NightLightBackend.hpp"
 #include "system/SNIBackend.hpp"
 #include "system/SystemBus.hpp"
 #include "system/ToplevelBackend.hpp"
@@ -65,6 +67,8 @@ private:
     void syncOverlay();
     // Grab/release keyboard focus when a search popover (launcher) opens/closes.
     void syncKeyboard();
+    // Re-read bar.conf and re-apply theme colours without a restart.
+    void reloadConfig();
 
     // --- config helpers (used in the member-init list; see the ctor) ---
     static Config loadConfig();
@@ -101,6 +105,7 @@ private:
     WorkspaceBackend workspace_;  // ext-workspace-v1 (on display_'s wl_display)
     ToplevelBackend toplevel_;    // active window (wlr-foreign-toplevel)
     DndState dnd_;
+    NightLightBackend nightLight_;  // init() + setOutputs() after display_.connect()
     // Session surface (Phase 10): already-built subsystems the lock app owns
     // too — the bar simply hosts them as applets.
     NotificationMonitor notifications_{loop_};
@@ -126,8 +131,9 @@ private:
                              .dbusMenu = &dbusMenu_,
                              .workspace = &workspace_,
                              .toplevel = &toplevel_,
-                             .dnd = &dnd_,
-                             .power = &power_,
+                              .dnd = &dnd_,
+                              .nightLight = &nightLight_,
+                              .power = &power_,
                              .powerProfiles = &powerProfiles_,
                              .idleInhibitor = &idleInhibitor_,
                              .desktopIndex = &desktopIndex_,
@@ -139,6 +145,7 @@ private:
                              .sessionSurface = true};
 
     StatusBar statusBar_{loop_, *this, backends_, modules_ ? &*modules_ : nullptr};
+    ConfigWatcher configWatcher_{loop_};
     int overlayHeight_ = 0;  // last surface height requested (logical px)
     bool kbActive_ = false;  // current keyboard-grab state (launcher search box)
 };

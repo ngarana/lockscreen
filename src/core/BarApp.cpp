@@ -104,6 +104,9 @@ int BarApp::run() {
     // lacks zwp_idle_inhibit.
     idleInhibitor_.init(display_.idleInhibitManager(), display_.anchorSurface(),
                         display_.display());
+    nightLight_.init(display_.gammaControlManager(), display_.display());
+    nightLight_.setOutputs(display_.outputs());
+    nightLight_.setOnChange([this] { invalidate(); });
     workspace_.start(display_.display());
     toplevel_.start(display_.display());
 
@@ -124,11 +127,26 @@ int BarApp::run() {
     // filesystem read, no daemon). The launcher indicator is otherwise inert.
     desktopIndex_.load();
 
+    // Live config reload: watch bar.conf for edits and re-apply the [theme]
+    // section without a restart. Structural changes (modules, position) still
+    // need a restart — but colours, fonts, and spacing update instantly.
+    configWatcher_.watch(config_.path(), [this] { reloadConfig(); });
+
     loop_.run();
     return 0;
 }
 
 void BarApp::invalidate() { display_.invalidateAll(); }
+
+void BarApp::reloadConfig() {
+    Config c;
+    if (!c.load(config_.path())) return;  // file vanished or unreadable — keep current theme
+
+    std::fprintf(stderr, "qypr-bar: config changed, reloading theme\n");
+    config_ = std::move(c);
+    theme::loadTheme(config_);
+    invalidate();
+}
 
 void BarApp::draw(cairo_t* cr, int w, int h, int scale) {
     Painter p(cr);
