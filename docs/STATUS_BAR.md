@@ -1073,14 +1073,14 @@ remains is mostly *session* surface area (windows, media, notifications, power),
 | Panel surface, exclusive zone, multi-monitor | ✅ `BarWindow` per output, reserves its zone | — | 7 ✅ |
 | Plasmoid/applet architecture | ✅ `IndicatorRegistry` + 3-layer views | compile-time only (see below) | 1 ✅ / 9 |
 | Pager (virtual desktops) | ✅ `WorkspacesIndicator` | — | 8 ✅ |
-| System tray (SNI) | ✅ icons + left `Activate` + **right-click dbusmenu** (submenus, toggles, drill-down) + middle `SecondaryActivate` | overflow "hidden items" popup, scroll | 6 / 13 ✅ |
+| System tray (SNI) | ✅ icons + left `Activate` + **right-click dbusmenu** (submenus, toggles, drill-down) + middle `SecondaryActivate` + **`Scroll(dx,dy)` forwarded to the under-cursor item** + **overflow chevron → "Hidden items"popover (Passive items per spec)** | — | 6 / 13 ✅ |
 | Battery / power management | ✅ UPower + QS tile + **power-profile switching** (`net.hadess.PowerProfiles`) | charge thresholds | 14 ✅ |
 | Brightness | ✅ sysfs + logind + slider | multi-display, keyboard backlight | 14 |
 | Networks | ✅ WiFi status + toggle + **AP picker** (join saved / disconnect, signal + secured + saved) | new-secured-AP join (secret agent), ethernet, VPN | 14 ✅ |
 | Bluetooth | ✅ status + toggle + **device picker** (connect/disconnect, per-device battery) | — | 14 ✅ |
 | Audio volume | ✅ master sink + QS mute + **output-device switching** + **per-app stream volumes** | input/source device switching | 4 / 14 ✅ |
 | Clock | ✅ time text + **calendar popover** (month nav, week numbers, secondary timezones), format config | — | 12 ✅ |
-| **Task manager (window list)** | ✅ icons-only taskbar: all toplevels, click-to-focus, click-focused-to-minimize, minimized dimming | middle-click close, grouping, pinning | 11 ✅ |
+| **Task manager (window list)** | ✅ icons-only taskbar: all toplevels, click-to-focus, click-focused-to-minimize, **middle-click close**, minimized dimming | grouping, pinning | 11 ✅ |
 | **Notifications applet + history** | ✅ bell + count + history popover; per-row **dismiss**, **Clear all**, **scroll**, relative timestamps, critical accent | per-app inline actions (buttons) | 10a ✅ |
 | **Media player (MPRIS)** | ✅ now-playing + transport popover, pushed (no poll) | album art, seek, explicit player switching | 10b ✅ |
 | **Session / power menu** | ✅ Lock/Suspend/Hibernate/Restart/Shut Down, arm-then-confirm | logout (session-manager specific) | 10a ✅ |
