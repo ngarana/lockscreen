@@ -96,6 +96,11 @@ qypr_gen_protocol(wlr-layer-shell-unstable-v1
 # respected by swayidle/hypridle and any compositor implementing it.
 qypr_gen_protocol(idle-inhibit-unstable-v1
     "${WAYLAND_PROTOCOLS_DIR}/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml")
+# Night Light (wlr-gamma-control, vendored wlroots protocol) — lets the bar
+# shift the screen colour temperature without a D-Bus daemon (Redshift) or
+# any compositor-specific API. Per-output gamma ramps pushed once per toggle.
+qypr_gen_protocol(wlr-gamma-control-unstable-v1
+    "${CMAKE_SOURCE_DIR}/protocols/wlr-gamma-control-unstable-v1.xml")
 
 # -----------------------------------------------------------------------------
 # Version header (generated)
