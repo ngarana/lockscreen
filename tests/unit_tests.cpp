@@ -1255,8 +1255,9 @@ TEST(BrightnessIndicatorConstruction) {
     bright.lastSnap_.current = 10;
     EXPECT_EQ(bright.icon(), std::string("󰃞"));
 
-    // Scroll without a backend must be a no-op, not a crash
-    EXPECT_FALSE(bright.onScroll(0, -1.0));
+    // Scroll without a backend must be a no-op, not a crash. (x,y are pointer
+    // coords forwarded to multi-element indicators; unused here.)
+    EXPECT_FALSE(bright.onScroll(0, -1.0, 0.0, 0.0));
 }
 
 TEST(BrightnessIndicatorCreatesSliderTile) {
@@ -1465,8 +1466,9 @@ TEST(VolumeIndicatorConstruction) {
     vol.lastSnap_.muted = true;
     EXPECT_EQ(vol.icon(), std::string("󰝟"));
 
-    // Scroll without a backend must be a no-op, not a crash
-    EXPECT_FALSE(vol.onScroll(0, -1.0));
+    // Scroll without a backend must be a no-op, not a crash. (x,y are pointer
+    // coords forwarded to multi-element indicators; unused here.)
+    EXPECT_FALSE(vol.onScroll(0, -1.0, 0.0, 0.0));
 }
 
 TEST(VolumeIndicatorCreatesSliderTile) {
