@@ -61,6 +61,7 @@ public:
 
     uint32_t name() const { return name_; }
     wl_surface* surface() const { return surface_; }
+    wl_output* output() const { return output_; }
     int logicalWidth() const { return width_; }
     int logicalHeight() const { return height_; }
 

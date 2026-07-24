@@ -1,6 +1,7 @@
 #include "wayland/BarDisplay.hpp"
 
 #include "idle-inhibit-unstable-v1-client-protocol.h"
+#include "wlr-gamma-control-unstable-v1-client-protocol.h"
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 
 #include <algorithm>
@@ -23,6 +24,7 @@ BarDisplay::BarDisplay(EventLoop& loop, int reservedHeight, bool bottom)
 BarDisplay::~BarDisplay() {
     windows_.clear();
     seat_.reset();
+    if (gammaMgr_) zwlr_gamma_control_manager_v1_destroy(gammaMgr_);
     if (idleMgr_) zwp_idle_inhibit_manager_v1_destroy(idleMgr_);
     if (layerShell_) zwlr_layer_shell_v1_destroy(layerShell_);
     if (compositor_) wl_compositor_destroy(compositor_);
@@ -94,6 +96,13 @@ BarWindow* BarDisplay::windowForSurface(wl_surface* surface) {
     return nullptr;
 }
 
+std::vector<wl_output*> BarDisplay::outputs() const {
+    std::vector<wl_output*> out;
+    out.reserve(windows_.size());
+    for (const auto& win : windows_) out.push_back(win->output());
+    return out;
+}
+
 void BarDisplay::onGlobal(void* data, wl_registry* registry, uint32_t name,
                           const char* interface, uint32_t version) {
     auto* self = static_cast<BarDisplay*>(data);
@@ -112,6 +121,9 @@ void BarDisplay::onGlobal(void* data, wl_registry* registry, uint32_t name,
     } else if (std::strcmp(interface, zwp_idle_inhibit_manager_v1_interface.name) == 0) {
         self->idleMgr_ = static_cast<zwp_idle_inhibit_manager_v1*>(
             wl_registry_bind(registry, name, &zwp_idle_inhibit_manager_v1_interface, 1));
+    } else if (std::strcmp(interface, zwlr_gamma_control_manager_v1_interface.name) == 0) {
+        self->gammaMgr_ = static_cast<zwlr_gamma_control_manager_v1*>(
+            wl_registry_bind(registry, name, &zwlr_gamma_control_manager_v1_interface, 1));
     } else if (std::strcmp(interface, wl_seat_interface.name) == 0) {
         auto* seat = static_cast<wl_seat*>(
             wl_registry_bind(registry, name, &wl_seat_interface, std::min(version, 7u)));

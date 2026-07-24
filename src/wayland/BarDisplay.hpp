@@ -21,6 +21,7 @@
 
 struct zwlr_layer_shell_v1;
 struct zwp_idle_inhibit_manager_v1;
+struct zwlr_gamma_control_manager_v1;
 
 namespace qypr {
 
@@ -61,7 +62,15 @@ public:
     // manager (nullptr if the compositor lacks the protocol) and a surface to
     // anchor an inhibitor on (the first bar window, or nullptr before any exist).
     zwp_idle_inhibit_manager_v1* idleInhibitManager() const { return idleMgr_; }
+    // Night Light plumbing (wlr-gamma-control): the bound manager, or nullptr
+    // when the compositor lacks the protocol — the toggle then hides.
+    zwlr_gamma_control_manager_v1* gammaControlManager() const { return gammaMgr_; }
     wl_surface* anchorSurface() const;
+
+    // The wl_output objects behind every discovered window. Used by the Night
+    // Light backend to create per-output gamma controls. The pointers are
+    // borrowed from BarWindow and remain valid while the window exists.
+    std::vector<wl_output*> outputs() const;
 
     // Wayland C callbacks (public so the registry listener table can bind them).
     static void onGlobal(void*, wl_registry*, uint32_t, const char*, uint32_t);
@@ -81,6 +90,7 @@ private:
     wl_shm* shm_ = nullptr;
     zwlr_layer_shell_v1* layerShell_ = nullptr;
     zwp_idle_inhibit_manager_v1* idleMgr_ = nullptr;
+    zwlr_gamma_control_manager_v1* gammaMgr_ = nullptr;
 
     OutputEnv env_;
     std::unique_ptr<Seat> seat_;
