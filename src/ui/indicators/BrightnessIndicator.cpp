@@ -37,7 +37,8 @@ void BrightnessIndicator::onBackendUpdate() {
     visible = lastSnap_.available;
 }
 
-bool BrightnessIndicator::onScroll(double dx, double dy) {
+bool BrightnessIndicator::onScroll(double dx, double dy, double x, double y) {
+    (void)x; (void)y;
     (void)dx;
     if (!backend_ || !lastSnap_.available) return false;
     // Scroll up (negative dy in Wayland) brightens.

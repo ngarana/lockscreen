@@ -3,9 +3,7 @@
 // The signature panel feature: one button per open toplevel, drawn as its app
 // icon, with the focused window highlighted and minimized ones dimmed. A left
 // click focuses/raises the window — or, if it is already focused, minimizes it
-// (the familiar taskbar toggle). Data + actions come from ToplevelBackend
-// (wlr-foreign-toplevel). Close-on-middle-click waits on button plumbing through
-// StatusBar (which currently discards the button number).
+// (the familiar taskbar toggle). A middle click closes it.
 //
 // Session-sensitive: the open-window list reveals what you are doing, so it is
 // hidden while locked (like ActiveWindowIndicator) and only appears on the
@@ -36,6 +34,7 @@ public:
 
     void onBackendUpdate() override;
     bool onClick(double x, double y) override;
+    bool onMiddleClick(double x, double y) override;
 
 private:
     // Map an x within bounds to a window index, or -1 if outside any button.

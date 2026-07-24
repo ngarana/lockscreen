@@ -19,7 +19,7 @@ public:
     std::string tooltip() const override;
 
     void onBackendUpdate() override;
-    bool onScroll(double dx, double dy) override;
+    bool onScroll(double dx, double dy, double x, double y) override;
 
     std::unique_ptr<QSTile> createTile() override;
 

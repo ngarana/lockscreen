@@ -150,6 +150,15 @@ bool TaskbarIndicator::onClick(double x, double y) {
     return true;
 }
 
+bool TaskbarIndicator::onMiddleClick(double x, double y) {
+    (void)y;
+    if (!backend_ || !visible) return false;
+    const int idx = hitTest(x);
+    if (idx < 0) return false;
+    backend_->close(snap_.windows[idx].id);
+    return true;
+}
+
 REGISTER_INDICATOR("taskbar", Zone::Left, 100, TaskbarIndicator)
 
 }  // namespace qypr

@@ -151,7 +151,8 @@ bool MediaIndicator::onClick(double, double) {
     return true;  // consumed: a click toggles rather than opening the popover
 }
 
-bool MediaIndicator::onScroll(double dx, double dy) {
+bool MediaIndicator::onScroll(double dx, double dy, double x, double y) {
+    (void)x; (void)y;
     if (!mpris_) return false;
     const double d = dy != 0.0 ? dy : dx;
     if (d < 0 && mpris_->canGoNext()) {

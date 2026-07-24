@@ -33,7 +33,7 @@ public:
     // Click the compact view to play/pause; the popover has the full transport.
     bool onClick(double x, double y) override;
     // Scroll over the applet to change tracks.
-    bool onScroll(double dx, double dy) override;
+    bool onScroll(double dx, double dy, double x, double y) override;
 
     void onBackendUpdate() override;
 

@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "system/SNIBackend.hpp"  // SNIItem
 #include "ui/statusbar/StatusIndicator.hpp"
 
 namespace qypr {
@@ -28,18 +29,33 @@ public:
     bool onClick(double x, double y) override;               // left: Activate
     bool onSecondaryClick(double x, double y) override;      // right: dbusmenu
     bool onMiddleClick(double x, double y) override;         // middle: SecondaryActivate
+    bool onScroll(double dx, double dy, double x, double y) override;             // forward SNI Scroll
 
     // A right-click on an item with a menu stashes it here and asks StatusBar to
     // open the detailed view; createDetailedView() then builds the MenuPopover.
-    bool hasDetailedView() const override { return pendingMenu_ >= 0; }
+    // Clicking the overflow chevron (when passive items exist) stashes -2 and
+    // opens the overflow list instead. Both share a single popover slot.
+    bool hasDetailedView() const override { return pendingMenu_ != -1; }
     std::unique_ptr<DetailedPopover> createDetailedView() override;
 
 private:
-    int iconIndexAt(double x) const;  // which tray icon is under x, or -1
+    int iconIndexAt(double x) const;  // which visible tray icon is under x, or -1
+    bool overOverflow(double x) const;
+
+    // Active/NeedsAttention items go on the strip; Passive ones live in the
+    // overflow popover. Items report SNI status "Active" | "Passive" |
+    // "NeedsAttention"; an item is shown on-strip unless it is "Passive".
+    bool onStrip(const SNIItem& it) const {
+        return (it.status == "Passive") ? false : (!it.iconName.empty() || it.pixmap);
+    }
 
     SNIBackend* backend_ = nullptr;
     DbusMenuBackend* dbusMenu_ = nullptr;
     int pendingMenu_ = -1;  // item index whose menu a right-click requested
+    // Width of the overflow chevron column (set in draw() so hit-testing knows
+    // where to look).
+    double overflowBoxStart_ = -1.0;
+    bool overflowBoxShown_ = false;
 };
 
 }  // namespace qypr

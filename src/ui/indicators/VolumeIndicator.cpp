@@ -187,8 +187,8 @@ void VolumeIndicator::onBackendUpdate() {
     visible = lastSnap_.available;
 }
 
-bool VolumeIndicator::onScroll(double dx, double dy) {
-    (void)dx;
+bool VolumeIndicator::onScroll(double dx, double dy, double x, double y) {
+    (void)x; (void)y;
     if (!backend_ || !lastSnap_.available) return false;
     // Scroll up (negative dy in Wayland) raises the volume.
     const double delta = dy < 0 ? kScrollStep : -kScrollStep;

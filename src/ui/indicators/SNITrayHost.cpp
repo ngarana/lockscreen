@@ -12,10 +12,96 @@
 namespace qypr {
 
 namespace {
+
 constexpr double kIconPx = 18.0;   // per-item icon size
 constexpr double kGap = 6.0;       // between adjacent icons
 constexpr double kSidePad = 8.0;   // hover-zone padding each side
-constexpr const char* kFallbackGlyph = "󰀻";  // nf-md-application (no icon/pixmap)
+constexpr double kChevronW = 18.0; // overflow button width
+constexpr const char* kHiddenGlyph = "\uf553";  // angle-left endpoints
+
+// ── Overflow popover ──────────────────────────────────────────────────────────
+// Lists the SNI items whose status is "Passive" (hidden from the strip per
+// spec). Each row carries its icon + title; clicking a row left-activates the
+// item and closes the popover. Mirrors the MenuPopover glass-card look.
+class OverflowPopover : public DetailedPopover {
+public:
+    OverflowPopover(SNIBackend* backend, std::vector<const SNIItem*> hidden, int originX, int originY)
+        : backend_(backend), hidden_(std::move(hidden)) {
+        anchorX = originX;
+        anchorY = originY;
+        if (hidden_.empty()) empty_ = true;
+    }
+
+    double contentWidth() const override { return 260.0; }
+    double contentHeight() const override { return empty_ ? 56.0 : (16.0 + hidden_.size() * 30.0 + 16.0); }
+
+    void draw(Painter& p, int64_t now) override {
+        Rect b = getBounds();
+        b.y -= (1.0 - openProgress_.value(now)) * 6.0;
+        p.fillGlass(b, theme::statusbar::popoverRadius, theme::color::glass,
+                    theme::color::glassBorder);
+        constexpr double pad = 14.0;
+        constexpr double iconPx = 18.0;
+        constexpr double rowH = 30.0;
+        TextStyle hdr{theme::font::family, 11.0, PANGO_WEIGHT_BOLD, theme::color::textSubtle};
+        p.drawText(b.x + pad, b.y + pad, "HIDDEN ITEMS", hdr);
+        rows_.clear();
+        if (empty_) {
+            TextStyle e{theme::font::family, 12.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
+            p.drawText(b.x + pad, b.y + pad + 24.0, "No hidden tray items", e);
+            return;
+        }
+        double y = b.y + pad + 22.0;
+        for (const SNIItem* it : hidden_) {
+            const Rect row{b.x + pad, y, b.w - pad * 2, rowH};
+            rows_.push_back({row, it});
+            cairo_surface_t* s = nullptr;
+            if (!it->iconName.empty()) s = IconResolver::instance().get(it->iconName);
+            if (!s) s = it->pixmap;
+            const double iy = row.y + (row.h - iconPx) / 2.0;
+            if (s) p.drawSurface(s, {row.x + 4.0, iy, iconPx, iconPx});
+            TextStyle ts{theme::font::family, 13.0, PANGO_WEIGHT_NORMAL, theme::color::text};
+            p.drawText(row.x + 28.0, row.y + (row.h - 14.0) / 2.0,
+                       it->title.empty() ? it->service : it->title, ts,
+                       HAlign::Left, row.w - 32.0);
+            y += rowH;
+        }
+    }
+
+    bool handleClick(double x, double y) override {
+        for (const auto& r : rows_) {
+            if (!r.rect.contains(x, y) || !r.item) continue;
+            const auto& items = backend_->items();
+            for (size_t i = 0; i < items.size(); ++i) {
+                if (&items[i] == r.item) {
+                    backend_->activate(i, static_cast<int>(x), static_cast<int>(y));
+                    break;
+                }
+            }
+            closeRequested_ = true;
+            return true;
+        }
+        return false;
+    }
+
+    bool consumeCloseRequest() override {
+        const bool c = closeRequested_;
+        closeRequested_ = false;
+        return c;
+    }
+
+private:
+    struct Row {
+        Rect rect;
+        const SNIItem* item = nullptr;
+    };
+    SNIBackend* backend_ = nullptr;
+    std::vector<const SNIItem*> hidden_;
+    std::vector<Row> rows_;
+    bool empty_ = false;
+    bool closeRequested_ = false;
+};
+
 }  // namespace
 
 SNITrayHost::SNITrayHost(const SystemBackends& backends)
@@ -37,10 +123,16 @@ double SNITrayHost::measureWidth(Painter&) {
     if (!backend_) return 0;
     size_t n = 0;
     for (const auto& it : backend_->items()) {
+        if (!onStrip(it)) continue;
         if (!it.iconName.empty() || it.pixmap) ++n;
     }
-    if (n == 0) return 0;
-    return n * kIconPx + (n - 1) * kGap + 2 * kSidePad;
+    if (n == 0 && !overflowBoxShown_) return 0;
+    double w = (n > 0) ? (n * kIconPx + (n - 1) * kGap) : 0.0;
+    if (overflowBoxShown_) {
+        if (n > 0) w += kGap;
+        w += kChevronW;
+    }
+    return w + 2 * kSidePad;
 }
 
 void SNITrayHost::draw(Painter& p, int64_t now) {
@@ -65,15 +157,27 @@ void SNITrayHost::draw(Painter& p, int64_t now) {
     }
 
     double x = bounds.x + kSidePad;
-    double y = bounds.y + (bounds.h - kIconPx) / 2.0;
+    const double y = bounds.y + (bounds.h - kIconPx) / 2.0;
+    overflowBoxStart_ = -1.0;
     for (const auto& it : items) {
+        if (!onStrip(it)) continue;
         cairo_surface_t* s = nullptr;
         if (!it.iconName.empty()) s = IconResolver::instance().get(it.iconName);
         if (!s) s = it.pixmap;
-        if (!s) continue;  // skip items with no renderable icon
-
+        if (!s) continue;
         p.drawSurface(s, {x, y, kIconPx, kIconPx});
         x += kIconPx + kGap;
+    }
+    // Overflow chevron at the end (only when passive items exist). The popover
+    // itself is the hover affordance; the chevron is left to its glyph alone so
+    // we don't need a separate hover state.
+    if (overflowBoxShown_) {
+        if (x > bounds.x + kSidePad + kIconPx) x -= kGap;  // no double gap before chevron
+        overflowBoxStart_ = x;
+        TextStyle gs{theme::font::iconFamily, 16.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
+        const Size sz = p.measureText(kHiddenGlyph, gs);
+        p.drawText(x + (kChevronW - sz.w) / 2.0, bounds.y + (bounds.h - sz.h) / 2.0,
+                   kHiddenGlyph, gs);
     }
 }
 
@@ -82,13 +186,22 @@ void SNITrayHost::onBackendUpdate() {
         visible = false;
         return;
     }
+    // Visible whenever any on-strip item has a renderable icon. Passive items
+    // by themselves keep the indicator hidden (the user already dismissed them
+    // by setting them Passive; the overflow chevron alone should not clutter
+    // the strip), but they re-emerge the moment any on-strip item appears.
+    bool anyStrip = false;
+    bool anyPassive = false;
     for (const auto& it : backend_->items()) {
-        if (!it.iconName.empty() || it.pixmap) {
-            visible = true;
-            return;
+        const bool renderable = !it.iconName.empty() || it.pixmap;
+        if (it.status == "Passive") {
+            if (renderable) anyPassive = true;
+        } else if (renderable) {
+            anyStrip = true;
         }
     }
-    visible = false;
+    overflowBoxShown_ = anyPassive && anyStrip;
+    visible = anyStrip;
 }
 
 int SNITrayHost::iconIndexAt(double x) const {
@@ -97,19 +210,41 @@ int SNITrayHost::iconIndexAt(double x) const {
     if (items.empty()) return -1;
     const double localX = x - (bounds.x + kSidePad);
     if (localX < 0) return -1;
-    // Walk items, skipping those without a renderable icon, to find the one
-    // at the visual position.
+    // Walk on-strip items only; Passive items are in the overflow popover.
     double cx = 0;
     for (size_t i = 0; i < items.size(); ++i) {
-        const auto& it = items[i];
-        if (it.iconName.empty() && !it.pixmap) continue;
+        if (!onStrip(items[i])) continue;
         if (localX >= cx && localX < cx + kIconPx) return static_cast<int>(i);
         cx += kIconPx + kGap;
     }
     return -1;
 }
 
+bool SNITrayHost::overOverflow(double x) const {
+    if (!overflowBoxShown_ || overflowBoxStart_ < 0) return false;
+    return x >= overflowBoxStart_ && x < overflowBoxStart_ + kChevronW;
+}
+
+bool SNITrayHost::onScroll(double dx, double dy, double x, double y) {
+    (void)y;
+    if (!backend_ || !visible) return false;
+    // Forward to the on-strip item under the cursor (status "Passive" items
+    // cannot be scrolled on the strip — they are in the overflow popover).
+    const int idx = iconIndexAt(x);
+    if (idx < 0) return false;
+    backend_->scroll(static_cast<size_t>(idx), static_cast<int>(dx), static_cast<int>(dy));
+    return true;
+}
+
 bool SNITrayHost::onClick(double x, double y) {
+    (void)y;
+    if (overOverflow(x)) {
+        // Open the overflow list. Returning false lets StatusBar's default
+        // activateIndicator run, which sees hasDetailedView()=true (pendingMenu_
+        // is set to -2 — overflow sentinel) and calls createDetailedView().
+        pendingMenu_ = -2;
+        return false;
+    }
     const int idx = iconIndexAt(x);
     if (idx < 0) return false;
     backend_->activate(static_cast<size_t>(idx), static_cast<int>(x), static_cast<int>(y));
@@ -139,6 +274,24 @@ bool SNITrayHost::onMiddleClick(double x, double y) {
 std::unique_ptr<DetailedPopover> SNITrayHost::createDetailedView() {
     const int idx = pendingMenu_;
     pendingMenu_ = -1;
+    if (idx == -2) {
+        // Overflow request: gather passive items and open the list popover.
+        std::vector<const SNIItem*> passive;
+        if (backend_) {
+            for (const auto& it : backend_->items()) {
+                if (it.status == "Passive" && (!it.iconName.empty() || it.pixmap))
+                    passive.push_back(&it);
+            }
+        }
+        // Anchor the popover below (or above on a bottom bar) the chevron. The
+        // StatusBar places popovers using anchorX/anchorY; for the Right-zone
+        // the anchor is the bar's right edge, so we use that and the popover
+        // opens just below the strip.
+        auto pop = std::make_unique<OverflowPopover>(backend_, std::move(passive),
+                                                     static_cast<int>(bounds.x + bounds.w),
+                                                     static_cast<int>(bounds.y + bounds.h + 4));
+        return pop;
+    }
     if (!dbusMenu_ || idx < 0 || idx >= static_cast<int>(backend_->items().size())) return nullptr;
     const SNIItem& it = backend_->items()[static_cast<size_t>(idx)];
     if (it.menuPath.empty()) return nullptr;
