@@ -117,9 +117,10 @@ private:
     std::vector<std::unique_ptr<StatusIndicator>> centerIndicators_;
     std::vector<std::unique_ptr<StatusIndicator>> rightIndicators_;
 
-    // Specialized trigger for Quick Settings
-    Rect qsButtonBounds_;
-    bool qsButtonHovered_ = false;
+    // Right-zone group chip: all right-side indicators sit inside a single
+    // rounded filled surface tile. Clicking anywhere on the chip opens Quick
+    // Settings (Ubuntu-style reveal).
+    Rect rightGroupBounds_;
 
     // Popover Management
     QuickSettingsPanel qsPanel_;

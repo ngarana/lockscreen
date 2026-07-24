@@ -71,7 +71,7 @@ public:
         // Slide down 6px while opening (fade is applied by PopoverManager).
         b.y -= (1.0 - openProgress_.value(now)) * 6.0;
 
-        p.fillGlass(b, theme::statusbar::popoverRadius, theme::color::glass, theme::color::glassBorder);
+        p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::surface);
         drawProfiles(p, b);
 
         const double pad = theme::statusbar::popoverPadding;
@@ -141,7 +141,7 @@ private:
         const double x = b.x + pad;
 
         double hy = b.y + b.h - 62.0;
-        p.fillRect({x, hy - 12.0, innerW, 1.0}, theme::color::glassBorder);
+        p.fillRect({x, hy - 12.0, innerW, 1.0}, theme::color::surfaceHover);
         TextStyle hdr{theme::font::family, 11.0, PANGO_WEIGHT_BOLD, theme::color::textSubtle};
         p.drawText(x, hy, "POWER PROFILE", hdr);
         hy += 20.0;

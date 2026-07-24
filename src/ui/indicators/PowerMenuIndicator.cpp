@@ -48,7 +48,7 @@ public:
         // Slide in from the bar while opening (fade comes from PopoverManager).
         b.y += (growUp ? 1.0 : -1.0) * (1.0 - openProgress_.value(now)) * 6.0;
 
-        p.fillGlass(b, theme::statusbar::popoverRadius, theme::color::glass, theme::color::glassBorder);
+        p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::surface);
 
         TextStyle iconStyle{theme::font::iconFamily, 15.0, PANGO_WEIGHT_NORMAL,
                             theme::color::text};

@@ -82,7 +82,7 @@ public:
     void draw(Painter& p, int64_t now) override {
         Rect b = getBounds();
         b.y += (growUp ? 1.0 : -1.0) * (1.0 - openProgress_.value(now)) * 6.0;
-        p.fillGlass(b, theme::statusbar::popoverRadius, theme::color::glass, theme::color::glassBorder);
+        p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::surface);
 
         // Displayed month = current month + monthOffset_.
         std::time_t t = std::time(nullptr);
@@ -179,7 +179,7 @@ public:
         // ── Secondary timezones ──────────────────────────────────────────────
         if (!zones_.empty()) {
             double ty = gy + kRows * kCellH + 8.0;
-            p.fillRect({b.x + kPad, ty, b.w - kPad * 2, 1.0}, theme::color::glassBorder);
+            p.fillRect({b.x + kPad, ty, b.w - kPad * 2, 1.0}, theme::color::surfaceHover);
             ty += 6.0;
             for (const auto& z : zones_) {
                 TextStyle ls{theme::font::family, 12.0, PANGO_WEIGHT_NORMAL, theme::color::text};

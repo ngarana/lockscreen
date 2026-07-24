@@ -25,13 +25,14 @@
 namespace qypr {
 
 namespace {
-constexpr const char* kGearGlyph = "\uf0dd";  // nf-fa-sort_desc
-constexpr double kGearWidth = 32.0;
 // Standalone-bar backdrop opacity (setBackdrop). Solid enough that the
 // chromeless glyphs stay legible over any wallpaper, still slightly translucent
 // so it reads as a light panel rather than an opaque block. Tune to taste
 // (0 = invisible → pure chromeless; 1 = fully opaque).
 constexpr double kBackdropAlpha = 0.80;
+constexpr double kRightGroupPadX = 10.0;   // horizontal padding inside the chip
+constexpr double kRightGroupPadY = 4.0;    // vertical padding inside the chip
+constexpr double kRightGroupCorner = 20.0; // rounded chip corner radius
 }  // namespace
 
 StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& backends,
@@ -190,11 +191,13 @@ void StatusBar::layout(int screenW, int screenH) {
         lx += w + sp;
     }
 
-    // 2. Layout rightmost gear button
-    qsButtonBounds_ = {bounds.x + bounds.w - pad - kGearWidth, bounds.y, kGearWidth, barH};
-
-    // 3. Layout Right Zone (flows left from gear button)
-    double rx = qsButtonBounds_.x - sp;
+    // 2. Layout Right Zone (flows left from the bar's right edge).
+    //    Indicators are drawn inside a single rounded filled-surface chip
+    //    (Ubuntu-style right group). The chip is the combined bounds of all
+    //    visible right indicators plus padding; clicking anywhere on it opens
+    //    Quick Settings. The gear glyph is gone — QS is reached by clicking
+    //    the indicators themselves (the whole right group chip).
+    double rx = bounds.x + bounds.w - pad;
     for (auto it = rightIndicators_.rbegin(); it != rightIndicators_.rend(); ++it) {
         if (!isShown(**it)) {
             (*it)->bounds = {0, 0, 0, 0};
@@ -206,7 +209,24 @@ void StatusBar::layout(int screenW, int screenH) {
         rx -= sp;
     }
 
-    // 4. Layout Center Zone
+    // Compute the right-group chip: a single rounded filled surface that
+    // wraps all visible right indicators (plus padding). When the whole
+    // right zone is empty the chip has zero area and is never drawn.
+    rightGroupBounds_ = {0, 0, 0, 0};
+    double rightMinX = bounds.x + bounds.w;
+    double rightMaxX = 0;
+    for (const auto& ind : rightIndicators_) {
+        if (!isShown(*ind)) continue;
+        if (ind->bounds.x < rightMinX) rightMinX = ind->bounds.x;
+        if (ind->bounds.x + ind->bounds.w > rightMaxX) rightMaxX = ind->bounds.x + ind->bounds.w;
+    }
+    if (rightMinX < rightMaxX) {
+        rightGroupBounds_ = {rightMinX - kRightGroupPadX, bounds.y + kRightGroupPadY,
+                             rightMaxX - rightMinX + 2 * kRightGroupPadX,
+                             barH - 2 * kRightGroupPadY};
+    }
+
+    // 3. Layout Center Zone
     double totalCenterW = 0;
     int visibleCenter = 0;
     for (auto& ind : centerIndicators_) {
@@ -226,7 +246,7 @@ void StatusBar::layout(int screenW, int screenH) {
         cx += w + sp;
     }
 
-    // 5. Anchor active popovers (Quick Settings or right-zone popovers) to the
+    // 4. Anchor active popovers
     //    right edge of the bar, opening away from the anchored screen edge.
     if (popovers_.active()) {
         DetailedPopover* p = popovers_.active();
@@ -253,13 +273,10 @@ void StatusBar::draw(Painter& p, int64_t now) {
     // wallpaper; the lock screen never enables it.
     if (backdrop_ && bounds.w > 0) {
         const double a = backdropAlpha_ >= 0.0 ? backdropAlpha_ : kBackdropAlpha;
-        // Frosted-glass strip: the surface tint at the configured opacity plus
-        // the shared sheen + hairline border, matching the popovers. On a
-        // blur-capable compositor (layer namespace "qypr-bar") it reads as real
-        // frost. The lock screen never enables the backdrop, so its bar stays
-        // chromeless over the controlled dark background.
-        p.fillGlass(bounds, theme::statusbar::cornerRadius,
-                    theme::color::surface.withAlpha(a), theme::color::glassBorder);
+        // Opaque tinted strip: fill the whole bar slab so glyphs stay
+        // legible over any wallpaper, with no outline stroke.
+        p.fillRoundedRect(bounds, theme::statusbar::cornerRadius,
+                          theme::color::surface.withAlpha(a));
     }
 
     auto drawZone = [&](auto& list) {
@@ -274,19 +291,15 @@ void StatusBar::draw(Painter& p, int64_t now) {
     };
     drawZone(leftIndicators_);
     drawZone(centerIndicators_);
-    drawZone(rightIndicators_);
 
-    // Gear button
-    if (qsButtonHovered_) {
-        p.fillRoundedRect(qsButtonBounds_, 8.0, theme::color::glassHover);
+    // Right-group chip: draw a single filled surface tile behind all right
+    // indicators (Ubuntu-style rounded group). Clicking anywhere on this chip
+    // reveals Quick Settings — the gear glyph is gone.
+    if (rightGroupBounds_.w > 0 && rightGroupBounds_.h > 0) {
+        p.fillRoundedRect(rightGroupBounds_, kRightGroupCorner, theme::color::surface);
     }
-    TextStyle gearStyle{theme::font::iconFamily, theme::statusbar::iconSize,
-                        PANGO_WEIGHT_NORMAL, theme::color::text};
-    Size gearSz = p.measureText(kGearGlyph, gearStyle);
-    p.drawTextShadowed(qsButtonBounds_.x + (qsButtonBounds_.w - gearSz.w) / 2.0,
-                       qsButtonBounds_.y + (qsButtonBounds_.h - gearSz.h) / 2.0, kGearGlyph,
-                       gearStyle, HAlign::Left, theme::effects::shadowOpacity,
-                       theme::effects::shadowOffset);
+
+    drawZone(rightIndicators_);
 
     // Popovers
     popovers_.draw(p, now);
@@ -316,11 +329,6 @@ bool StatusBar::handlePointerMotion(double x, double y, int64_t now) {
     }
     // An open popover hides the hover-tooltip (the popover's own title serves).
     if (popovers_.active()) tooltipTarget_ = nullptr;
-
-    // Hit test gear button
-    bool lastGearHover = qsButtonHovered_;
-    qsButtonHovered_ = qsButtonBounds_.contains(x, y);
-    if (qsButtonHovered_ != lastGearHover) host_.invalidate();
 
     // Hit test indicators. The hovered indicator also drives the hover-tooltip
     // (Phase 6 polish): we record the one pointer is over, and the timestamp
@@ -415,11 +423,38 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
 
     if (!pressed) return false;
 
-    // Gear button click (left only; a right-click there is a no-op).
-    if (button == kBtnLeft && qsButtonBounds_.contains(x, y)) {
-        toggleQuickSettings();
-        host_.invalidate();
-        return true;
+    // Clicking anywhere on the right-group chip (or a right-zone indicator that
+    // does not have its own popover) opens Quick Settings — Ubuntu-style reveal.
+    // Right-zone indicators with detailed views (WiFi AP picker, battery popover,
+    // etc.) open their own popover first; a second click on the same indicator or
+    // a click on the open space inside the right chip opens QS.
+    if (button == kBtnLeft) {
+        // If a right-zone indicator handles the click itself (e.g. WiFi opens its
+        // AP picker), let it. Otherwise open Quick Settings.
+        for (const auto& ind : rightIndicators_) {
+            if (!isShown(*ind) || !ind->bounds.contains(x, y)) continue;
+            if (ind->hasDetailedView() && ind->bounds.contains(x, y)) {
+                activateIndicator(*ind);
+                host_.invalidate();
+                return true;
+            }
+        }
+        for (const auto& ind : rightIndicators_) {
+            if (!isShown(*ind) || !ind->bounds.contains(x, y)) continue;
+            if (ind->onClick(x, y)) {
+                host_.invalidate();
+                return true;
+            }
+            // Indicator handled nothing else: open Quick Settings.
+            toggleQuickSettings();
+            host_.invalidate();
+            return true;
+        }
+        if (rightGroupBounds_.contains(x, y)) {
+            toggleQuickSettings();
+            host_.invalidate();
+            return true;
+        }
     }
 
     // Indicator click. Right/middle go to their handlers and never fall through
@@ -449,7 +484,6 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
 
 void StatusBar::handlePointerLeave(int64_t now) {
     (void)now;
-    qsButtonHovered_ = false;
     auto clear = [&](auto& list) {
         for (auto& ind : list) ind->hovered = false;
     };

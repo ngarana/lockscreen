@@ -99,32 +99,10 @@ void QuickSettingsPanel::draw(Painter& p, int64_t now) {
 
     Rect popBounds = getBounds();
 
-    // Draw card popover background (frosted glass)
-    p.fillGlass(popBounds, 16.0, theme::color::glass, theme::color::glassBorder);
-
-    // Draw popover arrow pointing up at top right of the card
-    double arrowX = anchorX - 24.0;
-    double arrowY = anchorY;
-
-    cairo_t* cr = p.cr();
-    cairo_save(cr);
-    cairo_new_path(cr);
-    cairo_move_to(cr, arrowX - 8.0, arrowY + 1.0); // slight bleed for overlap
-    cairo_line_to(cr, arrowX, arrowY - 8.0);
-    cairo_line_to(cr, arrowX + 8.0, arrowY + 1.0);
-    cairo_close_path(cr);
-    cairo_set_source_rgba(cr, theme::color::glass.r, theme::color::glass.g, theme::color::glass.b, theme::color::glass.a);
-    cairo_fill(cr);
-
-    // Stroke the arrow sides
-    cairo_new_path(cr);
-    cairo_move_to(cr, arrowX - 8.0, arrowY + 1.0);
-    cairo_line_to(cr, arrowX, arrowY - 8.0);
-    cairo_line_to(cr, arrowX + 8.0, arrowY + 1.0);
-    cairo_set_source_rgba(cr, theme::color::glassBorder.r, theme::color::glassBorder.g, theme::color::glassBorder.b, theme::color::glassBorder.a);
-    cairo_set_line_width(cr, 1.0);
-    cairo_stroke(cr);
-    cairo_restore(cr);
+    // Draw popover background: filled surface card, no outline stroke or
+    // glass sheen. The popover arrow (formerly glassmorphism detail) is
+    // removed — the card reads clean without it in the filled-surface style.
+    p.fillRoundedRect(popBounds, 16.0, theme::color::surface);
 
     // Draw all tiles
     for (const auto& tile : tiles_) {

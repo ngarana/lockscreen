@@ -1008,8 +1008,10 @@ TEST(StatusBarPointerInput) {
     bar.layout(1920, 1080);
 
     // A display-only indicator (no detailed view, no onClick) must NOT open the
-    // Quick Settings panel when activated — the gear is the sole QS trigger, so
-    // a click on such an element can't make the panel fly in from the far right.
+    // Quick Settings panel when activated — clicking the right-group chip
+    // (which wraps indicators like WiFi|Battery|Clock) is the QS trigger.
+    // A standalone click on a non-right-zone indicator activates it without
+    // opening QS.
     qypr::KeyboardLayoutIndicator displayOnly(backends);
     bar.activateIndicator(displayOnly);
     EXPECT_FALSE(bar.hasOpenOverlay());
@@ -1024,12 +1026,13 @@ TEST(StatusBarPointerInput) {
     handled = bar.handlePointerMotion(0, 0, 1001);
     EXPECT_FALSE(handled);
 
-    // Click on the gear button area
-    double gearX = bar.bounds.x + bar.bounds.w - 30;
-    double gearY = bar.bounds.y + bar.bounds.h / 2.0;
-    handled = bar.handlePointerButton(gearX, gearY, 272, true, 1002);
+    // Click the right-group chip area (the far-right of the bar where
+    // indicators reside) — this opens Quick Settings Ubuntu-style.
+    double chipX = bar.bounds.x + bar.bounds.w - 30;
+    double chipY = bar.bounds.y + bar.bounds.h / 2.0;
+    handled = bar.handlePointerButton(chipX, chipY, 272, true, 1002);
     EXPECT_TRUE(handled);
-    // The gear DOES open Quick Settings (positive control for the check above).
+    // The right-group chip opens Quick Settings (positive control).
     EXPECT_TRUE(bar.hasOpenOverlay());
     // The overlay surface is sized to the panel — NOT the whole output. This is
     // the fix for a popover resizing a full-window surface (which a compositor
@@ -1039,7 +1042,6 @@ TEST(StatusBarPointerInput) {
 
     // Leave clears hover
     bar.handlePointerLeave(1003);
-    EXPECT_FALSE(bar.qsButtonHovered_);
 }
 
 // Test StatusBar keyboard focus cycling.

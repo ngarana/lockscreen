@@ -27,14 +27,14 @@ void QSToggleTile::draw(Painter& p, int64_t now) {
     bool active = isActive_ && isActive_();
     double hAlpha = hoverAnim_.value(now);
 
-    // Dynamic backgrounds
-    Color bg = active ? theme::color::primary : theme::color::glass;
+    // Dynamic backgrounds: filled surface tiles, no outline stroke.
+    Color bg = active ? theme::color::primary : theme::color::surface;
     if (hAlpha > 0.01) {
-        bg = active ? theme::color::primary.withAlpha(0.85) : theme::color::glassHover;
+        bg = active ? theme::color::primary.withAlpha(0.85)
+                    : theme::color::surfaceHover;
     }
 
     p.fillRoundedRect(bounds, 12.0, bg);
-    p.strokeRoundedRect(bounds, 12.0, theme::color::glassBorder, 1.0);
 
     // Draw content
     Color fgColor = active ? Color::fromHex("#1e1e2e") : theme::color::text;
@@ -183,9 +183,8 @@ void QSInfoTile::draw(Painter& p, int64_t now) {
     double progress = getProgress_ ? getProgress_() : 0.0;
     std::string info = getInfo_ ? getInfo_() : "";
 
-    // Background
-    p.fillRoundedRect(bounds, 12.0, theme::color::glass);
-    p.strokeRoundedRect(bounds, 12.0, theme::color::glassBorder, 1.0);
+    // Background: filled surface tile, no outline.
+    p.fillRoundedRect(bounds, 12.0, theme::color::surface);
 
     double pad = 12.0;
 
