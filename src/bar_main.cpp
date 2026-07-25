@@ -16,6 +16,13 @@ int main(int argc, char** argv) {
             std::cout << "qypr-bar " << QYPR_VERSION_STRING << std::endl;
             return 0;
         }
+        // Offline preview: render bar frames to PNG without a Wayland connection.
+        //   qypr-bar --preview [path.png]
+        if (std::strcmp(argv[i], "--preview") == 0) {
+            qypr::BarApp app;
+            std::string path = (i + 1 < argc) ? argv[i + 1] : "qypr-bar-preview.png";
+            return app.preview(path);
+        }
     }
 
     qypr::BarApp app;

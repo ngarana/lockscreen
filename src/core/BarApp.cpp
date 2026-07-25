@@ -1,6 +1,7 @@
 #include "core/BarApp.hpp"
 
-#include <xkbcommon/xkbcommon-keysyms.h>
+#include <cairo/cairo.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -133,6 +134,83 @@ int BarApp::run() {
     configWatcher_.watch(config_.path(), [this] { reloadConfig(); });
 
     loop_.run();
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Offline preview: render bar frames to PNG without a Wayland connection.
+// ---------------------------------------------------------------------------
+namespace {
+void renderToPng(StatusBar& bar, const std::string& path, int w, int h) {
+    cairo_surface_t* surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+    cairo_t* cr = cairo_create(surface);
+    Painter p(cr);
+    bar.layout(w, h);
+    bar.draw(p, nowMs());
+    cairo_destroy(cr);
+    cairo_surface_write_to_png(surface, path.c_str());
+    cairo_surface_destroy(surface);
+}
+
+std::string stripExt(const std::string& path) {
+    const auto dot = path.rfind('.');
+    return dot != std::string::npos ? path.substr(0, dot) : path;
+}
+}  // namespace
+
+int BarApp::preview(const std::string& path, int width, int height) {
+    // Start backends for real indicator state.
+    battery_.start();
+    brightness_.start();
+    wifi_.start();
+    bluetooth_.start();
+    volume_.start();
+    sni_.start();
+    mpris_.refresh();
+
+    // Configure as standalone bar (mirrors run()).
+    statusBar_.setSessionContentVisible(true);
+    statusBar_.setBackdrop(true);
+    statusBar_.setGeometry(geom_);
+
+    // Pump the event loop briefly so volume (async connect) and the SNI tray
+    // (session bus fetch) populate.
+    loop_.addTimer(400, false, [this] { loop_.quit(); });
+    loop_.run();
+
+    // 1. Idle bar.
+    statusBar_.layout(width, height);
+    renderToPng(statusBar_, path, width, height);
+
+    // 2. Quick Settings open: click the right-group chip.
+    //    Use the actual computed chip bounds (centred inside the chip).
+    {
+        const auto& rgb = statusBar_.rightGroupBounds();
+        const double chipCx = rgb.x + rgb.w / 2.0;
+        const double chipCy = rgb.y + rgb.h / 2.0;
+        statusBar_.handlePointerButton(chipCx, chipCy, 0x110, true, nowMs());
+    }
+    usleep(300 * 1000);
+    // Re-layout so the opened panel's anchor is resolved and we can read its
+    // position for the DND click.
+    statusBar_.layout(width, height);
+    renderToPng(statusBar_, stripExt(path) + "-qs.png", width, height);
+
+    // 3. DND toggle on (row 2, col 1 of the toggle grid).
+    //    Panel x = barRight - kPanelW; tile centre: panelX + kPad + tileW/2,
+    //    y = statusBarTop + statusBarH + gap + kHeaderH + kPad + kGridRowH + kGap + kGridRowH/2.
+    {
+        const double barRight = statusBar_.bounds.x + statusBar_.bounds.w;
+        const double panelX = barRight - 380.0;
+        const double tileX = panelX + 14.0 + 56.0;  // kPad + tileW/2
+        const double statusBarBottom = statusBar_.bounds.y + statusBar_.bounds.h;
+        const double tileY = statusBarBottom + 6.0 + 52.0 + 14.0 + 76.0 + 8.0 + 38.0;
+        statusBar_.handlePointerButton(tileX, tileY, 0x110, true, nowMs());
+    }
+    usleep(400 * 1000);
+    renderToPng(statusBar_, stripExt(path) + "-dnd.png", width, height);
+
+    std::fprintf(stderr, "qypr-bar: wrote preview frames near %s\n", path.c_str());
     return 0;
 }
 

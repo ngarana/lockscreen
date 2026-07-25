@@ -205,13 +205,13 @@ std::unique_ptr<QSTile> VolumeIndicator::createTile() {
         [backend](double v) {
             if (backend) backend->setLevel(v);
         },
-        // Icon follows the live mute/level state; clicking it toggles mute; the
-        // row greys while muted.
+        // Icon follows live mute/level state
         [snap]() { return volumeIcon(*snap); },
         [backend]() {
             if (backend) backend->toggleMute();
         },
-        [snap]() { return snap->muted; });
+        [snap]() { return snap->muted; },
+        "Volume");
 }
 
 std::unique_ptr<DetailedPopover> VolumeIndicator::createDetailedView() {

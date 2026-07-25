@@ -62,6 +62,17 @@ StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& b
         if (auto tile = ind->createTile()) qsPanel_.addTile(std::move(tile));
     }
 
+    // Build internal QS panel tiles (header, power, wifi combo, volume, media).
+    // The power callback opens the PowerMenuIndicator's popover (if present).
+    qsPanel_.buildTiles(loop_, backends, [this]() {
+        for (auto& ind : rightIndicators_) {
+            if (ind->id() == "power" && ind->hasDetailedView()) {
+                activateIndicator(*ind);
+                return;
+            }
+        }
+    });
+
     // Backends push; every push fans out to the indicators (they filter by
     // their own backend pointer) and triggers a repaint.
     if (backends.battery) {
@@ -193,7 +204,7 @@ void StatusBar::layout(int screenW, int screenH) {
 
     // 2. Layout Right Zone (flows left from the bar's right edge).
     //    Indicators are drawn inside a single rounded filled-surface chip
-    //    (Ubuntu-style right group). The chip is the combined bounds of all
+    //    The chip is the combined bounds of all
     //    visible right indicators plus padding; clicking anywhere on it opens
     //    Quick Settings. The gear glyph is gone — QS is reached by clicking
     //    the indicators themselves (the whole right group chip).
@@ -292,11 +303,25 @@ void StatusBar::draw(Painter& p, int64_t now) {
     drawZone(leftIndicators_);
     drawZone(centerIndicators_);
 
-    // Right-group chip: draw a single filled surface tile behind all right
-    // indicators (Ubuntu-style rounded group). Clicking anywhere on this chip
-    // reveals Quick Settings — the gear glyph is gone.
+    // Right-group chip: a single rounded filled-surface tile wrapping all
+    // right-side indicators with subtle separator dots between them Wi-Fi.
     if (rightGroupBounds_.w > 0 && rightGroupBounds_.h > 0) {
         p.fillRoundedRect(rightGroupBounds_, kRightGroupCorner, theme::color::surface);
+
+        // Separator dots between adjacent visible right indicators
+        const TextStyle sepStyle{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL,
+                                 theme::color::textMuted};
+        for (size_t i = 0; i + 1 < rightIndicators_.size(); ++i) {
+            if (!isShown(*rightIndicators_[i]) || !isShown(*rightIndicators_[i + 1]))
+                continue;
+            const Rect& a = rightIndicators_[i]->bounds;
+            const Rect& b = rightIndicators_[i + 1]->bounds;
+            // b sits to the left of a (right zone flows right-to-left), so the
+            // gap is between b's right edge and a's left edge.
+            const double sepX = (a.x + b.x + b.w) / 2.0;
+            p.drawText(sepX, bounds.y + (bounds.h - 12.0) / 2.0, "·", sepStyle,
+                       HAlign::Center);
+        }
     }
 
     drawZone(rightIndicators_);
@@ -424,7 +449,7 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
     if (!pressed) return false;
 
     // Clicking anywhere on the right-group chip (or a right-zone indicator that
-    // does not have its own popover) opens Quick Settings — Ubuntu-style reveal.
+    // does not have its own popover) opens Quick Settings.
     // Right-zone indicators with detailed views (WiFi AP picker, battery popover,
     // etc.) open their own popover first; a second click on the same indicator or
     // a click on the open space inside the right chip opens QS.
@@ -634,7 +659,6 @@ bool StatusBar::hasFocusedChild() const {
            anyFocused(rightIndicators_);
 }
 
-// Phase 6 polish: per-indicator hover tooltip. After the pointer dwells on one
 // indicator for kTooltipDelayMs the bar fades in a small glass-card label
 // completing the spec's "per-indicator tooltips" entry. It opens *away from
 // the anchored edge* (down on a top bar, up on a bottom bar) — the same direction

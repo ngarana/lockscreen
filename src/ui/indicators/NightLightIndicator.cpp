@@ -19,7 +19,7 @@ constexpr double kPopoverH = 100.0;
 constexpr double kPad = 16.0;
 
 // ─────────────────────────────────────────────────────────────────────────
-// NightLightPopover — macOS-style temperature slider.
+// NightLightPopover.
 // ─────────────────────────────────────────────────────────────────────────
 class NightLightPopover : public DetailedPopover {
 public:

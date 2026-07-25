@@ -136,6 +136,7 @@ int g_tests_failed = 0;
 #include "ui/indicators/KeyboardLayoutIndicator.hpp"
 #include "ui/statusbar/LauncherPopover.hpp"
 #include "core/App.hpp"
+#include "core/BarApp.hpp"
 
 #undef private
 #undef protected
@@ -434,6 +435,19 @@ TEST(AppAndUIHeadlessPreview) {
     // Clean up preview files
     std::remove("qypr-test-preview.png");
     std::remove("qypr-test-preview-idle.png");
+}
+
+TEST(BarAppPreview) {
+    qypr::BarApp app;
+
+    // Exercises BarApp::preview which renders standalone bar + QS frames to PNG.
+    int rc = app.preview("qypr-test-bar-preview.png", 800, 600);
+    EXPECT_EQ(rc, 0);
+
+    // Clean up preview files
+    std::remove("qypr-test-bar-preview.png");
+    std::remove("qypr-test-bar-preview-qs.png");
+    std::remove("qypr-test-bar-preview-dnd.png");
 }
 
 TEST(LockScreenInputHandling) {
@@ -932,10 +946,10 @@ TEST(QuickSettingsPanelLayout) {
     double h = panel.contentHeight();
     EXPECT_TRUE(h > 0);
 
-    // Click inside the first toggle tile (bounds set by draw/layoutTiles).
+    // Click inside the first toggle tile (below the header row).
     qypr::Rect pb = panel.getBounds();
-    double firstTileX = pb.x + 16.0 + 5.0;  // pad + small offset inside tile
-    double firstTileY = pb.y + 16.0 + 5.0;
+    double firstTileX = pb.x + 16.0 + 5.0;  // pad + small offset
+    double firstTileY = pb.y + 16.0 + 52.0 + 8.0 + 5.0;  // pad + header + gap + offset
     EXPECT_TRUE(panel.handleClick(firstTileX, firstTileY));
 
     cairo_destroy(cr);

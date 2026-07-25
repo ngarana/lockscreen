@@ -39,9 +39,9 @@ void StatusIndicator::draw(Painter& p, int64_t now) {
     double alpha = hoverAlpha_.value(now);
     double scale = hoverScale_.value(now);
 
-    // 1. Hover background pill
+    // 1. Hover background pill (subtle surface highlight inside the chip)
     if (alpha > 0.01) {
-        Color bg = theme::color::glassHover.withAlpha(alpha * theme::color::glassHover.a);
+        Color bg = theme::color::surfaceHover.withAlpha(alpha * 0.5);
         Rect hoverRect = bounds;
         hoverRect.y += 2.0;
         hoverRect.h -= 4.0;

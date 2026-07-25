@@ -108,10 +108,8 @@ int App::preview(const std::string& path, int width, int height) {
     usleep(700 * 1000);
     renderToPng(shell_, path, width, height);
 
-    // Quick Settings open: click the gear through Shell routing (bar-first).
-    // Gear centre: w - sideMargin(48) - pad(14) - gearW(32)/2 → w-78; y =
-    // topMargin(24) + barH(36)/2 → 42.
-    shell_.onPointerButton(width, height, width - 78.0, 42.0, 0x110, true);
+    // Quick Settings open: click the right group chip in the status bar.
+    shell_.onPointerButton(width, height, width - 180.0, 42.0, 0x110, true);
     usleep(300 * 1000);
     renderToPng(shell_, path.substr(0, path.rfind('.')) + "-qs.png", width, height);
 

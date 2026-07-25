@@ -49,6 +49,10 @@ public:
 
     int run();
 
+    // Render standalone bar + QS frames to PNGs (no Wayland connection) for
+    // visual verification. Writes <path>, <path>-qs.png, and <path>-dnd.png.
+    int preview(const std::string& path, int width = 1920, int height = 1080);
+
     // Invalidator
     void invalidate() override;
 

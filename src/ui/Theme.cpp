@@ -23,6 +23,29 @@ void overrideDouble(double& target, const Config& cfg, const char* section, cons
 }  // namespace
 
 void loadTheme(const Config& cfg) {
+    // Reset to compiled defaults before applying overrides
+    color::background = Color::fromHex("#0d0e15");
+    color::surface = Color::fromHex("#181a24");
+    color::surfaceHover = Color::fromHex("#222534");
+    color::glass = Color::fromHex("#181a24").withAlpha(0.65);
+    color::glassHover = Color::fromHex("#222534").withAlpha(0.75);
+    color::glassBorder = Color::fromHex("#ffffff").withAlpha(0.08);
+    color::primary = Color::fromHex("#89b4fa");
+    color::primaryGlow = Color::fromHex("#4089b4fa");
+    color::text = Color::fromHex("#cdd6f4");
+    color::textSubtle = Color::fromHex("#a6adc8");
+    color::textMuted = Color::fromHex("#6c7086");
+    color::error = Color::fromHex("#f38ba8");
+    color::success = Color::fromHex("#a6e3a1");
+    color::warning = Color::fromHex("#f9e2af");
+
+    font::family = "Inter";
+    font::iconFamily = "CaskaydiaCove Nerd Font";
+    font::size = 16;
+    font::sizeLarge = 22;
+    font::sizeClock = 64;
+    font::sizeDate = 18;
+
     constexpr const char* s = "theme";
 
     // ─── Colors ──────────────────────────────────────────────────────

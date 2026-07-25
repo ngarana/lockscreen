@@ -94,6 +94,9 @@ public:
     void setGeometry(const BarGeometry& g);
     const BarGeometry& geometry() const { return geom_; }
 
+    // Right-group chip bounds (for preview click targeting).
+    const Rect& rightGroupBounds() const { return rightGroupBounds_; }
+
 private:
     void toggleQuickSettings();
     void activateIndicator(StatusIndicator& ind);

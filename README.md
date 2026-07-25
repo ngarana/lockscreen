@@ -48,6 +48,8 @@ hosted on wlr-layer-shell for the unlocked desktop.
   modules, clock format, style).
 - Session-sensitive widgets: workspaces + active window appear only on the bar
   (hidden on the lock screen).
+- **Offline preview**: render the bar, Quick Settings panel, and DND state to PNG
+  without a Wayland connection (`qypr-bar --preview`).
 
 ### Notification mirror (`qypr-record`)
 
@@ -116,6 +118,7 @@ qypr-lock --idle-timeout 30       # pause video + dim after 30s idle (default 60
 qypr-lock --video-test 6          # exercise video pipeline offscreen
 qypr-lock --version               # print version
 qypr-bar                          # start the status bar
+qypr-bar --preview [out.png]      # offline preview: bar + QS + DND frames to PNG
 qypr-bar --version                # print version
 qypr-record                       # notification mirror service (see below)
 qypr-record --version             # print version
