@@ -3,12 +3,15 @@
 #include "render/Painter.hpp"
 #include "ui/Theme.hpp"
 #include "ui/statusbar/StatusIndicator.hpp"
+#include "core/Config.hpp"
 #include "system/WifiBackend.hpp"
 #include "system/BluetoothBackend.hpp"
 #include "system/BrightnessBackend.hpp"
 #include "system/VolumeBackend.hpp"
+#include "system/DndState.hpp"
 #include "mpris/MprisController.hpp"
 #include "power/PowerManager.hpp"
+#include <cstdlib>
 #include <unistd.h>
 #include <vector>
 
@@ -35,6 +38,16 @@ constexpr double kVolumeH = 68.0;
 // Media card
 constexpr double kMediaH = 60.0;
 
+// Config section for QS commands
+constexpr const char* kQsSection = "quick-settings";
+
+// Run a shell command in the background (fire-and-forget).
+void runCommand(const std::string& cmd) {
+    if (cmd.empty()) return;
+    std::string detached = cmd + " &";
+    std::system(detached.c_str());
+}
+
 std::string getUserName() {
     const char* u = std::getenv("USER");
     return u ? std::string(u) : "user";
@@ -57,18 +70,22 @@ void QuickSettingsPanel::buildTiles(EventLoop&, const SystemBackends& backends,
     // Header
     std::string user = getUserName();
     std::string host = getHostName();
-    header_ = std::make_unique<QSHeaderTile>(user, user + "@" + host, Color::fromHex("#fabd2f"));
+    header_ = std::make_unique<QSHeaderTile>(user, user + "@" + host, theme::color::primary);
 
     // Power button (right of header)
-    power_ = std::make_unique<QSPowerTile>([onPower]() {
-        if (onPower) onPower();
+    std::string powerCmd = "waylaunch --power";
+    if (backends.config) {
+        powerCmd = backends.config->getString(kQsSection, "power-command", powerCmd);
+    }
+    power_ = std::make_unique<QSPowerTile>([powerCmd]() {
+        runCommand(powerCmd);
     });
 
     // Wi-Fi combo (if backend present)
     if (backends.wifi) {
         auto snap = backends.wifi;
         wifiCombo_ = std::make_unique<QSWifiComboTile>(
-            "Wired connection", 100, true, Color::fromHex("#00d2ff"));
+            "Wired connection", 100, true, theme::color::primary);
         wifiCombo_->setEnabled(snap->snapshot().enabled);
         wifiCombo_->setSsid(snap->snapshot().ssid);
         wifiCombo_->setStrength(snap->snapshot().strength);
@@ -79,22 +96,28 @@ void QuickSettingsPanel::buildTiles(EventLoop&, const SystemBackends& backends,
         });
     } else if (!wifiCombo_) {
         wifiCombo_ = std::make_unique<QSWifiComboTile>(
-            "Wired connection", 100, true, Color::fromHex("#00d2ff"));
+            "Wired connection", 100, true, theme::color::primary);
     }
+
+    // Remove any indicator-created WiFi/Network tiles — the combo tile replaces them.
+    tiles_.erase(std::remove_if(tiles_.begin(), tiles_.end(), [](const std::unique_ptr<QSTile>& t) {
+        if (!t) return false;
+        std::string title = t->title();
+        return title == "WiFi" || title == "Network" || title == "Wired";
+    }), tiles_.end());
 
     // Purge any volume tiles from grid (volume is handled in dedicated QSVolumeTile card at bottom)
     tiles_.erase(std::remove_if(tiles_.begin(), tiles_.end(), [](const std::unique_ptr<QSTile>& t) {
         return t && (t->type() == QSTile::Type::Volume || t->title() == "Volume");
     }), tiles_.end());
 
-    bool hasBt = false, hasBr = false, hasDnd = false, hasNl = false, hasKa = false, hasSs = false;
+    bool hasBt = false, hasBr = false, hasDnd = false, hasKa = false, hasSs = false;
     for (const auto& t : tiles_) {
         if (!t) continue;
         std::string title = t->title();
         if (title == "Bluetooth") hasBt = true;
         else if (t->type() == QSTile::Type::Slider || title == "Q27G41ZDF" || title == "Brightness") hasBr = true;
         else if (title == "Do Not Disturb") hasDnd = true;
-        else if (title == "Night Light" || title == "Dark Theme") hasNl = true;
         else if (title == "Keep awake" || title == "Idle Inhibitor") hasKa = true;
         else if (title == "Screenshot") hasSs = true;
     }
@@ -134,12 +157,30 @@ void QuickSettingsPanel::buildTiles(EventLoop&, const SystemBackends& backends,
     }
 
     if (!hasDnd) {
-        tiles_.push_back(std::make_unique<QSToggleTile>(
-            "Do Not Disturb", "󰂜", []() { return false; }, []() {},
-            []() -> std::string { return "Off"; }));
+        if (backends.dnd) {
+            auto dnd = backends.dnd;
+            tiles_.push_back(std::make_unique<QSToggleTile>(
+                "Do Not Disturb", "󰂜",
+                std::function<bool()>([dnd]() { return dnd->enabled(); }),
+                std::function<void()>([dnd]() { dnd->toggle(); }),
+                std::function<std::string()>([dnd]() -> std::string {
+                    return dnd->enabled() ? "On" : "Off";
+                })));
+        } else {
+            tiles_.push_back(std::make_unique<QSToggleTile>(
+                "Do Not Disturb", "󰂜", []() { return false; }, []() {},
+                []() -> std::string { return "Off"; }));
+        }
     }
 
-    if (!hasNl) {
+    // Night Light: always present. Remove any indicator-created tile and
+    // re-create from the backend (or a static fallback) so the wiring is
+    // consistent regardless of how the indicator was set up.
+    {
+        tiles_.erase(std::remove_if(tiles_.begin(), tiles_.end(), [](const std::unique_ptr<QSTile>& t) {
+            return t && t->title() == "Night Light";
+        }), tiles_.end());
+
         if (backends.nightLight) {
             auto nl = backends.nightLight;
             tiles_.push_back(std::make_unique<QSToggleTile>(
@@ -176,9 +217,13 @@ void QuickSettingsPanel::buildTiles(EventLoop&, const SystemBackends& backends,
     }
 
     if (!hasSs) {
+        std::string ssCmd = "flameshot gui";
+        if (backends.config) {
+            ssCmd = backends.config->getString(kQsSection, "screenshot-command", ssCmd);
+        }
         tiles_.push_back(std::make_unique<QSToggleTile>(
-            "Screenshot", "󰄄", []() { return false; }, []() {
-                system("grim ~/Pictures/Screenshot_$(date +%Y%m%d_%H%M%S).png &");
+            "Screenshot", "󰄄", []() { return false; }, [ssCmd]() {
+                runCommand(ssCmd);
             }, []() -> std::string { return "Screenshot"; }));
     }
 
@@ -310,15 +355,15 @@ void QuickSettingsPanel::draw(Painter& p, int64_t now) {
     Rect popBounds = getBounds();
 
     // Main panel background: dark slate rounded rect
-    p.fillRoundedRect(popBounds, 16.0, Color::fromHex("#1e1c2b"));
-    p.strokeRoundedRect(popBounds, 16.0, Color::fromHex("#2a273f"), 1.5);
+    p.fillRoundedRect(popBounds, 16.0, theme::color::background);
+    p.strokeRoundedRect(popBounds, 16.0, theme::color::surface, 1.5);
 
     // Close button (X) at top right of the panel canvas
     closeBounds_ = {popBounds.x + popBounds.w - kPad - 24.0, popBounds.y + 8.0, 24.0, 24.0};
-    p.fillCircle(closeBounds_.x + 12.0, closeBounds_.y + 12.0, 12.0, Color::fromHex("#252336"));
-    p.strokeCircle(closeBounds_.x + 12.0, closeBounds_.y + 12.0, 12.0, Color::fromHex("#383450"), 1.0);
+    p.fillCircle(closeBounds_.x + 12.0, closeBounds_.y + 12.0, 12.0, theme::color::surface);
+    p.strokeCircle(closeBounds_.x + 12.0, closeBounds_.y + 12.0, 12.0, theme::color::surfaceHover, 1.0);
 
-    TextStyle closeStyle{theme::font::family, 12.0, PANGO_WEIGHT_BOLD, Color::fromHex("#ffffff")};
+    TextStyle closeStyle{theme::font::family, 12.0, PANGO_WEIGHT_BOLD, theme::color::text};
     Size closeSz = p.measureText("✕", closeStyle);
     p.drawText(closeBounds_.x + 12.0 - closeSz.w / 2.0, closeBounds_.y + 12.0 - closeSz.h / 2.0, "✕", closeStyle);
 
