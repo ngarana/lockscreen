@@ -35,6 +35,23 @@ const char* batteryIcon(int percentage, bool charging) {
     return charging ? kChargingIcons[idx] : kDischargingIcons[idx];
 }
 
+// freedesktop symbolic names, tiered by percentage with -charging variants.
+const char* batteryThemedIcon(int percentage, bool charging, bool full) {
+    if (full) return "battery-full-charged-symbolic";
+    if (charging) {
+        if (percentage >= 90) return "battery-full-charging-symbolic";
+        if (percentage >= 60) return "battery-good-charging-symbolic";
+        if (percentage >= 40) return "battery-low-charging-symbolic";
+        if (percentage >= 20) return "battery-caution-charging-symbolic";
+        return "battery-empty-charging-symbolic";
+    }
+    if (percentage >= 90) return "battery-full-symbolic";
+    if (percentage >= 60) return "battery-good-symbolic";
+    if (percentage >= 40) return "battery-low-symbolic";
+    if (percentage >= 20) return "battery-caution-symbolic";
+    return "battery-empty-symbolic";
+}
+
 std::string stateString(BatterySnapshot::State state) {
     switch (state) {
         case BatterySnapshot::Charging: return "Charging";
@@ -184,6 +201,13 @@ std::string BatteryIndicator::icon() const {
     bool charging = lastSnap_.state == BatterySnapshot::Charging ||
                     lastSnap_.state == BatterySnapshot::PendingCharge;
     return batteryIcon(lastSnap_.percentage, charging);
+}
+
+std::string BatteryIndicator::themedIcon() const {
+    bool charging = lastSnap_.state == BatterySnapshot::Charging ||
+                    lastSnap_.state == BatterySnapshot::PendingCharge;
+    bool full = lastSnap_.state == BatterySnapshot::Full;
+    return batteryThemedIcon(lastSnap_.percentage, charging, full);
 }
 
 std::string BatteryIndicator::label() const {

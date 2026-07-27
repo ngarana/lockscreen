@@ -147,6 +147,11 @@ std::string BluetoothIndicator::icon() const {
     return lastSnap_.connectedCount > 0 ? "󰂱" : "󰂯";
 }
 
+std::string BluetoothIndicator::themedIcon() const {
+    if (!lastSnap_.powered) return "bluetooth-disabled-symbolic";
+    return lastSnap_.connectedCount > 0 ? "bluetooth-active-symbolic" : "bluetooth-paired-symbolic";
+}
+
 std::string BluetoothIndicator::tooltip() const {
     if (!lastSnap_.powered) return "Bluetooth off";
     if (lastSnap_.connectedCount == 0) return "Bluetooth on";

@@ -8,6 +8,11 @@
 #include <string>
 #include <memory>
 
+// Forward declaration — used by the symbolic-icon cache (recolourable surfaces
+// from the active icon theme). Cairo's full header is pulled in transitively by
+// Painter.
+typedef struct _cairo_surface cairo_surface_t;
+
 namespace qypr {
 
 enum class Zone { Left, Center, Right };
@@ -84,6 +89,15 @@ public:
     // icon() may return "" for text-only indicators (e.g. the clock); the
     // base draw then renders just the label.
     virtual std::string icon() const = 0;
+    // Preferred representation: a freedesktop symbolic icon name (e.g.
+    // "network-wireless-signal-excellent-symbolic") resolved through the *active*
+    // system icon theme — whatever gtk-icon-theme-name points at. Return "" for a
+    // glyph-only indicator. Whether it is actually used depends on
+    // theme::icons::mode and on the active theme providing the name; otherwise the
+    // base draw falls back to the Nerd Font glyph from icon(). The base caches one
+    // cairo surface per unique name and recolours it to iconColor() by masking —
+    // symbolic SVGs (black-with-alpha) are designed for exactly this.
+    virtual std::string themedIcon() const { return ""; }
     virtual std::string label() const { return ""; }
     virtual std::string tooltip() const = 0;
     virtual Color iconColor() const;
@@ -170,6 +184,20 @@ protected:
     std::string prevDrawnIcon_;     // outgoing glyph during a crossfade
     int64_t crossfadeStartMs_ = 0;  // wall clock the swap started
     static constexpr int kCrossfadeMs = 300;  // cf. theme::anim::medium
+
+    // ── Symbolic icon cache (recolourable surfaces from the active theme) ──
+    // Resolved via IconResolver from the active system icon theme and drawn with
+    // `iconColor()` as the recolour tint. Keyed by the themedIcon() name so a
+    // battery tier change refreshes the surface lazily on the next draw.
+    cairo_surface_t* themedIconCache_ = nullptr;
+    std::string themedIconCacheKey_;
+    cairo_surface_t* themedIconSurface();
+
+    // The symbolic surface to actually display this frame, or nullptr to render
+    // the Nerd Font glyph instead. Applies theme::icons::mode and returns null
+    // when the active theme does not provide the name (graceful fallback). Shared
+    // by measureWidth() and draw() so layout and paint always agree.
+    cairo_surface_t* displayIconSurface();
 };
 
 }  // namespace qypr

@@ -16,6 +16,7 @@ public:
     explicit WifiIndicator(const SystemBackends& backends);
 
     std::string icon() const override;
+    std::string themedIcon() const override;
     std::string tooltip() const override;
 
     void onBackendUpdate() override;

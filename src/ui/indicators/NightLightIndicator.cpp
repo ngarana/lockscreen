@@ -144,6 +144,12 @@ std::string NightLightIndicator::icon() const {
     return kMoonGlyph;
 }
 
+std::string NightLightIndicator::themedIcon() const {
+    // night/day symbolic variant resolved against the active icon theme.
+    if (!backend_ || !backend_->enabled()) return "weather-clear-night-symbolic";
+    return "weather-clear-night-symbolic";
+}
+
 std::string NightLightIndicator::tooltip() const {
     if (!backend_ || !backend_->available()) return "Night Light";
     if (!backend_->enabled()) return "Night Light: off";

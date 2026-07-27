@@ -182,13 +182,14 @@ int BarApp::preview(const std::string& path, int width, int height) {
     statusBar_.layout(width, height);
     renderToPng(statusBar_, path, width, height);
 
-    // 2. Quick Settings open: click the right-group chip.
-    //    Use the actual computed chip bounds (centred inside the chip).
+    // 2. Quick Settings open: click the Control Center icon
+    //    (the rightmost indicator, the "power" indicator with id "power").
     {
+        // Find the power indicator's bounds and click its center.
         const auto& rgb = statusBar_.rightGroupBounds();
-        const double chipCx = rgb.x + rgb.w / 2.0;
-        const double chipCy = rgb.y + rgb.h / 2.0;
-        statusBar_.handlePointerButton(chipCx, chipCy, 0x110, true, nowMs());
+        const double iconCx = rgb.x + rgb.w - 8.0;  // rightmost item is the Control Center
+        const double iconCy = rgb.y + rgb.h / 2.0;
+        statusBar_.handlePointerButton(iconCx, iconCy, 0x110, true, nowMs());
     }
     usleep(300 * 1000);
     // Re-layout so the opened panel's anchor is resolved and we can read its

@@ -14,6 +14,14 @@ const char* brightnessIcon(double frac) {
     if (frac >= 0.33) return "󰃟";
     return "󰃞";
 }
+
+// freedesktop symbolic names — display-brightness icons.
+const char* brightnessThemedIcon(double frac) {
+    if (frac >= 0.66) return "display-brightness-high-symbolic";
+    if (frac >= 0.33) return "display-brightness-medium-symbolic";
+    if (frac > 0.001) return "display-brightness-low-symbolic";
+    return "display-brightness-off-symbolic";
+}
 }  // namespace
 
 BrightnessIndicator::BrightnessIndicator(const SystemBackends& backends)
@@ -24,6 +32,10 @@ BrightnessIndicator::BrightnessIndicator(const SystemBackends& backends)
 
 std::string BrightnessIndicator::icon() const {
     return brightnessIcon(lastSnap_.fraction());
+}
+
+std::string BrightnessIndicator::themedIcon() const {
+    return brightnessThemedIcon(lastSnap_.fraction());
 }
 
 std::string BrightnessIndicator::tooltip() const {

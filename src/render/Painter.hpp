@@ -61,6 +61,10 @@ public:
 
     // Image
     void drawSurface(cairo_surface_t* surface, const Rect& dest);
+    // Same as drawSurface, but tints a single-colour alpha-mask surface (freedesktop
+    // *-symbolic SVGs render as black silhouettes with alpha = icon shape) to the
+    // given colour. Used to recolour symbolic status icons to the bar text colour.
+    void drawSurfaceTinted(cairo_surface_t* surface, const Rect& dest, const Color& tint);
 
     // Text
     Size measureText(const std::string& text, const TextStyle& style, double maxWidth = -1);

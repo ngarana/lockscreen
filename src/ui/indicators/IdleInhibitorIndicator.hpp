@@ -19,6 +19,7 @@ public:
     explicit IdleInhibitorIndicator(const SystemBackends& backends);
 
     std::string icon() const override;
+    std::string themedIcon() const override;
     std::string tooltip() const override;
     Color iconColor() const override;
     bool qsOnly() const override { return true; }

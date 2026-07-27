@@ -15,6 +15,7 @@ public:
     explicit DNDIndicator(const SystemBackends& backends);
 
     std::string icon() const override { return "󰽥"; }
+    std::string themedIcon() const override { return "weather-clear-night-symbolic"; }
     std::string tooltip() const override { return "Do Not Disturb"; }
     Color iconColor() const override;
     bool qsOnly() const override { return true; }

@@ -1,6 +1,7 @@
 // StatusIndicator.cpp - Base status bar applet implementation
 #include "ui/statusbar/StatusIndicator.hpp"
 #include "render/Painter.hpp"
+#include "ui/IconResolver.hpp"
 #include "ui/Theme.hpp"
 
 namespace qypr {
@@ -8,18 +9,51 @@ namespace qypr {
 namespace {
 constexpr double kContentGap = 8.0;   // between icon and label
 constexpr double kSidePad = 8.0;      // hover-zone padding each side
+// Symbolic-theme icon rasters are square; the on-strip render size comes from
+// theme::statusbar::symbolicIconSize (bar.conf: bar-symbolic-icon-size) so it can
+// be tuned independently of the bar height and the Nerd Font glyph size.
 }  // namespace
 
 Color StatusIndicator::iconColor() const {
     return theme::color::text;
 }
 
+// Lazy theme-resolved surface for the current themedIcon() name; caches the
+// (name → surface) pair so a battery tier change reuses the same raster. The
+// cache key is the icon name (compared by string, since pointer identity is not
+// viable for std::string).
+cairo_surface_t* StatusIndicator::themedIconSurface() {
+    const std::string name = themedIcon();
+    if (name.empty()) return nullptr;
+    if (name == themedIconCacheKey_ && themedIconCache_) return themedIconCache_;
+    themedIconCacheKey_ = name;
+    themedIconCache_ = IconResolver::instance().get(name);
+    return themedIconCache_;
+}
+
+// Which representation to render this frame. In Glyph mode we never touch the
+// theme; otherwise we try the active theme and return null when it does not
+// carry the name (IconResolver caches the miss), so the caller falls back to the
+// Nerd Font glyph. Shared by measureWidth() and draw() so they never disagree.
+cairo_surface_t* StatusIndicator::displayIconSurface() {
+    if (theme::icons::mode == theme::icons::Mode::Glyph) return nullptr;
+    return themedIconSurface();
+}
+
 double StatusIndicator::measureWidth(Painter& p) {
+    cairo_surface_t* themed = displayIconSurface();
     const std::string ic = icon();
     const std::string lbl = label();
     double w = 0;
 
-    if (!ic.empty()) {
+    // A resolved symbolic icon takes precedence over the Nerd Font glyph; if the
+    // active theme lacks it (themed == null) we measure the glyph instead, so the
+    // reserved width always matches what draw() paints.
+    if (themed) {
+        // The themed surface measures square (symbolicIconSize); measured width
+        // matches its eventual footprint so centring matches the draw path.
+        w += theme::statusbar::symbolicIconSize;
+    } else if (!ic.empty()) {
         TextStyle iconStyle{theme::font::iconFamily, theme::statusbar::iconSize,
                             PANGO_WEIGHT_NORMAL, iconColor()};
         w += p.measureText(ic, iconStyle).w;
@@ -56,20 +90,26 @@ void StatusIndicator::draw(Painter& p, int64_t now) {
         p.strokeRoundedRect(focusRect, 8.0, theme::color::primary, 1.5);
     }
 
-    // 3. Content: optional icon + optional label, centered in bounds
+    // 3. Content: optional icon + optional label, centered in bounds.
+    // Resolve the display representation once — a themed symbolic surface (from
+    // the active icon theme) when available and enabled, else the Nerd Font glyph.
+    // measureWidth() used the same predicate, so layout and paint agree.
+    cairo_surface_t* themedSurf = displayIconSurface();
     const std::string ic = icon();
     const std::string lbl = label();
 
-    // Phase 6 polish: if the icon glyph has changed since the last frame, kick
-    // off a 300ms ease-in-out crossfade. The outgoing glyph rerenders under the
-    // incoming one at shrinking alpha; both share the new footprint. Battery
-    // level changes and WiFi signal tiers go through this path for free.
-    if (!ic.empty() && ic != lastDrawnIcon_) {
+    // Phase 6 polish: if the icon has changed since the last frame, kick off a
+    // 300ms ease-in-out crossfade. The outgoing icon rerenders under the incoming
+    // one at shrinking alpha; both share the new footprint. Battery level changes
+    // and WiFi signal tiers go through this path for free. The crossfade tracks
+    // the themed icon when one is shown, else the glyph.
+    const std::string iconKey = themedSurf ? ("theme:" + themedIcon()) : ic;
+    if (!iconKey.empty() && iconKey != lastDrawnIcon_) {
         if (!lastDrawnIcon_.empty() && prevDrawnIcon_.empty()) {
             prevDrawnIcon_ = lastDrawnIcon_;
             crossfadeStartMs_ = now;
         }
-        lastDrawnIcon_ = ic;
+        lastDrawnIcon_ = iconKey;
     }
     double crossfadeT = 1.0;
     if (!prevDrawnIcon_.empty()) {
@@ -78,38 +118,61 @@ void StatusIndicator::draw(Painter& p, int64_t now) {
         if (crossfadeT >= 1.0) prevDrawnIcon_.clear();
     }
 
-    TextStyle iconStyle{theme::font::iconFamily, theme::statusbar::iconSize,
-                        PANGO_WEIGHT_NORMAL, iconColor()};
+    // themedSurf resolved above. A themed icon + label are drawn side by side,
+    // both vertically centred.
+    const double iconPx = theme::statusbar::symbolicIconSize * (scale > 1.001 ? scale : 1.0);
+
     TextStyle labelStyle{theme::font::family, labelFontSize(), PANGO_WEIGHT_NORMAL,
                          iconColor()};
-    if (scale > 1.001) {
-        iconStyle.size *= scale;
-        labelStyle.size *= scale;
-    }
+    if (scale > 1.001) labelStyle.size *= scale;
 
-    Size iconSz{}, labelSz{};
+    Size labelSz{};
+    if (!lbl.empty()) labelSz = p.measureText(lbl, labelStyle);
+
     double contentW = 0;
-    if (!ic.empty()) {
-        iconSz = p.measureText(ic, iconStyle);
+    if (themedSurf) contentW += iconPx;
+    else if (!ic.empty()) {
+        TextStyle iconStyle{theme::font::iconFamily, theme::statusbar::iconSize,
+                            PANGO_WEIGHT_NORMAL, iconColor()};
+        if (scale > 1.001) iconStyle.size *= scale;
+        // Measure the glyph; the draw still uses drawTextShadowed.
+        Size iconSz = p.measureText(ic, iconStyle);
         contentW += iconSz.w;
     }
     if (!lbl.empty()) {
-        labelSz = p.measureText(lbl, labelStyle);
         if (contentW > 0) contentW += kContentGap;
         contentW += labelSz.w;
     }
 
-    // Shadowed like the lockscreen clock: the bar has no background of its
-    // own, so text must stay readable straight over the video.
     const double shadowA = theme::effects::shadowOpacity;
     const double shadowOff = theme::effects::shadowOffset;
     double x = bounds.x + (bounds.w - contentW) / 2.0;
-    if (!ic.empty()) {
+
+    if (themedSurf) {
+        // The themed icon is painted with iconColor() as its tint, so a
+        // symbolic SVG (black-with-alpha) recolours to match the bar text.
+        // Vertical-centre to the same baseline the glyph path uses.
+        const double iconY = bounds.y + (bounds.h - iconPx) / 2.0;
+        p.drawSurfaceTinted(themedSurf, {x, iconY, iconPx, iconPx}, iconColor());
+        // Crossfade the outgoing themed icon under the incoming one.
+        if (!prevDrawnIcon_.empty() && prevDrawnIcon_.rfind("theme:", 0) == 0 &&
+            crossfadeT < 1.0) {
+            double t = ease::inOutQuad(crossfadeT);
+            Color fade = iconColor().withAlpha((1.0 - t) * iconColor().a);
+            p.drawSurfaceTinted(themedSurf, {x, iconY, iconPx, iconPx}, fade);
+        }
+        x += iconPx + (lbl.empty() ? 0.0 : kContentGap);
+    } else if (!ic.empty()) {
+        TextStyle iconStyle{theme::font::iconFamily, theme::statusbar::iconSize,
+                            PANGO_WEIGHT_NORMAL, iconColor()};
+        if (scale > 1.001) iconStyle.size *= scale;
+        Size iconSz = p.measureText(ic, iconStyle);
         p.drawTextShadowed(x, bounds.y + (bounds.h - iconSz.h) / 2.0, ic, iconStyle,
                            HAlign::Left, shadowA, shadowOff);
-        //during the swap, layer the outgoing glyph at shrinking alpha so the
+        // During the swap, layer the outgoing glyph at shrinking alpha so the
         // two dissolve rather than blink.
-        if (!prevDrawnIcon_.empty() && crossfadeT < 1.0) {
+        if (!prevDrawnIcon_.empty() && prevDrawnIcon_.rfind("theme:", 0) == std::string::npos &&
+            crossfadeT < 1.0) {
             double t = ease::inOutQuad(crossfadeT);
             TextStyle prevStyle = iconStyle;
             prevStyle.color = iconColor().withAlpha((1.0 - t) * iconColor().a);

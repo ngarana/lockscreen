@@ -22,6 +22,12 @@ std::string KeyboardLayoutIndicator::icon() const {
     return kGlyph;
 }
 
+std::string KeyboardLayoutIndicator::themedIcon() const {
+    // input-keyboard symbolic; the active layout label is rendered alongside so
+    // the user still gets the actual locale code.
+    return "input-keyboard-symbolic";
+}
+
 std::string KeyboardLayoutIndicator::label() const {
     return backend_ ? backend_->label() : "";
 }

@@ -6,6 +6,8 @@
 #pragma once
 
 #include <memory>
+#include <string>
+#include <unordered_map>
 
 #include "system/SNIBackend.hpp"  // SNIItem
 #include "ui/statusbar/StatusIndicator.hpp"
@@ -21,7 +23,9 @@ public:
 
     std::string icon() const override { return ""; }  // custom multi-icon draw
     std::string tooltip() const override;
-    bool qsOnly() const override { return true; }
+    // The tray is a first-class bar applet (a row of live item icons), not a
+    // Quick Settings toggle — it must NOT be qsOnly(), or isShown() skips it in
+    // layout/draw/input and, with no createTile(), it appears nowhere.
 
     double measureWidth(Painter& p) override;
     void draw(Painter& p, int64_t now) override;
@@ -42,6 +46,9 @@ public:
 private:
     int iconIndexAt(double x) const;  // which visible tray icon is under x, or -1
     bool overOverflow(double x) const;
+    // Whether the icon resolved for `name` is monochrome/symbolic (needs
+    // recolouring to the foreground). Memoised in monoCache_.
+    bool iconIsMonochrome(const std::string& name, cairo_surface_t* s);
 
     // Active/NeedsAttention items go on the strip; Passive ones live in the
     // overflow popover. Items report SNI status "Active" | "Passive" |
@@ -57,6 +64,8 @@ private:
     // where to look).
     double overflowBoxStart_ = -1.0;
     bool overflowBoxShown_ = false;
+    // Icon name → is-monochrome, so the per-frame draw doesn't re-scan pixels.
+    std::unordered_map<std::string, bool> monoCache_;
 };
 
 }  // namespace qypr

@@ -24,6 +24,12 @@ std::string IdleInhibitorIndicator::icon() const {
     return (backend_ && backend_->active()) ? kAwake : kAsleep;
 }
 
+std::string IdleInhibitorIndicator::themedIcon() const {
+    // "keep awake" caffeine-cup icons; themes that lack them fall back to the glyph.
+    return (backend_ && backend_->active()) ? "caffeine-cup-full-symbolic"
+                                              : "caffeine-cup-empty-symbolic";
+}
+
 std::string IdleInhibitorIndicator::tooltip() const {
     if (!backend_ || !backend_->available()) return "Keep awake";
     return backend_->active() ? "Keep awake: on (idle inhibited)" : "Keep awake: off";

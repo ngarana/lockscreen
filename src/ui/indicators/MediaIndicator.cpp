@@ -125,6 +125,10 @@ bool MediaIndicator::playing() const { return mpris_ && mpris_->playing(); }
 
 std::string MediaIndicator::icon() const { return playing() ? kPause : kPlay; }
 
+std::string MediaIndicator::themedIcon() const {
+    return playing() ? "media-playback-pause-symbolic" : "media-playback-start-symbolic";
+}
+
 std::string MediaIndicator::label() const {
     if (!mpris_ || !mpris_->active()) return "";
     const std::string& t = mpris_->title();

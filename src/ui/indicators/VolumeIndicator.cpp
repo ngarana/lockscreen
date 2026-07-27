@@ -23,6 +23,14 @@ const char* volumeIcon(const VolumeSnapshot& s) {
     return "󰕿";
 }
 
+// freedesktop symbolic names (resolved against the active icon theme).
+const char* volumeThemedIcon(const VolumeSnapshot& s) {
+    if (s.muted || s.level <= 0.001) return "audio-volume-muted-symbolic";
+    if (s.level >= 0.66) return "audio-volume-high-symbolic";
+    if (s.level >= 0.33) return "audio-volume-medium-symbolic";
+    return "audio-volume-low-symbolic";
+}
+
 // Audio panel: output-device picker + per-app stream sliders (Phase 14).
 constexpr double kAW = 320.0;
 constexpr double kAPad = 12.0;
@@ -173,6 +181,10 @@ VolumeIndicator::VolumeIndicator(const SystemBackends& backends)
 
 std::string VolumeIndicator::icon() const {
     return volumeIcon(lastSnap_);
+}
+
+std::string VolumeIndicator::themedIcon() const {
+    return volumeThemedIcon(lastSnap_);
 }
 
 std::string VolumeIndicator::tooltip() const {

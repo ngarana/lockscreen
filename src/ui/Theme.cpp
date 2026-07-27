@@ -46,6 +46,16 @@ void loadTheme(const Config& cfg) {
     font::sizeClock = 64;
     font::sizeDate = 18;
 
+    // Menu-bar backdrop resets to compiled-in alpha/enabled defaults; the tint
+    // and border *colours* are derived from the resolved palette further below
+    // (after the colour overrides), so the strip follows the active theme.
+    statusbar::barTintAlpha = 0.80;
+    statusbar::barBorderAlpha = 0.08;
+    statusbar::barBorderEnabled = true;
+
+    // Icon rendering resets to Auto (themed-when-available, else Nerd Font glyph).
+    icons::mode = icons::Mode::Auto;
+
     constexpr const char* s = "theme";
 
     // ─── Colors ──────────────────────────────────────────────────────
@@ -89,8 +99,25 @@ void loadTheme(const Config& cfg) {
     overrideInt(anim::slow, cfg, s, "anim-slow");
     overrideInt(anim::reveal, cfg, s, "anim-reveal");
 
-    // ─── Style ───────────────────────────────────────────────────────
+    // ─── Style preset ───────────────────────────────────────────────
+    // `style` selects popover rendering only:
+    //   "glass"  — frosted translucent cards (default).
+    //   "solid"  — opaque cards, same hue, no translucency.
+    // The menu-bar backdrop (tint + hairline) is a separate, always-available
+    // feature driven by the bar-tint/bar-border keys below; it is no longer tied
+    // to a preset. "macos" is kept as a backward-compatible alias for "glass" so
+    // an existing config keeps working.
     if (cfg.has(s, "style")) style::mode = cfg.getString(s, "style", "glass");
+    if (style::mode == "macos") style::mode = "glass";
+
+    // ─── Icon style ─────────────────────────────────────────────────
+    // auto (default) | symbolic | glyph. See theme::icons::Mode.
+    if (cfg.has(s, "icon-style")) {
+        const std::string m = cfg.getString(s, "icon-style", "auto");
+        if (m == "symbolic") icons::mode = icons::Mode::Symbolic;
+        else if (m == "glyph" || m == "nerd" || m == "font") icons::mode = icons::Mode::Glyph;
+        else icons::mode = icons::Mode::Auto;
+    }
 
     // ─── Effects ─────────────────────────────────────────────────────
     overrideDouble(effects::shadowOpacity, cfg, s, "shadow-opacity");
@@ -99,10 +126,23 @@ void loadTheme(const Config& cfg) {
     // ─── Statusbar ───────────────────────────────────────────────────
     overrideDouble(statusbar::height, cfg, s, "bar-height");
     overrideDouble(statusbar::iconSize, cfg, s, "bar-icon-size");
+    statusbar::symbolicIconSize = 18.0;
+    overrideDouble(statusbar::symbolicIconSize, cfg, s, "bar-symbolic-icon-size");
     overrideDouble(statusbar::iconSpacing, cfg, s, "bar-icon-spacing");
     overrideDouble(statusbar::padding, cfg, s, "bar-padding");
     overrideDouble(statusbar::cornerRadius, cfg, s, "bar-corner-radius");
     overrideDouble(statusbar::popoverRadius, cfg, s, "popover-radius");
+
+    // Menu-bar backdrop: translucent tint + hairline border. The tint and border
+    // colours default to the resolved theme palette (background/text) so the strip
+    // follows whatever colours are configured; each can be overridden explicitly.
+    statusbar::barTint = color::background;
+    statusbar::barBorder = color::text;
+    overrideColor(statusbar::barTint, cfg, s, "bar-tint");
+    overrideDouble(statusbar::barTintAlpha, cfg, s, "bar-tint-alpha");
+    overrideColor(statusbar::barBorder, cfg, s, "bar-border-color");
+    overrideDouble(statusbar::barBorderAlpha, cfg, s, "bar-border-alpha");
+    statusbar::barBorderEnabled = cfg.getBool(s, "bar-border", statusbar::barBorderEnabled);
 
     // ─── Notification ────────────────────────────────────────────────
     overrideInt(notification::cardWidth, cfg, s, "notification-card-width");

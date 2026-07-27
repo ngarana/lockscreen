@@ -132,11 +132,14 @@ private:
 
 PowerMenuIndicator::PowerMenuIndicator(const SystemBackends& backends)
     : StatusIndicator("power", Zone::Right, 700), power_(backends.power) {
-    // No PowerManager (qypr-lock) → the applet does not exist at all.
     visible = power_ != nullptr;
 }
 
-Color PowerMenuIndicator::iconColor() const { return theme::color::textSubtle; }
+Color PowerMenuIndicator::iconColor() const { return theme::color::text; }
+
+bool PowerMenuIndicator::onClick(double, double) {
+    return false;
+}
 
 std::unique_ptr<DetailedPopover> PowerMenuIndicator::createDetailedView() {
     return std::make_unique<PowerMenuPopover>(power_);

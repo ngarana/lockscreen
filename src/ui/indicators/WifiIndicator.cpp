@@ -22,6 +22,16 @@ const char* wifiIcon(const WifiSnapshot& s) {
     return "󰤯";
 }
 
+// freedesktop symbolic names — signal-bar icons with -secure variants.
+const char* wifiThemedIcon(const WifiSnapshot& s) {
+    if (!s.enabled) return "network-wireless-disabled-symbolic";
+    if (!s.connected) return "network-wireless-disconnected-symbolic";
+    if (s.strength >= 75) return "network-wireless-signal-excellent-symbolic";
+    if (s.strength >= 50) return "network-wireless-signal-good-symbolic";
+    if (s.strength >= 25) return "network-wireless-signal-ok-symbolic";
+    return "network-wireless-signal-weak-symbolic";
+}
+
 // Signal glyph by strength for a picker row.
 const char* apGlyph(int strength) {
     if (strength >= 75) return "󰤨";
@@ -202,6 +212,10 @@ WifiIndicator::WifiIndicator(const SystemBackends& backends)
 
 std::string WifiIndicator::icon() const {
     return wifiIcon(lastSnap_);
+}
+
+std::string WifiIndicator::themedIcon() const {
+    return wifiThemedIcon(lastSnap_);
 }
 
 std::string WifiIndicator::tooltip() const {

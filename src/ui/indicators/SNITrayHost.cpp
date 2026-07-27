@@ -1,6 +1,9 @@
 // SNITrayHost.cpp - Status bar system-tray applet implementation.
 #include "ui/indicators/SNITrayHost.hpp"
 
+#include <algorithm>
+#include <cstdint>
+
 #include "render/Painter.hpp"
 #include "system/DbusMenuBackend.hpp"
 #include "system/SNIBackend.hpp"
@@ -18,6 +21,40 @@ constexpr double kGap = 6.0;       // between adjacent icons
 constexpr double kSidePad = 8.0;   // hover-zone padding each side
 constexpr double kChevronW = 18.0; // overflow button width
 constexpr const char* kHiddenGlyph = "\uf553";  // angle-left endpoints
+
+// Is every inked pixel of this surface (near) the same grey? Such an icon is a
+// freedesktop *-symbolic / monochrome glyph (e.g. blueman-tray resolves to a
+// dark #363636 bluetooth). Drawn as-is it vanishes on a dark strip, so a
+// monochrome tray icon is recoloured to the bar foreground (like the status
+// glyphs). A full-colour app icon has chromatic pixels and is left untouched.
+bool surfaceIsMonochrome(cairo_surface_t* s) {
+    if (!s || cairo_image_surface_get_format(s) != CAIRO_FORMAT_ARGB32) return false;
+    const int w = cairo_image_surface_get_width(s);
+    const int h = cairo_image_surface_get_height(s);
+    if (w <= 0 || h <= 0) return false;
+    cairo_surface_flush(s);
+    const unsigned char* data = cairo_image_surface_get_data(s);
+    const int stride = cairo_image_surface_get_stride(s);
+    bool anyInk = false;
+    for (int y = 0; y < h; ++y) {
+        const auto* row = reinterpret_cast<const uint32_t*>(data + y * stride);
+        for (int x = 0; x < w; ++x) {
+            const uint32_t px = row[x];
+            const unsigned a = (px >> 24) & 0xFF;
+            if (a < 24) continue;  // ignore near-transparent antialiasing (<~10%)
+            // ARGB32 is premultiplied; scale channels back to straight alpha
+            // before comparing hue so faint edges don't read as "grey".
+            const int R = static_cast<int>(((px >> 16) & 0xFF) * 255 / a);
+            const int G = static_cast<int>(((px >> 8) & 0xFF) * 255 / a);
+            const int B = static_cast<int>((px & 0xFF) * 255 / a);
+            const int mx = std::max({R, G, B});
+            const int mn = std::min({R, G, B});
+            if (mx - mn > 24) return false;  // chromatic pixel \u2192 full-colour icon
+            anyInk = true;
+        }
+    }
+    return anyInk;
+}
 
 // ── Overflow popover ──────────────────────────────────────────────────────────
 // Lists the SNI items whose status is "Passive" (hidden from the strip per
@@ -55,10 +92,19 @@ public:
             const Rect row{b.x + pad, y, b.w - pad * 2, rowH};
             rows_.push_back({row, it});
             cairo_surface_t* s = nullptr;
-            if (!it->iconName.empty()) s = IconResolver::instance().get(it->iconName);
+            bool fromName = false;
+            if (!it->iconName.empty()) {
+                s = IconResolver::instance().get(it->iconName);
+                fromName = s != nullptr;
+            }
             if (!s) s = it->pixmap;
             const double iy = row.y + (row.h - iconPx) / 2.0;
-            if (s) p.drawSurface(s, {row.x + 4.0, iy, iconPx, iconPx});
+            if (s) {
+                if (fromName && surfaceIsMonochrome(s))
+                    p.drawSurfaceTinted(s, {row.x + 4.0, iy, iconPx, iconPx}, theme::color::text);
+                else
+                    p.drawSurface(s, {row.x + 4.0, iy, iconPx, iconPx});
+            }
             TextStyle ts{theme::font::family, 13.0, PANGO_WEIGHT_NORMAL, theme::color::text};
             p.drawText(row.x + 28.0, row.y + (row.h - 14.0) / 2.0,
                        it->title.empty() ? it->service : it->title, ts,
@@ -161,10 +207,20 @@ void SNITrayHost::draw(Painter& p, int64_t now) {
     for (const auto& it : items) {
         if (!onStrip(it)) continue;
         cairo_surface_t* s = nullptr;
-        if (!it.iconName.empty()) s = IconResolver::instance().get(it.iconName);
+        bool fromName = false;
+        if (!it.iconName.empty()) {
+            s = IconResolver::instance().get(it.iconName);
+            fromName = s != nullptr;
+        }
         if (!s) s = it.pixmap;
         if (!s) continue;
-        p.drawSurface(s, {x, y, kIconPx, kIconPx});
+        // Recolour a monochrome/symbolic themed icon to the bar foreground so it
+        // stays legible on the strip; leave full-colour app icons and app-supplied
+        // pixmaps untouched.
+        if (fromName && iconIsMonochrome(it.iconName, s))
+            p.drawSurfaceTinted(s, {x, y, kIconPx, kIconPx}, iconColor());
+        else
+            p.drawSurface(s, {x, y, kIconPx, kIconPx});
         x += kIconPx + kGap;
     }
     // Overflow chevron at the end (only when passive items exist). The popover
@@ -201,6 +257,18 @@ void SNITrayHost::onBackendUpdate() {
     }
     overflowBoxShown_ = anyPassive && anyStrip;
     visible = anyStrip;
+}
+
+// Memoised per icon name: whether the resolved surface is monochrome/symbolic
+// (and so needs recolouring to the foreground). An icon name's monochromy is
+// stable, and there are only a handful of tray names, so the cache never needs
+// invalidating.
+bool SNITrayHost::iconIsMonochrome(const std::string& name, cairo_surface_t* s) {
+    auto it = monoCache_.find(name);
+    if (it != monoCache_.end()) return it->second;
+    const bool m = surfaceIsMonochrome(s);
+    monoCache_.emplace(name, m);
+    return m;
 }
 
 int SNITrayHost::iconIndexAt(double x) const {

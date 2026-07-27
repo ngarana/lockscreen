@@ -25,14 +25,12 @@
 namespace qypr {
 
 namespace {
-// Standalone-bar backdrop opacity (setBackdrop). Solid enough that the
-// chromeless glyphs stay legible over any wallpaper, still slightly translucent
-// so it reads as a light panel rather than an opaque block. Tune to taste
-// (0 = invisible → pure chromeless; 1 = fully opaque).
-constexpr double kBackdropAlpha = 0.80;
-constexpr double kRightGroupPadX = 10.0;   // horizontal padding inside the chip
-constexpr double kRightGroupPadY = 4.0;    // vertical padding inside the chip
-constexpr double kRightGroupCorner = 20.0; // rounded chip corner radius
+// Translucent menu-bar backdrop. The tint colour and its alpha come from the
+// theme at draw time (theme::statusbar::barTint / barTintAlpha, both derived
+// from the active palette); a config-supplied `bar.backdrop` value overrides the
+// alpha (used by qypr-bar's standalone config). The bar itself is a single
+// translucent slab; each indicator is a separate interactive item (no
+// right-group chip).
 }  // namespace
 
 StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& backends,
@@ -203,11 +201,8 @@ void StatusBar::layout(int screenW, int screenH) {
     }
 
     // 2. Layout Right Zone (flows left from the bar's right edge).
-    //    Indicators are drawn inside a single rounded filled-surface chip
-    //    The chip is the combined bounds of all
-    //    visible right indicators plus padding; clicking anywhere on it opens
-    //    Quick Settings. The gear glyph is gone — QS is reached by clicking
-    //    the indicators themselves (the whole right group chip).
+    //    Each indicator is an independent interactive item.
+    //    Clicking an indicator opens its own popover or toggles its state.
     double rx = bounds.x + bounds.w - pad;
     for (auto it = rightIndicators_.rbegin(); it != rightIndicators_.rend(); ++it) {
         if (!isShown(**it)) {
@@ -220,9 +215,7 @@ void StatusBar::layout(int screenW, int screenH) {
         rx -= sp;
     }
 
-    // Compute the right-group chip: a single rounded filled surface that
-    // wraps all visible right indicators (plus padding). When the whole
-    // right zone is empty the chip has zero area and is never drawn.
+    // Compute right-group bounds for the backdrop chip (subtle, not a solid filled tile)
     rightGroupBounds_ = {0, 0, 0, 0};
     double rightMinX = bounds.x + bounds.w;
     double rightMaxX = 0;
@@ -232,9 +225,7 @@ void StatusBar::layout(int screenW, int screenH) {
         if (ind->bounds.x + ind->bounds.w > rightMaxX) rightMaxX = ind->bounds.x + ind->bounds.w;
     }
     if (rightMinX < rightMaxX) {
-        rightGroupBounds_ = {rightMinX - kRightGroupPadX, bounds.y + kRightGroupPadY,
-                             rightMaxX - rightMinX + 2 * kRightGroupPadX,
-                             barH - 2 * kRightGroupPadY};
+        rightGroupBounds_ = {rightMinX, bounds.y, rightMaxX - rightMinX, barH};
     }
 
     // 3. Layout Center Zone
@@ -277,17 +268,21 @@ void StatusBar::anchorPopoverY(DetailedPopover& pop) const {
 void StatusBar::draw(Painter& p, int64_t now) {
     if (!visible) return;
 
-    // On the lock screen the bar has no chrome of its own — indicators sit
-    // directly on the (controlled, dark) lockscreen background so the two read
-    // as one surface. The standalone desktop bar opts into a subtle backdrop
-    // (setBackdrop) so the chromeless glyphs stay legible over an arbitrary
-    // wallpaper; the lock screen never enables it.
+    // Translucent menu-bar backdrop: a single frosted-glass slab spans the
+    // entire bar surface, with a subtle hairline bottom (or top) border.
+    // The lock screen stays chromeless against its dark background.
     if (backdrop_ && bounds.w > 0) {
-        const double a = backdropAlpha_ >= 0.0 ? backdropAlpha_ : kBackdropAlpha;
-        // Opaque tinted strip: fill the whole bar slab so glyphs stay
-        // legible over any wallpaper, with no outline stroke.
+        const double tintAlpha = backdropAlpha_ >= 0.0
+                                     ? backdropAlpha_
+                                     : theme::statusbar::barTintAlpha;
         p.fillRoundedRect(bounds, theme::statusbar::cornerRadius,
-                          theme::color::surface.withAlpha(a));
+                          theme::statusbar::barTint.withAlpha(tintAlpha));
+        // Hairline separator along the anchored edge
+        if (theme::statusbar::barBorderEnabled && theme::statusbar::barBorderAlpha > 0.0) {
+            const double borderY = geom_.bottom ? bounds.y : bounds.y + bounds.h;
+            p.fillRect({bounds.x, borderY - 0.5, bounds.w, 1.0},
+                        theme::statusbar::barBorder.withAlpha(theme::statusbar::barBorderAlpha));
+        }
     }
 
     auto drawZone = [&](auto& list) {
@@ -302,28 +297,6 @@ void StatusBar::draw(Painter& p, int64_t now) {
     };
     drawZone(leftIndicators_);
     drawZone(centerIndicators_);
-
-    // Right-group chip: a single rounded filled-surface tile wrapping all
-    // right-side indicators with subtle separator dots between them Wi-Fi.
-    if (rightGroupBounds_.w > 0 && rightGroupBounds_.h > 0) {
-        p.fillRoundedRect(rightGroupBounds_, kRightGroupCorner, theme::color::surface);
-
-        // Separator dots between adjacent visible right indicators
-        const TextStyle sepStyle{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL,
-                                 theme::color::textMuted};
-        for (size_t i = 0; i + 1 < rightIndicators_.size(); ++i) {
-            if (!isShown(*rightIndicators_[i]) || !isShown(*rightIndicators_[i + 1]))
-                continue;
-            const Rect& a = rightIndicators_[i]->bounds;
-            const Rect& b = rightIndicators_[i + 1]->bounds;
-            // b sits to the left of a (right zone flows right-to-left), so the
-            // gap is between b's right edge and a's left edge.
-            const double sepX = (a.x + b.x + b.w) / 2.0;
-            p.drawText(sepX, bounds.y + (bounds.h - 12.0) / 2.0, "·", sepStyle,
-                       HAlign::Center);
-        }
-    }
-
     drawZone(rightIndicators_);
 
     // Popovers
@@ -386,28 +359,22 @@ bool StatusBar::handlePointerMotion(double x, double y, int64_t now) {
 
 void StatusBar::activateIndicator(StatusIndicator& ind) {
     ind.onActivate();
+    if (ind.id() == "power") {
+        toggleQuickSettings();
+        host_.invalidate();
+        return;
+    }
     if (ind.hasDetailedView()) {
         if (auto view = ind.createDetailedView()) {
             DetailedPopover* p = view.get();
-            // getBounds() treats anchorX as the popover's right edge (it extends
-            // left). That keeps right/center popovers clear of the right screen
-            // edge, but a left-zone indicator (e.g. the clock) would then open
-            // off the left edge — so anchor a left-zone popover by its left edge
-            // instead, opening rightward.
             const double anchorX = ind.zone() == Zone::Left
                                        ? ind.bounds.x + p->contentWidth()
                                        : (ind.zone() == Zone::Right ? bounds.x + bounds.w
-                                                                    : ind.bounds.x + ind.bounds.w);
+                                                                     : ind.bounds.x + ind.bounds.w);
             popovers_.open(std::move(view), anchorX, 0);
-            anchorPopoverY(*p);  // opens away from the anchored screen edge
+            anchorPopoverY(*p);
         }
     }
-    // A display-only indicator (active window, keyboard layout, system monitor)
-    // has no popover: activating it is a no-op. It must NOT fall back to opening
-    // Quick Settings — that panel spawns at the far-right gear, so a click on an
-    // unrelated element would make it appear to fly across the bar. Quick
-    // Settings is reached only via the gear button (or an indicator's own
-    // toggle/scroll).
     host_.invalidate();
 }
 
@@ -454,11 +421,12 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
     // etc.) open their own popover first; a second click on the same indicator or
     // a click on the open space inside the right chip opens QS.
     if (button == kBtnLeft) {
-        // If a right-zone indicator handles the click itself (e.g. WiFi opens its
-        // AP picker), let it. Otherwise open Quick Settings.
+        // Each indicator handles its own click. Right-zone indicators with
+        // detailed views open their own popover; toggle indicators fire directly.
+        // No automatic fallback to Quick Settings.
         for (const auto& ind : rightIndicators_) {
             if (!isShown(*ind) || !ind->bounds.contains(x, y)) continue;
-            if (ind->hasDetailedView() && ind->bounds.contains(x, y)) {
+            if (ind->hasDetailedView()) {
                 activateIndicator(*ind);
                 host_.invalidate();
                 return true;
@@ -470,14 +438,6 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
                 host_.invalidate();
                 return true;
             }
-            // Indicator handled nothing else: open Quick Settings.
-            toggleQuickSettings();
-            host_.invalidate();
-            return true;
-        }
-        if (rightGroupBounds_.contains(x, y)) {
-            toggleQuickSettings();
-            host_.invalidate();
             return true;
         }
     }

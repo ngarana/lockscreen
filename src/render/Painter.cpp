@@ -135,6 +135,32 @@ void Painter::drawSurface(cairo_surface_t* surface, const Rect& dest) {
     cairo_restore(cr_);
 }
 
+void Painter::drawSurfaceTinted(cairo_surface_t* surface, const Rect& dest, const Color& tint) {
+    if (!surface) return;
+    int sw = cairo_image_surface_get_width(surface);
+    int sh = cairo_image_surface_get_height(surface);
+    if (sw <= 0 || sh <= 0) return;
+
+    double scale = std::min(dest.w / sw, dest.h / sh);
+    double dw = sw * scale;
+    double dh = sh * scale;
+    double dx = dest.x + (dest.w - dw) / 2.0;
+    double dy = dest.y + (dest.h - dh) / 2.0;
+
+    cairo_save(cr_);
+    cairo_rectangle(cr_, dest.x, dest.y, dest.w, dest.h);
+    cairo_clip(cr_);
+    cairo_translate(cr_, dx, dy);
+    cairo_scale(cr_, scale, scale);
+    // Use the surface as a mask: paint the tint colour through the surface's
+    // alpha channel. Symbolic SVGs are black-with-alpha, so this replaces the
+    // black with `tint` while preserving the icon shape — the standard way to
+    // recolour a freedesktop symbolic icon to a UI foreground colour.
+    cairo_set_source_rgba(cr_, tint.r, tint.g, tint.b, tint.a);
+    cairo_mask_surface(cr_, surface, 0, 0);
+    cairo_restore(cr_);
+}
+
 PangoLayout* Painter::makeLayout(const std::string& text, const TextStyle& style, double maxWidth) {
     PangoLayout* layout = pango_cairo_create_layout(cr_);
     PangoFontDescription* desc = pango_font_description_new();

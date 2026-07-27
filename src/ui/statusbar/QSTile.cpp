@@ -45,7 +45,8 @@ void QSToggleTile::draw(Painter& p, int64_t now) {
         p.drawText(badgeCx - iconSz.w / 2.0, badgeCy - iconSz.h / 2.0, icon_, iconStyle);
 
         TextStyle titleStyle{theme::font::family, 12.0, PANGO_WEIGHT_BOLD, theme::color::text};
-        p.drawText(bounds.x + 46.0, bounds.y + (bounds.h - 14.0) / 2.0, title_, titleStyle);
+        double titleMaxW = bounds.w - 56.0;
+        p.drawText(bounds.x + 46.0, bounds.y + (bounds.h - 14.0) / 2.0, title_, titleStyle, HAlign::Left, titleMaxW);
     } else {
         // Vertical Layout: Top circular badge, Bottom text
         double badgeR = 18.0;
@@ -255,7 +256,8 @@ void QSInfoTile::draw(Painter& p, int64_t now) {
 
     if (!info.empty()) {
         TextStyle infoStyle{theme::font::family, 11.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
-        p.drawText(bounds.x + pad, barY + barH + 6.0, info, infoStyle);
+        double infoMaxW = bounds.w - 2 * pad;
+        p.drawText(bounds.x + pad, barY + barH + 6.0, info, infoStyle, HAlign::Left, infoMaxW);
     }
 }
 
@@ -426,12 +428,12 @@ void QSVolumeTile::draw(Painter& p, int64_t) {
     p.drawText(iconX, iconY, glyph, iconStyle);
     iconBounds_ = {bounds.x, iconY - 4.0, iconX + iconSz.w + 6.0 - bounds.x, iconSz.h + 8.0};
 
-    // Right chevron arrow button `>`
-    TextStyle arrStyle{theme::font::family, 16.0, PANGO_WEIGHT_BOLD, theme::color::error};
-    Size arrSz = p.measureText(">", arrStyle);
+    // Right chevron arrow button `>` (subtle)
+    TextStyle arrStyle{theme::font::iconFamily, 14.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
+    Size arrSz = p.measureText("󰅂", arrStyle);
     double arrX = bounds.x + bounds.w - pad - arrSz.w;
     double arrY = iconY + (iconSz.h - arrSz.h) / 2.0;
-    p.drawText(arrX, arrY, ">", arrStyle);
+    p.drawText(arrX, arrY, "󰅂", arrStyle);
 
     // Volume track
     double trackX = iconX + iconSz.w + 12.0;

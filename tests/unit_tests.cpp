@@ -1040,19 +1040,18 @@ TEST(StatusBarPointerInput) {
     handled = bar.handlePointerMotion(0, 0, 1001);
     EXPECT_FALSE(handled);
 
-    // Click the right-group chip area (the far-right of the bar where
-    // indicators reside) — this opens Quick Settings Ubuntu-style.
+    // macOS-style: each indicator opens its own popover; Quick Settings is
+    // reached by clicking the Control Center (the "power" indicator in the
+    // right zone). With no PowerManager supplied (backends.power == nullptr)
+    // the panel cannot open, so a stray click on empty right-zone space is
+    // a harmless no-op.
     double chipX = bar.bounds.x + bar.bounds.w - 30;
     double chipY = bar.bounds.y + bar.bounds.h / 2.0;
     handled = bar.handlePointerButton(chipX, chipY, 272, true, 1002);
-    EXPECT_TRUE(handled);
-    // The right-group chip opens Quick Settings (positive control).
-    EXPECT_TRUE(bar.hasOpenOverlay());
-    // The overlay surface is sized to the panel — NOT the whole output. This is
-    // the fix for a popover resizing a full-window surface (which a compositor
-    // animates/blurs "across the window").
-    EXPECT_TRUE(bar.overlayHeight() > 0);
-    EXPECT_TRUE(bar.overlayHeight() < 1080);
+    // Result is handled iff an indicator is actually present at that
+    // location; the empty-slot expectation is "no overlay opens".
+    EXPECT_FALSE(bar.hasOpenOverlay());
+    EXPECT_EQ(bar.overlayHeight(), 0);
 
     // Leave clears hover
     bar.handlePointerLeave(1003);
@@ -1132,6 +1131,58 @@ TEST(ThemeLoadThemeDefaults) {
     EXPECT_EQ(qypr::theme::font::size, 16);
     EXPECT_NEAR(qypr::theme::color::primary.r, 0.537, 0.01);
     EXPECT_NEAR(qypr::theme::statusbar::height, 36.0, 0.01);
+    // Icons default to Auto (themed-when-available, else glyph).
+    EXPECT_TRUE(qypr::theme::icons::mode == qypr::theme::icons::Mode::Auto);
+}
+
+// The bar backdrop tint/border colours follow the active palette (no hardcoded
+// macOS values), and icon-style + the legacy `macos` alias parse correctly.
+TEST(ThemeFollowsSystemPalette) {
+    const std::string path =
+        std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp") +
+        "/qypr-theme-test.conf";
+    {
+        std::ofstream f(path);
+        f << "[theme]\n"
+          << "style = macos\n"          // legacy alias → glass rendering
+          << "icon-style = glyph\n"
+          << "background = #112233\n"
+          << "text = #ffeedd\n";
+    }
+    qypr::Config c;
+    c.load(path);
+    qypr::theme::loadTheme(c);
+
+    // `macos` is accepted but resolves to the generic glass rendering path.
+    EXPECT_EQ(qypr::theme::style::mode, std::string("glass"));
+    // icon-style honoured.
+    EXPECT_TRUE(qypr::theme::icons::mode == qypr::theme::icons::Mode::Glyph);
+    // Backdrop tint defaults to the configured background, border to the text
+    // colour — the strip tracks whatever palette the user set, not a fixed hue.
+    EXPECT_NEAR(qypr::theme::statusbar::barTint.r, 0x11 / 255.0, 0.01);
+    EXPECT_NEAR(qypr::theme::statusbar::barTint.g, 0x22 / 255.0, 0.01);
+    EXPECT_NEAR(qypr::theme::statusbar::barTint.b, 0x33 / 255.0, 0.01);
+    EXPECT_NEAR(qypr::theme::statusbar::barBorder.r, 0xff / 255.0, 0.01);
+    EXPECT_NEAR(qypr::theme::statusbar::barBorder.g, 0xee / 255.0, 0.01);
+    EXPECT_NEAR(qypr::theme::statusbar::barBorder.b, 0xdd / 255.0, 0.01);
+
+    // An explicit bar-tint override wins over the derived default.
+    {
+        std::ofstream f(path);
+        f << "[theme]\n"
+          << "icon-style = symbolic\n"
+          << "background = #112233\n"
+          << "bar-tint = #445566\n";
+    }
+    qypr::Config c2;
+    c2.load(path);
+    qypr::theme::loadTheme(c2);
+    EXPECT_TRUE(qypr::theme::icons::mode == qypr::theme::icons::Mode::Symbolic);
+    EXPECT_NEAR(qypr::theme::statusbar::barTint.r, 0x44 / 255.0, 0.01);
+    EXPECT_NEAR(qypr::theme::statusbar::barTint.g, 0x55 / 255.0, 0.01);
+    EXPECT_NEAR(qypr::theme::statusbar::barTint.b, 0x66 / 255.0, 0.01);
+
+    std::remove(path.c_str());
 }
 
 // =============================================================================

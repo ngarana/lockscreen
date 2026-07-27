@@ -97,6 +97,20 @@ namespace style {
 inline std::string mode = "glass";
 }  // namespace style
 
+// How status-bar applets render their icon.
+//   Symbolic — a freedesktop `*-symbolic` icon pulled from the *active* system
+//              icon theme (whatever gtk-icon-theme-name points at) and recoloured
+//              to the bar text colour. Adapts to the user's theme on the fly.
+//   Glyph    — the built-in Nerd Font glyph (font::iconFamily). Self-contained,
+//              looks identical on every machine.
+//   Auto     — Symbolic when the active theme actually provides the icon, else
+//              the Nerd Font glyph. The robust default: adopts a themed install
+//              yet degrades cleanly on a bare one.
+namespace icons {
+enum class Mode { Auto, Symbolic, Glyph };
+inline Mode mode = Mode::Auto;
+}  // namespace icons
+
 namespace audio {
 inline int buttonSize = 48;
 inline int buttonIconSize = 20;
@@ -124,7 +138,12 @@ inline double height         = 36.0;
 inline double topMargin      = spacing::large;
 inline double sideMargin     = spacing::xlarge;
 inline double cornerRadius   = 12.0;
-inline double iconSize       = 16.0;
+inline double iconSize       = 16.0;   // Nerd Font glyph point size
+// Render box for themed *-symbolic icons. Independent of the bar height and of
+// the glyph iconSize: symbolic SVGs carry internal padding, so they read a touch
+// smaller than a glyph at the same nominal size — bump this to enlarge just the
+// themed icons without touching the strip. (bar.conf: bar-symbolic-icon-size)
+inline double symbolicIconSize = 18.0;
 inline double iconSpacing    = 18.0;
 inline double padding        = 14.0;
 inline double separatorWidth = 1.0;
@@ -139,6 +158,17 @@ inline double popoverWidth   = 280.0;
 inline double popoverPadding = 16.0;
 inline double popoverRadius  = 12.0;
 inline double arrowSize      = 8.0;
+
+// Menu-bar backdrop: a translucent tint over the wallpaper with a hairline
+// separator along the anchored edge. The colours default to the theme's own
+// background/text (so the strip follows whatever palette is configured) and are
+// each overridable from the [theme] section of bar.conf. loadTheme() derives
+// the tint/border defaults after the colours are resolved.
+inline Color   barTint       = color::background;           // tint applied to the strip
+inline double  barTintAlpha  = 0.80;                        // 0..1 opacity of the tint
+inline Color   barBorder     = color::text;                 // hairline border colour
+inline double  barBorderAlpha = 0.08;                        // 0..1 opacity of the hairline
+inline bool    barBorderEnabled = true;                      // draw the hairline at all
 }  // namespace statusbar
 
 // Read the [theme] section of a Config and override any values present.

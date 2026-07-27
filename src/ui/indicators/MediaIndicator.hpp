@@ -23,6 +23,7 @@ public:
     explicit MediaIndicator(const SystemBackends& backends);
 
     std::string icon() const override;
+    std::string themedIcon() const override;
     std::string label() const override;
     std::string tooltip() const override;
     Color iconColor() const override;

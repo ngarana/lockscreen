@@ -288,6 +288,12 @@ std::string NotificationIndicator::icon() const {
     return (dnd_ && dnd_->enabled()) ? kBellOff : kBell;
 }
 
+std::string NotificationIndicator::themedIcon() const {
+    // notification-* symbolic from the active icon theme.
+    return (dnd_ && dnd_->enabled()) ? "notification-alert-symbolic"
+                                      : "notification-new-symbolic";
+}
+
 std::string NotificationIndicator::label() const {
     const size_t n = count();
     return n == 0 ? "" : std::to_string(n);

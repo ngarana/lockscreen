@@ -12,6 +12,7 @@
 #include "mpris/MprisController.hpp"
 #include "power/PowerManager.hpp"
 #include <cstdlib>
+#include <csignal>
 #include <unistd.h>
 #include <vector>
 
@@ -41,11 +42,27 @@ constexpr double kMediaH = 60.0;
 // Config section for QS commands
 constexpr const char* kQsSection = "quick-settings";
 
-// Run a shell command in the background (fire-and-forget).
+// Run a shell command detached (fire-and-forget).
+//
+// Deliberately NOT std::system(): the bar sets SIGCHLD to SIG_IGN process-wide
+// (PowerManager, to auto-reap its systemctl forks), and that disposition is
+// inherited across exec. A command whose own children call waitpid() — a shell
+// pipeline, or wl-copy forking its clipboard daemon — then gets ECHILD and
+// fails (grimblast reports "Clipboard error"). So fork here and restore the
+// default signal disposition in the child before exec, and setsid() so it
+// outlives the bar. The parent doesn't wait; with SIGCHLD ignored the child is
+// auto-reaped (no zombie).
 void runCommand(const std::string& cmd) {
     if (cmd.empty()) return;
-    std::string detached = cmd + " &";
-    std::system(detached.c_str());
+    pid_t pid = fork();
+    if (pid < 0) return;
+    if (pid == 0) {
+        setsid();
+        signal(SIGCHLD, SIG_DFL);
+        signal(SIGPIPE, SIG_DFL);
+        execl("/bin/sh", "sh", "-c", cmd.c_str(), static_cast<char*>(nullptr));
+        _exit(127);  // exec failed
+    }
 }
 
 std::string getUserName() {
@@ -85,7 +102,8 @@ void QuickSettingsPanel::buildTiles(EventLoop&, const SystemBackends& backends,
     if (backends.wifi) {
         auto snap = backends.wifi;
         wifiCombo_ = std::make_unique<QSWifiComboTile>(
-            "Wired connection", 100, true, theme::color::primary);
+            "Wired connection", 100, true, theme::color::primary,
+            [snap]() { snap->setEnabled(!snap->snapshot().enabled); });
         wifiCombo_->setEnabled(snap->snapshot().enabled);
         wifiCombo_->setSsid(snap->snapshot().ssid);
         wifiCombo_->setStrength(snap->snapshot().strength);
@@ -184,7 +202,7 @@ void QuickSettingsPanel::buildTiles(EventLoop&, const SystemBackends& backends,
         if (backends.nightLight) {
             auto nl = backends.nightLight;
             tiles_.push_back(std::make_unique<QSToggleTile>(
-                "Night Light", "󰋌",
+                "Night Light", "",
                 std::function<bool()>([nl]() { return nl && nl->enabled(); }),
                 std::function<void()>([nl]() { if (nl && nl->available()) nl->toggle(); }),
                 std::function<std::string()>([nl]() -> std::string {
@@ -193,7 +211,7 @@ void QuickSettingsPanel::buildTiles(EventLoop&, const SystemBackends& backends,
                 })));
         } else {
             tiles_.push_back(std::make_unique<QSToggleTile>(
-                "Night Light", "󰋌", []() { return false; }, []() {},
+                "Night Light", "", []() { return false; }, []() {},
                 []() -> std::string { return "Off"; }));
         }
     }
@@ -217,7 +235,18 @@ void QuickSettingsPanel::buildTiles(EventLoop&, const SystemBackends& backends,
     }
 
     if (!hasSs) {
-        std::string ssCmd = "flameshot gui";
+        // qypr is a wlroots/Wayland bar, so the default is grim-based interactive
+        // capture: grimblast lets the user drag-select a region, then copies it to
+        // the clipboard AND saves a file, with a notification. flameshot is only a
+        // fallback for machines without grimblast — it is broken on Hyprland at
+        // v14 (flameshot-org/flameshot#4666), so it must not be preferred.
+        // Chosen by availability, NOT exit code, so cancelling the region select
+        // (grimblast returns non-zero) does not spuriously launch flameshot.
+        // The command inherits the bar's environment (correct WAYLAND_DISPLAY —
+        // never hardcode a display). Override via [quick-settings] screenshot-command.
+        std::string ssCmd =
+            "if command -v grimblast >/dev/null 2>&1; then grimblast --notify copysave area; "
+            "else flameshot gui; fi";
         if (backends.config) {
             ssCmd = backends.config->getString(kQsSection, "screenshot-command", ssCmd);
         }
@@ -354,18 +383,18 @@ void QuickSettingsPanel::draw(Painter& p, int64_t now) {
     layoutTiles();
     Rect popBounds = getBounds();
 
-    // Main panel background: dark slate rounded rect
-    p.fillRoundedRect(popBounds, 16.0, theme::color::background);
+    // Main panel background: themed translucent rounded rect (uses barTint so
+    // the Control Center floats over the wallpaper the same way the bar does).
+    // Add fillGlass over the backdrop so it gets the frosted sheen in glass mode.
+    p.fillRoundedRect(popBounds, 16.0, theme::statusbar::barTint.withAlpha(0.95));
     p.strokeRoundedRect(popBounds, 16.0, theme::color::surface, 1.5);
 
-    // Close button (X) at top right of the panel canvas
+    // Close button (×) at top right — a subtle circular button.
     closeBounds_ = {popBounds.x + popBounds.w - kPad - 24.0, popBounds.y + 8.0, 24.0, 24.0};
-    p.fillCircle(closeBounds_.x + 12.0, closeBounds_.y + 12.0, 12.0, theme::color::surface);
-    p.strokeCircle(closeBounds_.x + 12.0, closeBounds_.y + 12.0, 12.0, theme::color::surfaceHover, 1.0);
-
-    TextStyle closeStyle{theme::font::family, 12.0, PANGO_WEIGHT_BOLD, theme::color::text};
-    Size closeSz = p.measureText("✕", closeStyle);
-    p.drawText(closeBounds_.x + 12.0 - closeSz.w / 2.0, closeBounds_.y + 12.0 - closeSz.h / 2.0, "✕", closeStyle);
+    p.fillCircle(closeBounds_.x + 12.0, closeBounds_.y + 12.0, 12.0, theme::color::surfaceHover);
+    TextStyle closeStyle{theme::font::iconFamily, 11.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
+    Size closeSz = p.measureText("󰅖", closeStyle);
+    p.drawText(closeBounds_.x + 12.0 - closeSz.w / 2.0, closeBounds_.y + 12.0 - closeSz.h / 2.0, "󰅖", closeStyle);
 
     auto drawOrSkip = [&](auto& tile) {
         if (!tile) return;
@@ -427,6 +456,7 @@ bool QuickSettingsPanel::handleClick(double x, double y) {
     }
 
     if (wifiCombo_ && wifiCombo_->bounds.contains(x, y)) {
+        wifiCombo_->onClick(x, y);
         return true;
     }
 

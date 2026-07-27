@@ -23,16 +23,15 @@ class PowerMenuIndicator : public StatusIndicator {
 public:
     explicit PowerMenuIndicator(const SystemBackends& backends);
 
-    std::string icon() const override { return "󰐥"; }  // nf-md-power
-    std::string tooltip() const override { return "Session"; }
+    std::string icon() const override { return "󰒓"; }  // nf-md-toggle_switch (glyph fallback)
+    std::string themedIcon() const override { return "applications-system-symbolic"; }
+    std::string tooltip() const override { return "Control Center"; }
     Color iconColor() const override;
-    bool qsOnly() const override { return true; }
 
+    bool onClick(double x, double y) override;
     bool hasDetailedView() const override { return true; }
     std::unique_ptr<DetailedPopover> createDetailedView() override;
 
-    // Reveals nothing by itself, but it *acts on* the session: never on a lock
-    // screen.
     bool sensitive() const override { return true; }
 
 private:

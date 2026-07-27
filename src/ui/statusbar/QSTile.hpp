@@ -158,12 +158,14 @@ private:
 // visual.
 class QSWifiComboTile : public QSTile {
 public:
-    QSWifiComboTile(std::string ssid, int strength, bool enabled, Color accent)
+    QSWifiComboTile(std::string ssid, int strength, bool enabled, Color accent,
+                    std::function<void()> onToggle = {})
         : ssid_(std::move(ssid)), strength_(strength), enabled_(enabled),
-          accent_(accent) {}
+          accent_(accent), onToggle_(std::move(onToggle)) {}
 
     Type type() const override { return Type::WifiCombo; }
     void draw(Painter& p, int64_t now) override;
+    void onClick(double, double) override { if (onToggle_) onToggle_(); }
 
     void setEnabled(bool e) { enabled_ = e; }
     void setSsid(std::string s) { ssid_ = std::move(s); }
@@ -174,6 +176,7 @@ private:
     int strength_;
     bool enabled_;
     Color accent_;
+    std::function<void()> onToggle_;
 };
 
 // ─── Volume section ────────────────────────────────────────────────────────
