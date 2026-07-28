@@ -43,10 +43,10 @@ constexpr int    kGridCols = 3;
 const double&    kGridRowH = theme::statusbar::qsTileHeight;
 
 // Volume section
-constexpr double kVolumeH = 68.0;
+constexpr double kVolumeH = 52.0;
 
 // Media card
-constexpr double kMediaH = 60.0;
+constexpr double kMediaH = 68.0;
 
 // Config section for QS commands
 constexpr const char* kQsSection = "quick-settings";
@@ -110,20 +110,20 @@ void QuickSettingsPanel::buildTiles(EventLoop&, const SystemBackends& backends,
     // Wi-Fi combo (if backend present)
     if (backends.wifi) {
         auto snap = backends.wifi;
+        const auto& ws = snap->snapshot();
         wifiCombo_ = std::make_unique<QSWifiComboTile>(
-            "Wired connection", 100, true, theme::color::primary,
+            ws.ssid, ws.strength, ws.enabled, ws.connected, theme::color::primary,
             [snap]() { snap->setEnabled(!snap->snapshot().enabled); });
-        wifiCombo_->setEnabled(snap->snapshot().enabled);
-        wifiCombo_->setSsid(snap->snapshot().ssid);
-        wifiCombo_->setStrength(snap->snapshot().strength);
         backends.wifi->setOnChange([this, snap]() {
-            wifiCombo_->setEnabled(snap->snapshot().enabled);
-            wifiCombo_->setSsid(snap->snapshot().ssid);
-            wifiCombo_->setStrength(snap->snapshot().strength);
+            const auto& s = snap->snapshot();
+            wifiCombo_->setEnabled(s.enabled);
+            wifiCombo_->setConnected(s.connected);
+            wifiCombo_->setSsid(s.ssid);
+            wifiCombo_->setStrength(s.strength);
         });
     } else if (!wifiCombo_) {
         wifiCombo_ = std::make_unique<QSWifiComboTile>(
-            "Wired connection", 100, true, theme::color::primary);
+            "", 0, false, false, theme::color::primary);
     }
 
     // Remove any indicator-created WiFi/Network tiles — the combo tile replaces them.
@@ -302,23 +302,40 @@ double QuickSettingsPanel::contentHeight() const {
     h += kHeaderH;
 
     // Grid row 1 & row 2
-    int totalCells = static_cast<int>(tiles_.size()) + (wifiCombo_ ? 1 : 0);
-    int rows = (totalCells + kGridCols - 1) / kGridCols;
+    int totalGrid = (wifiCombo_ ? 1 : 0);
+    for (const auto& t : tiles_) {
+        if (t && (t->type() == QSTile::Type::Toggle || t->type() == QSTile::Type::WifiCombo)) {
+            totalGrid++;
+        }
+    }
+    int rows = (totalGrid + kGridCols - 1) / kGridCols;
     if (rows > 0) {
         h += kGap;
         h += rows * kGridRowH + (rows - 1) * kGap;
     }
 
+    // Slider tiles (e.g. Brightness)
+    for (const auto& t : tiles_) {
+        if (t && t->type() == QSTile::Type::Slider) {
+            h += kGap + 48.0;
+        }
+    }
+
     // Volume section
     if (volume_) {
-        h += kGap;
-        h += kVolumeH;
+        h += kGap + kVolumeH;
+    }
+
+    // Info tiles (e.g. Battery)
+    for (const auto& t : tiles_) {
+        if (t && t->type() == QSTile::Type::Info) {
+            h += kGap + 50.0;
+        }
     }
 
     // Media card
     if (media_) {
-        h += kGap;
-        h += kMediaH;
+        h += kGap + kMediaH;
     }
 
     h += kPad; // bottom padding
@@ -348,11 +365,13 @@ void QuickSettingsPanel::layoutTiles() {
 
     y += kHeaderH + kGap;
 
-    // 2. 3-Column Toggle & Slider Grid
+    // 2. 3-Column Toggle Grid
     std::vector<QSTile*> gridTiles;
     if (wifiCombo_) gridTiles.push_back(wifiCombo_.get());
     for (auto& t : tiles_) {
-        gridTiles.push_back(t.get());
+        if (t && (t->type() == QSTile::Type::Toggle || t->type() == QSTile::Type::WifiCombo)) {
+            gridTiles.push_back(t.get());
+        }
     }
 
     int col = 0;
@@ -372,18 +391,54 @@ void QuickSettingsPanel::layoutTiles() {
         y = rowY + kGridRowH;
     }
 
-    // 3. Volume section
+    // 3. Slider section (Brightness)
+    for (auto& t : tiles_) {
+        if (t && t->type() == QSTile::Type::Slider) {
+            y += kGap;
+            double sliderH = 48.0;
+            t->bounds = {popBounds.x + kPad, y, contentW, sliderH};
+            y += sliderH;
+        }
+    }
+
+    // 4. Volume section
     if (volume_) {
         y += kGap;
         volume_->bounds = {popBounds.x + kPad, y, contentW, kVolumeH};
         y += kVolumeH;
     }
 
-    // 4. Media card
+    // 5. Info section (Battery)
+    for (auto& t : tiles_) {
+        if (t && t->type() == QSTile::Type::Info) {
+            y += kGap;
+            double infoH = 50.0;
+            t->bounds = {popBounds.x + kPad, y, contentW, infoH};
+            y += infoH;
+        }
+    }
+
+    // 6. Media card
     if (media_) {
         y += kGap;
         media_->bounds = {popBounds.x + kPad, y, contentW, kMediaH};
     }
+}
+
+Rect QuickSettingsPanel::findTileBounds(const std::string& tileTitle) const {
+    if (wifiCombo_ && (wifiCombo_->title() == tileTitle || tileTitle == "Wi-Fi" || tileTitle == "WiFi")) {
+        return wifiCombo_->bounds;
+    }
+    for (const auto& t : tiles_) {
+        if (t && (t->title() == tileTitle || (tileTitle == "Do Not Disturb" && t->title().find("Disturb") != std::string::npos))) {
+            return t->bounds;
+        }
+    }
+    if (volume_ && (volume_->title() == tileTitle || tileTitle == "Volume")) return volume_->bounds;
+    if (media_ && (media_->title() == tileTitle || tileTitle == "Media")) return media_->bounds;
+    if (header_ && header_->title() == tileTitle) return header_->bounds;
+    if (power_ && power_->title() == tileTitle) return power_->bounds;
+    return {0, 0, 0, 0};
 }
 
 // ─── Draw ─────────────────────────────────────────────────────────────────

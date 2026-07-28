@@ -129,6 +129,7 @@ public:
           avatarColor_(avatarColor) {}
 
     Type type() const override { return Type::Header; }
+    std::string title() const override { return title_; }
     void draw(Painter& p, int64_t now) override;
 
 private:
@@ -145,6 +146,7 @@ public:
     explicit QSPowerTile(std::function<void()> onClick) : onClick_(std::move(onClick)) {}
 
     Type type() const override { return Type::Power; }
+    std::string title() const override { return "Power"; }
     void draw(Painter& p, int64_t now) override;
     void onClick(double x, double y) override;
 
@@ -158,23 +160,32 @@ private:
 // visual.
 class QSWifiComboTile : public QSTile {
 public:
+    QSWifiComboTile(std::string ssid, int strength, bool enabled, bool connected,
+                    Color accent, std::function<void()> onToggle = {})
+        : ssid_(std::move(ssid)), strength_(strength), enabled_(enabled),
+          connected_(connected), accent_(accent), onToggle_(std::move(onToggle)) {}
+
+    // Legacy 4-arg constructor (assumes connected when ssid is non-empty)
     QSWifiComboTile(std::string ssid, int strength, bool enabled, Color accent,
                     std::function<void()> onToggle = {})
         : ssid_(std::move(ssid)), strength_(strength), enabled_(enabled),
-          accent_(accent), onToggle_(std::move(onToggle)) {}
+          connected_(!ssid_.empty()), accent_(accent), onToggle_(std::move(onToggle)) {}
 
     Type type() const override { return Type::WifiCombo; }
+    std::string title() const override { return "Wi-Fi"; }
     void draw(Painter& p, int64_t now) override;
     void onClick(double, double) override { if (onToggle_) onToggle_(); }
 
     void setEnabled(bool e) { enabled_ = e; }
+    void setConnected(bool c) { connected_ = c; }
     void setSsid(std::string s) { ssid_ = std::move(s); }
     void setStrength(int s) { strength_ = s; }
 
 private:
     std::string ssid_;
-    int strength_;
-    bool enabled_;
+    int strength_ = 0;
+    bool enabled_ = false;
+    bool connected_ = false;
     Color accent_;
     std::function<void()> onToggle_;
 };
@@ -190,6 +201,7 @@ public:
                  std::function<bool()> dimmed);
 
     Type type() const override { return Type::Volume; }
+    std::string title() const override { return "Volume"; }
     void draw(Painter& p, int64_t now) override;
     void onClick(double x, double y) override;
     void onDrag(double x, double y) override;
@@ -219,6 +231,7 @@ public:
     explicit QSMediaTile(MprisController* mpris) : mpris_(mpris) {}
 
     Type type() const override { return Type::Media; }
+    std::string title() const override { return "Media"; }
     void draw(Painter& p, int64_t now) override;
     void onClick(double x, double y) override;
 

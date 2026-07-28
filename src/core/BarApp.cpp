@@ -214,16 +214,20 @@ int BarApp::preview(const std::string& path, int width, int height) {
     statusBar_.layout(width, height);
     renderToPng(statusBar_, stripExt(path) + "-qs.png", width, height);
 
-    // 3. DND toggle on (row 2, col 1 of the toggle grid).
-    //    Panel x = barRight - kPanelW; tile centre: panelX + kPad + tileW/2,
-    //    y = statusBarTop + statusBarH + gap + kHeaderH + kPad + kGridRowH + kGap + kGridRowH/2.
+    // 3. DND toggle on (find DND tile bounds and click its center).
     {
-        const double barRight = statusBar_.bounds.x + statusBar_.bounds.w;
-        const double panelX = barRight - 380.0;
-        const double tileX = panelX + 14.0 + 56.0;  // kPad + tileW/2
-        const double statusBarBottom = statusBar_.bounds.y + statusBar_.bounds.h;
-        const double tileY = statusBarBottom + 6.0 + 52.0 + 14.0 + 76.0 + 8.0 + 38.0;
-        statusBar_.handlePointerButton(tileX, tileY, 0x110, true, nowMs());
+        Rect dndBounds = statusBar_.quickSettings().findTileBounds("Do Not Disturb");
+        if (dndBounds.valid()) {
+            statusBar_.handlePointerButton(dndBounds.cx(), dndBounds.cy(), 0x110, true, nowMs());
+        } else {
+            // Fallback
+            const double barRight = statusBar_.bounds.x + statusBar_.bounds.w;
+            const double panelX = barRight - 380.0;
+            const double tileX = panelX + 14.0 + 56.0;
+            const double statusBarBottom = statusBar_.bounds.y + statusBar_.bounds.h;
+            const double tileY = statusBarBottom + 6.0 + 52.0 + 14.0 + 76.0 + 8.0 + 38.0;
+            statusBar_.handlePointerButton(tileX, tileY, 0x110, true, nowMs());
+        }
     }
     usleep(400 * 1000);
     renderToPng(statusBar_, stripExt(path) + "-dnd.png", width, height);

@@ -41,6 +41,8 @@ public:
     bool handleKey(uint32_t keysym) override;
     bool consumeCloseRequest() override;
 
+    Rect findTileBounds(const std::string& tileTitle) const;
+
     QSTile* activeDragTile_ = nullptr;
     double curX_ = -1, curY_ = -1;
 
