@@ -26,6 +26,12 @@ public:
     void addTile(std::unique_ptr<QSTile> tile);
     void clearTiles() { tiles_.clear(); }
 
+    // Effective backdrop tint opacity, forwarded by StatusBar so the panel's
+    // translucent slab matches the menu-bar strip. A value < 0 (the default)
+    // means "unset" — the panel falls back to theme::statusbar::barTintAlpha at
+    // draw time, so a live [theme] bar-tint-alpha change is still picked up.
+    void setBackdropAlpha(double alpha) { backdropAlpha_ = alpha; }
+
     void draw(Painter& p, int64_t now) override;
     double contentHeight() const override;
     double contentWidth() const override;
@@ -55,6 +61,9 @@ private:
     Rect powerBounds_;
     Rect closeBounds_;
     bool closeRequested_ = false;
+
+    // Backdrop tint opacity mirrored from the strip; <0 = fall back to the theme.
+    double backdropAlpha_ = -1.0;
 };
 
 }  // namespace qypr

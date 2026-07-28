@@ -10,6 +10,13 @@ namespace qypr {
 
 namespace {
 constexpr double kSliderArrowStep = 0.05;  // ±5%
+// Tile corner radii. Deliberately a touch smaller than the panel's own
+// qsCornerRadius (theme::statusbar::qsCornerRadius, 16) so the nested cards read
+// as concentric inside the popover rather than fighting its corners. Kept as
+// fixed panel-local layout constants; the colours (below) are what track the
+// theme, not the geometry.
+constexpr double kTileRadius = 12.0;
+constexpr double kSectionRadius = 14.0;
 }  // namespace
 
 // ─── Toggle tile ──────────────────────────────────────────────────────────
@@ -25,8 +32,8 @@ void QSToggleTile::draw(Painter& p, int64_t now) {
     Color bg = theme::color::surface;
     if (hAlpha > 0.01) bg = theme::color::surfaceHover;
 
-    p.fillRoundedRect(bounds, 12.0, bg);
-    p.strokeRoundedRect(bounds, 12.0, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRect(bounds, kTileRadius, bg);
+    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
 
     bool isHorizontal = (title_ == "Do Not Disturb" || bounds.w > 140.0);
 
@@ -171,8 +178,8 @@ void QSSliderTile::updateValueFromCoord(double x) {
 void QSSliderTile::draw(Painter& p, int64_t now) {
     double val = getValue_ ? getValue_() : 0.8;
 
-    p.fillRoundedRect(bounds, 12.0, theme::color::surface);
-    p.strokeRoundedRect(bounds, 12.0, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRect(bounds, kTileRadius, theme::color::surface);
+    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
 
     if (bounds.h <= 80.0) {
         // Grid slot card: Monitor/Control Name top, Icon + Slider bottom
@@ -232,8 +239,8 @@ void QSInfoTile::draw(Painter& p, int64_t now) {
     double progress = getProgress_ ? getProgress_() : 0.0;
     std::string info = getInfo_ ? getInfo_() : "";
 
-    p.fillRoundedRect(bounds, 12.0, theme::color::surface);
-    p.strokeRoundedRect(bounds, 12.0, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRect(bounds, kTileRadius, theme::color::surface);
+    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
 
     double pad = 12.0;
 
@@ -264,8 +271,8 @@ void QSInfoTile::draw(Painter& p, int64_t now) {
 // ─── Header tile ──────────────────────────────────────────────────────────
 
 void QSHeaderTile::draw(Painter& p, int64_t) {
-    p.fillRoundedRect(bounds, 12.0, theme::color::surface);
-    p.strokeRoundedRect(bounds, 12.0, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRect(bounds, kTileRadius, theme::color::surface);
+    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
 
     // Avatar circle
     double avatarR = 15.0;
@@ -307,8 +314,8 @@ void QSPowerTile::onClick(double, double) {
 }
 
 void QSPowerTile::draw(Painter& p, int64_t now) {
-    p.fillRoundedRect(bounds, 12.0, theme::color::surface);
-    p.strokeRoundedRect(bounds, 12.0, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRect(bounds, kTileRadius, theme::color::surface);
+    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
 
     double cx = bounds.x + bounds.w / 2.0;
     double cy = bounds.y + bounds.h / 2.0;
@@ -326,8 +333,8 @@ void QSWifiComboTile::draw(Painter& p, int64_t now) {
     Color bg = theme::color::surface;
     if (hAlpha > 0.01) bg = theme::color::surfaceHover;
 
-    p.fillRoundedRect(bounds, 12.0, bg);
-    p.strokeRoundedRect(bounds, 12.0, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRect(bounds, kTileRadius, bg);
+    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
 
     // Top center circular icon badge
     double badgeR = 18.0;
@@ -410,8 +417,8 @@ void QSVolumeTile::updateValueFromCoord(double x) {
 void QSVolumeTile::draw(Painter& p, int64_t) {
     double val = getValue_ ? getValue_() : 0.7;
 
-    p.fillRoundedRect(bounds, 14.0, theme::color::surface);
-    p.strokeRoundedRect(bounds, 14.0, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRect(bounds, kSectionRadius, theme::color::surface);
+    p.strokeRoundedRect(bounds, kSectionRadius, theme::color::surfaceHover, 1.0);
 
     double pad = 14.0;
 
@@ -458,8 +465,8 @@ void QSMediaTile::onClick(double x, double y) {
 }
 
 void QSMediaTile::draw(Painter& p, int64_t) {
-    p.fillRoundedRect(bounds, 14.0, theme::color::surface);
-    p.strokeRoundedRect(bounds, 14.0, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRect(bounds, kSectionRadius, theme::color::surface);
+    p.strokeRoundedRect(bounds, kSectionRadius, theme::color::surfaceHover, 1.0);
 
     double pad = 14.0;
 

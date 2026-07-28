@@ -22,16 +22,25 @@
 namespace qypr {
 
 namespace {
-constexpr double kPanelW = 380.0;
-constexpr double kPad = 14.0;
-constexpr double kGap = 8.0;
+// Panel geometry tracks the theme so QS stays visually consistent with the bar
+// strip and the other popovers, and honours any [theme] override. These are
+// *references* to the theme's inline variables, never cached copies: copying
+// into a file-scope `const double` produces a dynamically-initialised global
+// whose init order relative to the theme variables (defined in another TU) is
+// unspecified — it can be read as 0 (static-init-order fiasco) and would also
+// miss any value loadTheme() applies at startup. Binding a reference to a
+// static-storage object is constant-initialised, so it is always valid and
+// always reflects the live theme value.
+const double& kPanelW = theme::statusbar::qsPanelWidth;
+const double& kPad = theme::statusbar::qsPadding;
+const double& kGap = theme::statusbar::qsTileGap;
 
 // Header
 constexpr double kHeaderH = 52.0;
 
 // Toggle grid: 3 equal columns
 constexpr int    kGridCols = 3;
-constexpr double kGridRowH = 76.0;
+const double&    kGridRowH = theme::statusbar::qsTileHeight;
 
 // Volume section
 constexpr double kVolumeH = 68.0;
@@ -383,11 +392,25 @@ void QuickSettingsPanel::draw(Painter& p, int64_t now) {
     layoutTiles();
     Rect popBounds = getBounds();
 
-    // Main panel background: themed translucent rounded rect (uses barTint so
-    // the Control Center floats over the wallpaper the same way the bar does).
-    // Add fillGlass over the backdrop so it gets the frosted sheen in glass mode.
-    p.fillRoundedRect(popBounds, 16.0, theme::statusbar::barTint.withAlpha(0.95));
-    p.strokeRoundedRect(popBounds, 16.0, theme::color::surface, 1.5);
+    // Main panel background: mirror the menu-bar strip's backdrop exactly — a
+    // translucent barTint slab at the strip's resolved alpha, with a hairline
+    // border in the theme's own colour — so the Control Center floats over the
+    // wallpaper the same way the bar does, in BOTH glass and solid modes.
+    // We deliberately do NOT use fillGlass() here: in solid mode it forces the
+    // fill fully opaque (dropping the backdrop entirely) and it paints the
+    // Catppuccin-tinted glassBorder, neither of which the strip does — so the
+    // panel would stop matching the bar. backdropAlpha_ is forwarded from the
+    // [bar] backdrop key via StatusBar; <=0 falls back to the live theme alpha
+    // so a [theme] bar-tint-alpha change still applies on a config reload.
+    const double tintAlpha = backdropAlpha_ > 0.0 ? backdropAlpha_
+                                                  : theme::statusbar::barTintAlpha;
+    p.fillRoundedRect(popBounds, theme::statusbar::qsCornerRadius,
+                      theme::statusbar::barTint.withAlpha(tintAlpha));
+    if (theme::statusbar::barBorderEnabled && theme::statusbar::barBorderAlpha > 0.0) {
+        p.strokeRoundedRect(popBounds, theme::statusbar::qsCornerRadius,
+                            theme::statusbar::barBorder.withAlpha(theme::statusbar::barBorderAlpha),
+                            1.0);
+    }
 
     // Close button (×) at top right — a subtle circular button.
     closeBounds_ = {popBounds.x + popBounds.w - kPad - 24.0, popBounds.y + 8.0, 24.0, 24.0};

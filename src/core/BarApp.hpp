@@ -67,6 +67,10 @@ public:
 
 private:
     void draw(cairo_t* cr, int w, int h, int scale);
+    // Fire the (potentially blocking) D-Bus / filesystem backend startup once,
+    // deferred until after the first frame has painted so the bar window appears
+    // immediately instead of waiting behind synchronous fetches at session start.
+    void startBackends();
     // Grow/shrink the layer surfaces when the open-overlay state flips.
     void syncOverlay();
     // Grab/release keyboard focus when a search popover (launcher) opens/closes.
@@ -152,6 +156,7 @@ private:
     ConfigWatcher configWatcher_{loop_};
     int overlayHeight_ = 0;  // last surface height requested (logical px)
     bool kbActive_ = false;  // current keyboard-grab state (launcher search box)
+    bool backendsScheduled_ = false;  // startBackends() posted after first paint
 };
 
 }  // namespace qypr

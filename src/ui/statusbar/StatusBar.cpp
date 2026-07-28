@@ -157,6 +157,9 @@ int StatusBar::overlayHeight() const {
 void StatusBar::setBackdrop(bool enabled, double alpha) {
     backdrop_ = enabled;
     backdropAlpha_ = alpha;
+    // Keep the Quick Settings panel's backdrop in lock-step with the strip so
+    // the Control Center floats over the wallpaper with the same tint opacity.
+    qsPanel_.setBackdropAlpha(alpha);
     host_.invalidate();
 }
 
@@ -469,6 +472,11 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
 
 void StatusBar::handlePointerLeave(int64_t now) {
     (void)now;
+    // Dismiss Quick Settings when the pointer leaves the surface entirely
+    // (switching to another window/desktop).
+    if (popovers_.active() == &qsPanel_) {
+        popovers_.closeActive();
+    }
     auto clear = [&](auto& list) {
         for (auto& ind : list) ind->hovered = false;
     };
@@ -505,13 +513,17 @@ bool StatusBar::handleKey(uint32_t keysym) {
             host_.invalidate();
             return true;
         }
+        const bool isQS = (popovers_.active() == &qsPanel_);
         const bool handled = popovers_.handleKey(keysym);
         // A keyboard action may fire an item (launcher Enter) and ask to close.
         if (popovers_.active() && popovers_.active()->consumeCloseRequest()) {
             popovers_.closeActive();
+        } else if (isQS && !handled) {
+            // Close Quick Settings on any unhandled keypress (keyboard dismissal).
+            popovers_.closeActive();
         }
         host_.invalidate();
-        return handled;
+        return handled || isQS;
     }
 
     if (!hasFocusedChild()) return false;

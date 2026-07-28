@@ -90,8 +90,38 @@ int BarApp::run() {
     statusBar_.setBackdrop(alpha != 0.0, alpha);
     statusBar_.setGeometry(geom_);
 
+    // Wayland-local wiring only — these talk to the compositor we just connected
+    // to (present and fast), never to an external daemon, so they are safe on the
+    // pre-first-paint path. Everything that touches D-Bus or the filesystem is
+    // deferred to startBackends() (fired after the first frame) so a cold session
+    // start — where UPower/BlueZ/NetworkManager may still be coming up — cannot
+    // hold the bar window off screen behind a synchronous fetch.
+    idleInhibitor_.init(display_.idleInhibitManager(), display_.anchorSurface(),
+                        display_.display());
+    nightLight_.init(display_.gammaControlManager(), display_.display());
+    nightLight_.setOutputs(display_.outputs());
+    nightLight_.setOnChange([this] { invalidate(); });
+    workspace_.start(display_.display());
+    toplevel_.start(display_.display());
+
+    // Live config reload: watch bar.conf for edits and re-apply the [theme]
+    // section without a restart. Structural changes (modules, position) still
+    // need a restart — but colours, fonts, and spacing update instantly.
+    configWatcher_.watch(config_.path(), [this] { reloadConfig(); });
+
+    loop_.run();
+    return 0;
+}
+
+void BarApp::startBackends() {
+    // Called exactly once, from the first draw()'s deferred post (guarded by
+    // backendsScheduled_ there).
+    //
     // Status bar backends: one startup fetch, push-only afterwards (each is
-    // non-fatal — a missing daemon just hides its indicator).
+    // non-fatal — a missing daemon just hides its indicator). These run now,
+    // after the first paint, so any synchronous D-Bus round-trip that blocks on
+    // a still-starting service delays only the indicator's first data, not the
+    // appearance of the bar itself.
     battery_.start();
     brightness_.start();
     wifi_.start();
@@ -100,16 +130,6 @@ int BarApp::run() {
     sni_.start();
     powerProfiles_.setOnChange([this] { invalidate(); });
     powerProfiles_.start();  // no-op/degrades if power-profiles-daemon is absent
-    // Idle inhibitor ("keep awake"): the manager + a surface exist now that the
-    // display is connected. Unavailable (indicator hides) if the compositor
-    // lacks zwp_idle_inhibit.
-    idleInhibitor_.init(display_.idleInhibitManager(), display_.anchorSurface(),
-                        display_.display());
-    nightLight_.init(display_.gammaControlManager(), display_.display());
-    nightLight_.setOutputs(display_.outputs());
-    nightLight_.setOnChange([this] { invalidate(); });
-    workspace_.start(display_.display());
-    toplevel_.start(display_.display());
 
     // Notification centre: the monitor already pushes on the loop's fd. No
     // backlog seed — that is the lock screen's concern (the pre-lock queue);
@@ -128,13 +148,7 @@ int BarApp::run() {
     // filesystem read, no daemon). The launcher indicator is otherwise inert.
     desktopIndex_.load();
 
-    // Live config reload: watch bar.conf for edits and re-apply the [theme]
-    // section without a restart. Structural changes (modules, position) still
-    // need a restart — but colours, fonts, and spacing update instantly.
-    configWatcher_.watch(config_.path(), [this] { reloadConfig(); });
-
-    loop_.run();
-    return 0;
+    invalidate();  // repaint now that the indicators have data
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +184,10 @@ int BarApp::preview(const std::string& path, int width, int height) {
 
     // Configure as standalone bar (mirrors run()).
     statusBar_.setSessionContentVisible(true);
-    statusBar_.setBackdrop(true);
+    // Honour the configured backdrop opacity (same resolution as run()) so the
+    // preview frames — including the Quick Settings panel — match the live bar.
+    const double alpha = config_.getDouble("bar", "backdrop", -1.0);
+    statusBar_.setBackdrop(alpha != 0.0, alpha);
     statusBar_.setGeometry(geom_);
 
     // Pump the event loop briefly so volume (async connect) and the SNI tray
@@ -231,6 +248,16 @@ void BarApp::draw(cairo_t* cr, int w, int h, int scale) {
     Painter p(cr);
     statusBar_.layout(w, h);
     statusBar_.draw(p, nowMs());
+
+    // First frame is now rendered: schedule the deferred backend startup on the
+    // loop so it runs after this buffer is committed/flushed (addPrepare flush
+    // → next epoll_wait → the posted task), never before the window is on
+    // screen. Posted (not called inline) precisely so the paint wins the race.
+    // Flag set here so the one-shot post cannot be duplicated by a later frame.
+    if (!backendsScheduled_) {
+        backendsScheduled_ = true;
+        loop_.post([this] { startBackends(); });
+    }
 
     // Keep the surface height in step with the overlay state (deferred; never
     // resize mid-render).
