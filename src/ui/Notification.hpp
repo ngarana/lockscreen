@@ -34,6 +34,11 @@ struct Notification {
     uint8_t urgency = 1;    // freedesktop urgency hint: 0 low, 1 normal, 2 critical
     bool sensitive = false; // true if the notification contains sensitive content
     std::vector<std::pair<std::string, std::string>> actions;
+    // freedesktop `desktop-entry` hint: the .desktop id of the sending app — the
+    // reliable key for launching/focusing it when a card is clicked ("" if the
+    // app did not send it; we then fall back to matching by app name). Kept last
+    // so the positional aggregate inits in demoNotifications() stay valid.
+    std::string desktopEntry;
 };
 
 class NotificationView {

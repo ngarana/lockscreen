@@ -16,13 +16,15 @@ void NotificationActions::close(uint32_t daemonId) {
                              "CloseNotification", nullptr, nullptr, "u", daemonId);
 }
 
-void NotificationActions::invoke(uint32_t daemonId, const std::string& actionKey) {
-    if (daemonId == 0 || !bus_.available()) return;
+void NotificationActions::invokeLatestAction(uint32_t actionIndex) {
+    if (!bus_.available()) return;
 
-    // Async: invoking an action must not block the UI thread.
-    sd_bus_call_method_async(bus_.get(), nullptr, "org.freedesktop.Notifications",
-                             "/org/freedesktop/Notifications", "org.freedesktop.Notifications",
-                             "InvokeAction", nullptr, nullptr, "us", daemonId, actionKey.c_str());
+    // swaync control interface: LatestInvokeAction(u index) fires the action on
+    // the most-recent notification. Async and reply-less — a wrong daemon simply
+    // has no such service and the call is dropped (UnknownService), never blocks.
+    sd_bus_call_method_async(bus_.get(), nullptr, "org.erikreider.swaync.cc",
+                             "/org/erikreider/swaync/cc", "org.erikreider.swaync.cc",
+                             "LatestInvokeAction", nullptr, nullptr, "u", actionIndex);
 }
 
 }  // namespace qypr

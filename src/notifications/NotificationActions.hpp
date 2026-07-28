@@ -30,8 +30,17 @@ public:
     // reply). A zero id means the reply has not landed yet — nothing to close.
     void close(uint32_t daemonId);
 
-    // Ask the daemon to invoke a specific action on `daemonId`.
-    void invoke(uint32_t daemonId, const std::string& actionKey);
+    // Invoke the action at `actionIndex` (0-based, into the notification's full
+    // actions array) on the *newest* notification.
+    //
+    // Third-party action invocation is not in the freedesktop Notifications spec
+    // (actions are delivered server→client via the ActionInvoked signal, which
+    // only the daemon may emit), so this is necessarily daemon-specific. swaync —
+    // the common wlroots daemon — exposes LatestInvokeAction(index) on its
+    // control interface; it targets the most-recent notification only, which is
+    // why callers must gate this to the newest card. A no-op (harmless) when
+    // swaync is not the running daemon. Returns nothing: fire-and-forget.
+    void invokeLatestAction(uint32_t actionIndex);
 
 private:
     SystemBus& bus_;

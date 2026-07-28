@@ -1,13 +1,25 @@
 // NotificationIndicator.cpp - Notification centre implementation.
+//
+// A bell-with-count in the bar; clicking opens a Windows 11-style notification
+// centre: a scroll of app-grouped cards. Each card shows the app, title, body,
+// age and (on hover) a dismiss ×; multi-notification apps collapse under a
+// count with an expand chevron. Clicking a card activates it — the app's own
+// "default" action when it registered one, otherwise we launch/focus the app
+// via its .desktop entry. All send-side actions go through NotificationActions
+// (the monitor connection is receive-only); with no actions backend the panel
+// is read-only.
 #include "ui/indicators/NotificationIndicator.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "notifications/NotificationActions.hpp"
 #include "notifications/NotificationMonitor.hpp"
 #include "render/Painter.hpp"
+#include "system/DesktopIndex.hpp"
 #include "system/DndState.hpp"
 #include "ui/Notification.hpp"
 #include "ui/Theme.hpp"
@@ -19,18 +31,20 @@ namespace {
 
 constexpr const char* kBell = "󰂚";     // nf-md-bell
 constexpr const char* kBellOff = "󰂛";  // nf-md-bell_off (DND)
+constexpr const char* kBellRing = "󰂞"; // nf-md-bell_ring (empty-state)
 constexpr const char* kClose = "󰅖";    // nf-md-close
-constexpr const char* kChevronRight = "›";
-constexpr const char* kChevronDown = "⌄";
-constexpr double kPad = 10.0;
-constexpr double kMenuW = 380.0;
-constexpr double kHeaderH = 26.0;
-constexpr double kGroupHeaderH = 32.0;
-constexpr double kPreviewH = 22.0;
-constexpr double kSubCardH = 52.0;
-constexpr double kSubCardGap = 4.0;
+constexpr const char* kChevronDown = "󰅀";
+constexpr const char* kChevronRight = "󰅂";
+
+constexpr double kPad = 14.0;
+constexpr double kMenuW = 390.0;
+constexpr double kHeaderH = 30.0;       // "Notifications" / "Clear all" row
+constexpr double kGroupHeaderH = 26.0;  // per-app header (only when count > 1)
+constexpr double kCardH = 64.0;         // base card (icon + title + body)
+constexpr double kActionRowH = 30.0;    // extra height for a custom-action row
+constexpr double kGap = 8.0;
+constexpr double kIconTile = 38.0;
 constexpr double kAccentBarW = 3.0;
-constexpr size_t kMaxVisibleGroups = 6;
 
 std::string ageLabel(int64_t postedAt, int64_t now) {
     if (postedAt <= 0) return "";
@@ -42,20 +56,32 @@ std::string ageLabel(int64_t postedAt, int64_t now) {
     return std::to_string(secs / 86400) + "d";
 }
 
-// ── Group: notifications from the same app ──────────────────────────────────
+// The tile letter: first alphanumeric of the app name, uppercased.
+std::string initialOf(const std::string& app) {
+    for (unsigned char c : app)
+        if (std::isalnum(c)) return std::string(1, static_cast<char>(std::toupper(c)));
+    return "!";
+}
+
+// Custom actions are everything except the implicit "default" (which is the
+// whole-card click, not a button).
+bool hasCustomActions(const Notification& n) {
+    for (const auto& a : n.actions)
+        if (a.first != "default") return true;
+    return false;
+}
+
+// ── Group: notifications from the same app, newest-first ────────────────────
 struct NotifyGroup {
     std::string app;
     Color accent = theme::color::primary;
     uint8_t urgency = 1;
-    // Newest-first (reversed from monitor's oldest-first).
-    std::vector<const Notification*> notes;
+    std::vector<const Notification*> notes;  // newest-first
 };
 
 std::vector<NotifyGroup> buildGroups(const std::vector<Notification>& notes) {
-    // Bucket by app name, preserving insertion order for first-seen apps.
     std::vector<NotifyGroup> groups;
     std::unordered_map<std::string, size_t> appIndex;
-
     for (int i = static_cast<int>(notes.size()) - 1; i >= 0; --i) {
         const Notification& n = notes[i];
         const std::string key = n.app.empty() ? "System" : n.app;
@@ -66,468 +92,400 @@ std::vector<NotifyGroup> buildGroups(const std::vector<Notification>& notes) {
         } else {
             auto& g = groups[it->second];
             g.notes.push_back(&n);
-            // Critical overrides normal.
             if (n.urgency > g.urgency) g.urgency = n.urgency;
         }
     }
     return groups;
 }
 
-// ── Display item: either a group header or a sub-card ───────────────────────
-struct DisplayItem {
-    enum Type { GroupHeader, SubCard } type;
-    size_t groupIdx;
-    size_t noteIdx;
+// One hit-testable row on screen. It carries everything an action needs, so
+// input handling never dereferences a Notification* that may have changed
+// between the draw that laid it out and the click that follows.
+struct Item {
+    enum Kind { Header, Card } kind;
     Rect bounds;
-    Rect dismissBounds;
-    Rect arrowBounds;
-    std::vector<Rect> buttonBounds;
-    std::vector<std::string> buttonKeys;
+    Rect closeBtn;   // card dismiss / group clear-all (drawn on hover)
+    Rect chevron;    // header expand/collapse toggle
+    std::vector<Rect> actionBtns;
+    std::vector<int> actionIdx;  // index into the note's full actions array
+    // Card payload.
+    uint32_t daemonId = 0;
+    bool isNewest = false;       // only the newest note's actions are invokable
+    std::string desktopEntry;
+    std::string app;
+    // Header payload.
+    std::string groupApp;
+    std::vector<uint32_t> groupIds;
 };
 
 class NotificationPopover : public DetailedPopover {
 public:
-    NotificationPopover(const NotificationMonitor* mon, NotificationActions* actions)
-        : mon_(mon), actions_(actions) {}
+    NotificationPopover(const NotificationMonitor* mon, NotificationActions* actions,
+                        DesktopIndex* apps)
+        : mon_(mon), actions_(actions), apps_(apps) {}
+
+    // Offline preview: render from a fixed set instead of a live monitor.
+    explicit NotificationPopover(std::vector<Notification> demo)
+        : previewNotes_(std::move(demo)) {}
 
     double contentWidth() const override { return kMenuW; }
 
+    // Transient like a real notification panel: fade away after a spell of no
+    // interaction. Any hover/click/scroll over it resets the host's timer.
+    int autoDismissMs() const override { return 8000; }
+
     double contentHeight() const override {
         const auto& notes = list();
-        if (notes.empty()) return kPad * 2.0 + kHeaderH + 28.0;
-
-        auto groups = buildGroups(notes);
-        const int64_t now = nowMs();
-        double h = kPad * 2.0 + kHeaderH;
-        const size_t n = std::min(groups.size(), kMaxVisibleGroups);
-
-        for (size_t gi = 0; gi < n; ++gi) {
-            const auto& g = groups[gi];
-            h += kGroupHeaderH;  // group header row
-
-            const double prog = groupProgress(g.app).value(now);
-
-            if (g.notes.size() == 1 && prog < 0.01) {
-                // Single notification, collapsed: show preview line.
-                h += kPreviewH;
-            } else if (g.notes.size() > 1) {
-                // Multiple: collapsed shows preview of newest, expanded shows all.
-                h += kPreviewH;  // always show at least the preview
-                if (prog > 0.01) {
-                    const size_t extra = g.notes.size() - 1;
-                    const double expandedSubH =
-                        extra * (kSubCardH + kSubCardGap);
-                    h += expandedSubH * prog;
-                }
-            }
+        if (notes.empty()) return kPad + kHeaderH + 96.0 + kPad;
+        const uint64_t newestId = notes.back().id;
+        double h = kPad + kHeaderH;
+        for (const auto& g : buildGroups(notes)) {
+            const bool multi = g.notes.size() > 1;
+            const bool expanded = multi && isExpanded(g.app);
+            if (multi) h += kGroupHeaderH + kGap;
+            const size_t shown = (!multi || expanded) ? g.notes.size() : 1;
+            for (size_t i = 0; i < shown; ++i)
+                h += cardHeight(*g.notes[i], g.notes[i]->id == newestId) + kGap;
         }
-        if (groups.size() > kMaxVisibleGroups) h += 20.0;
-        return h;
+        return h + kPad - kGap;  // last card's trailing gap folds into bottom pad
     }
 
     void draw(Painter& p, int64_t now) override {
         Rect b = getBounds();
         b.y += (growUp ? 1.0 : -1.0) * (1.0 - openProgress_.value(now)) * 6.0;
 
-        p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::surface);
+        // Panel: same themed frosted slab the rest of the suite uses (frosted in
+        // glass mode, opaque in solid) — the cards sit a shade lighter on top.
+        p.fillGlass(b, theme::statusbar::popoverRadius, theme::color::background,
+                    theme::color::surfaceHover.withAlpha(0.6));
 
         items_.clear();
         clearAll_ = {0, 0, 0, 0};
-        double y = b.y + kPad;
-
         const auto& notes = list();
 
         // ── Header ─────────────────────────────────────────────────────────
-        TextStyle head{theme::font::family, 12.0, PANGO_WEIGHT_BOLD,
-                       theme::color::textSubtle};
+        double y = b.y + kPad;
+        TextStyle head{theme::font::family, 13.0, PANGO_WEIGHT_BOLD, theme::color::text};
         p.drawText(b.x + kPad, y, "Notifications", head);
         if (!notes.empty() && actions_) {
+            const bool hot = clearAll_.contains(hoverX_, hoverY_);
             TextStyle ca{theme::font::family, 11.0, PANGO_WEIGHT_NORMAL,
-                         clearAllHot_ ? theme::color::text : theme::color::textSubtle};
+                         hot ? theme::color::text : theme::color::textSubtle};
             const Size sz = p.measureText("Clear all", ca);
             const double cx = b.x + b.w - kPad - sz.w;
-            clearAll_ = {cx - 6.0, y - 3.0, sz.w + 12.0, 20.0};
-            if (clearAllHot_)
-                p.fillRoundedRect(clearAll_, 6.0, theme::color::glassHover);
+            clearAll_ = {cx - 8.0, y - 4.0, sz.w + 16.0, 22.0};
+            if (clearAll_.contains(hoverX_, hoverY_))
+                p.fillRoundedRect(clearAll_, 6.0, theme::color::surfaceHover.withAlpha(0.5));
             p.drawText(cx, y, "Clear all", ca);
         }
         y += kHeaderH;
 
         if (notes.empty()) {
-            TextStyle empty{theme::font::family, 13.0, PANGO_WEIGHT_NORMAL,
-                            theme::color::textSubtle};
-            p.drawText(b.x + kPad, y, "No notifications", empty);
+            drawEmptyState(p, b, y);
             return;
         }
 
+        // The single newest notification is the only one whose actions can be
+        // fired (swaync's LatestInvokeAction targets the most-recent one).
+        const uint64_t newestId = notes.back().id;
+
         // ── Groups ─────────────────────────────────────────────────────────
-        groups_ = buildGroups(notes);
-        const size_t n = std::min(groups_.size(), kMaxVisibleGroups);
+        for (auto& g : buildGroups(notes)) {
+            const bool multi = g.notes.size() > 1;
+            const bool expanded = multi && isExpanded(g.app);
+            const Color accent = g.urgency >= 2 ? theme::color::error : g.accent;
 
-        for (size_t gi = 0; gi < n; ++gi) {
-            auto& g = groups_[gi];
-            const double prog = clamp01(groupProgress(g.app).value(now));
-            const bool gHot = Rect{b.x + kPad, y, b.w - kPad * 2.0,
-                                   kGroupHeaderH}
-                                  .contains(hoverX_, hoverY_);
-
-            // ── Group header ───────────────────────────────────────────────
-            const Rect headerR{b.x + kPad, y, b.w - kPad * 2.0, kGroupHeaderH};
-            DisplayItem headerItem{DisplayItem::GroupHeader, gi, 0, headerR};
-
-            if (gHot)
-                p.fillRoundedRect(headerR, 8.0,
-                                  theme::color::glassHover.withAlpha(0.35));
-
-            // Accent bar.
-            const Color accent =
-                g.urgency >= 2 ? theme::color::error : g.accent;
-            p.fillRoundedRect({headerR.x, headerR.y + 3.0, kAccentBarW,
-                               headerR.h - 6.0},
-                              1.5, accent);
-
-            // App name + count badge.
-            const double textX = headerR.x + kAccentBarW + 8.0;
-            TextStyle appStyle{theme::font::family, 11.0, PANGO_WEIGHT_BOLD,
-                               accent};
-            p.drawText(textX, headerR.y + 4.0, g.app, appStyle);
-
-            if (g.notes.size() > 1) {
-                const std::string count = "(" + std::to_string(g.notes.size()) + ")";
-                TextStyle cntStyle{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL,
-                                   theme::color::textSubtle};
-                Size appSz = p.measureText(g.app, appStyle);
-                p.drawText(textX + appSz.w + 6.0, headerR.y + 5.0, count,
-                           cntStyle);
+            if (multi) {
+                drawGroupHeader(p, b, y, g, accent, expanded);
+                y += kGroupHeaderH + kGap;
             }
 
-            // Age of newest notification.
-            const std::string age = ageLabel(g.notes[0]->postedAt, now);
-            if (!age.empty()) {
-                TextStyle at{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL,
-                             theme::color::textSubtle};
-                const Size asz = p.measureText(age, at);
-                p.drawText(headerR.x + headerR.w - 26.0 - asz.w,
-                           headerR.y + 5.0, age, at);
-            }
-
-            // Dismiss group (×).
-            if (actions_) {
-                const Rect xBtn{headerR.x + headerR.w - 24.0, headerR.y + 2.0,
-                                20.0, 20.0};
-                const bool xHot = xBtn.contains(hoverX_, hoverY_);
-                TextStyle gStyle{theme::font::iconFamily, 11.0,
-                                 PANGO_WEIGHT_NORMAL,
-                                 xHot ? theme::color::error
-                                      : theme::color::textSubtle.withAlpha(
-                                            gHot ? 0.9 : 0.0)};
-                const Size gs = p.measureText(kClose, gStyle);
-                p.drawText(xBtn.x + (xBtn.w - gs.w) / 2.0,
-                           xBtn.y + (xHot ? (xBtn.h - gs.h) / 2.0 - 1.0
-                                          : (xBtn.h - gs.h) / 2.0),
-                           kClose, gStyle);
-                headerItem.dismissBounds = xBtn;
-            }
-
-            // Expand / collapse chevron.
-            if (g.notes.size() > 1) {
-                const Rect arr{headerR.x + headerR.w - 46.0, headerR.y + 2.0,
-                               20.0, 20.0};
-                const bool arrHot = arr.contains(hoverX_, hoverY_);
-                TextStyle arrStyle{theme::font::family, 11.0, PANGO_WEIGHT_NORMAL,
-                                   arrHot ? theme::color::primary
-                                          : theme::color::textSubtle};
-                const char* glyph = prog > 0.5 ? kChevronDown : kChevronRight;
-                const Size asz = p.measureText(glyph, arrStyle);
-                p.drawText(arr.x + (arr.w - asz.w) / 2.0,
-                           arr.y + (arr.h - asz.h) / 2.0, glyph, arrStyle);
-                headerItem.arrowBounds = arr;
-            }
-
-            items_.push_back(headerItem);
-            y += kGroupHeaderH;
-
-            // ── Collapsed preview (newest notification title) ──────────────
-            const Notification& newest = *g.notes[0];
-            const Rect previewR{b.x + kPad + 8.0, y, b.w - kPad * 2.0 - 8.0,
-                                kPreviewH};
-            TextStyle previewStyle{theme::font::family, 11.0, PANGO_WEIGHT_NORMAL,
-                                   theme::color::textSubtle};
-            const std::string previewText =
-                newest.title.empty() ? newest.app : newest.title;
-            p.drawText(previewR.x, previewR.y + 3.0, previewText, previewStyle,
-                       HAlign::Left, previewR.w - 10.0);
-            y += kPreviewH;
-
-            // ── Expanded sub-cards ─────────────────────────────────────────
-            if (g.notes.size() > 1 && prog > 0.01) {
-                p.pushGroup();
-                const size_t extra = g.notes.size() - 1;
-                double subY = y;
-                for (size_t ni = 1; ni < g.notes.size(); ++ni) {
-                    const Notification& n = *g.notes[ni];
-                    const Rect subR{b.x + kPad + 4.0, subY,
-                                    b.w - kPad * 2.0 - 4.0, kSubCardH};
-                    DisplayItem subItem{DisplayItem::SubCard, gi, ni, subR};
-
-                    // Sub-card background.
-                    const bool subHot = subR.contains(hoverX_, hoverY_);
-                    p.fillRoundedRect(subR, 6.0,
-                                      subHot ? theme::color::glassHover.withAlpha(0.3)
-                                             : theme::color::surface.withAlpha(0.5));
-                    p.strokeRoundedRect(subR, 6.0,
-                                        theme::color::glassBorder.withAlpha(0.3), 1);
-
-                    // Title line: app source + age + dismiss.
-                    const double sx = subR.x + 8.0;
-                    const double sw = subR.w - 16.0;
-
-                    // Sender/title.
-                    TextStyle stStyle{theme::font::family, 10.0, PANGO_WEIGHT_BOLD,
-                                      theme::color::text};
-                    const std::string sender =
-                        n.title.empty() ? n.app : n.title;
-                    p.drawText(sx, subR.y + 4.0, sender, stStyle, HAlign::Left,
-                               sw - 40.0);
-
-                    // Age.
-                    const std::string subAge = ageLabel(n.postedAt, now);
-                    if (!subAge.empty()) {
-                        TextStyle sat{theme::font::family, 9.0, PANGO_WEIGHT_NORMAL,
-                                      theme::color::textMuted};
-                        const Size sasz = p.measureText(subAge, sat);
-                        p.drawText(subR.x + subR.w - 24.0 - sasz.w,
-                                   subR.y + 4.0, subAge, sat);
-                    }
-
-                    // Dismiss sub-card (×).
-                    if (n.daemonId != 0 && actions_) {
-                        const Rect subX{subR.x + subR.w - 20.0, subR.y + 2.0,
-                                        18.0, 18.0};
-                        const bool subXHot = subX.contains(hoverX_, hoverY_);
-                        TextStyle sxStyle{theme::font::iconFamily, 9.0,
-                                          PANGO_WEIGHT_NORMAL,
-                                          subXHot ? theme::color::error
-                                                  : theme::color::textMuted};
-                        const Size sxGs = p.measureText(kClose, sxStyle);
-                        p.drawText(subX.x + (subX.w - sxGs.w) / 2.0,
-                                   subX.y + (subX.h - sxGs.h) / 2.0, kClose,
-                                   sxStyle);
-                        subItem.dismissBounds = subX;
-                    }
-
-                    // Body (single line, truncated).
-                    if (!n.body.empty()) {
-                        TextStyle sbStyle{theme::font::family, 10.0,
-                                          PANGO_WEIGHT_NORMAL,
-                                          theme::color::textSubtle};
-                        p.drawText(sx, subR.y + 18.0, n.body, sbStyle,
-                                   HAlign::Left, sw - 20.0);
-                    }
-
-                    // Action buttons row.
-                    std::vector<std::pair<std::string, std::string>> customActs;
-                    for (const auto& a : n.actions)
-                        if (a.first != "default") customActs.push_back(a);
-                    if (!customActs.empty()) {
-                        const double btnY = subR.y + 34.0;
-                        const double btnGap = 4.0;
-                        const double btnW =
-                            (sw - (customActs.size() - 1) * btnGap) /
-                            customActs.size();
-                        double bx = sx;
-                        for (const auto& a : customActs) {
-                            Rect btnR{bx, btnY, btnW, 14.0};
-                            bool bHot = btnR.contains(hoverX_, hoverY_);
-                            p.fillRoundedRect(
-                                btnR, 3.0,
-                                bHot ? theme::color::glassHover
-                                     : theme::color::surface.withAlpha(0.4));
-                            TextStyle bTxt{theme::font::family, 8.0,
-                                           PANGO_WEIGHT_BOLD,
-                                           bHot ? theme::color::primary
-                                                : theme::color::textMuted};
-                            const Size bsz = p.measureText(a.second, bTxt);
-                            p.drawText(
-                                btnR.x + (btnR.w - bsz.w) / 2.0,
-                                btnR.y + (btnR.h - bsz.h) / 2.0, a.second,
-                                bTxt);
-                            subItem.buttonBounds.push_back(btnR);
-                            subItem.buttonKeys.push_back(a.first);
-                            bx += btnW + btnGap;
-                        }
-                    }
-
-                    items_.push_back(subItem);
-                    subY += (kSubCardH + kSubCardGap) * prog;
-                }
-                p.popGroupWithAlpha(prog);
-                y += (extra * (kSubCardH + kSubCardGap)) * prog;
+            const size_t shown = (!multi || expanded) ? g.notes.size() : 1;
+            for (size_t i = 0; i < shown; ++i) {
+                const Notification& n = *g.notes[i];
+                const bool isNewest = n.id == newestId;
+                const double ch = cardHeight(n, isNewest);
+                const Rect r{b.x + kPad, y, b.w - kPad * 2.0, ch};
+                drawCard(p, r, n, accent, now, isNewest);
+                y += ch + kGap;
             }
         }
+    }
 
-        // Scroll hint.
-        if (groups_.size() > kMaxVisibleGroups) {
-            TextStyle more{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL,
-                           theme::color::textSubtle};
-            const std::string s =
-                "showing " + std::to_string(n) + " of " +
-                std::to_string(groups_.size()) + " apps  ·  scroll for more";
-            p.drawText(b.x + kPad, y + 1.0, s, more);
-        }
+    // ── Input ───────────────────────────────────────────────────────────────
+    bool handleMotion(double x, double y) override {
+        hoverX_ = x;
+        hoverY_ = y;
+        return contains(x, y);
+    }
+    bool handleDrag(double x, double y) override { return handleMotion(x, y); }
+
+    bool consumeCloseRequest() override {
+        const bool c = closeRequested_;
+        closeRequested_ = false;
+        return c;
     }
 
     bool handleClick(double x, double y) override {
         if (!actions_) return false;
 
-        // ── "Clear all" ───────────────────────────────────────────────────
         if (clearAll_.contains(x, y)) {
-            std::vector<uint32_t> ids;
             for (const auto& n : list())
-                if (n.daemonId != 0) ids.push_back(n.daemonId);
-            for (uint32_t id : ids) actions_->close(id);
-            groupExpanded_.clear();
-            scroll_ = 0;
+                if (n.daemonId != 0) actions_->close(n.daemonId);
             return true;
         }
 
-        // ── Items: newest first (sub-cards before headers) ─────────────────
-        for (int i = static_cast<int>(items_.size()) - 1; i >= 0; --i) {
-            const auto& item = items_[i];
-            if (!item.bounds.contains(x, y)) continue;
+        // Newest rows are drawn first; iterate forward (topmost wins on overlap
+        // is irrelevant — rows never overlap).
+        for (const auto& it : items_) {
+            if (!it.bounds.contains(x, y)) continue;
 
-            if (item.type == DisplayItem::SubCard) {
-                const auto& g = groups_.at(item.groupIdx);
-                const Notification& n = *g.notes[item.noteIdx];
+            if (it.kind == Item::Header) {
+                if (it.closeBtn.valid() && it.closeBtn.contains(x, y)) {
+                    for (uint32_t id : it.groupIds)
+                        if (id != 0) actions_->close(id);
+                    groupExpanded_.erase(it.groupApp);
+                    return true;
+                }
+                toggleExpanded(it.groupApp);  // chevron or anywhere on the header
+                return true;
+            }
 
-                // Dismiss sub-card.
-                if (item.dismissBounds.valid() &&
-                    item.dismissBounds.contains(x, y) && n.daemonId != 0) {
-                    actions_->close(n.daemonId);
+            // Card.
+            if (it.closeBtn.valid() && it.closeBtn.contains(x, y)) {
+                if (it.daemonId != 0) actions_->close(it.daemonId);
+                return true;
+            }
+            for (size_t k = 0; k < it.actionBtns.size(); ++k) {
+                if (it.actionBtns[k].contains(x, y)) {
+                    // Buttons are only laid out for the newest card (it.isNewest),
+                    // the one swaync's LatestInvokeAction can target.
+                    actions_->invokeLatestAction(static_cast<uint32_t>(it.actionIdx[k]));
+                    requestClose();
                     return true;
-                }
-                // Action buttons.
-                for (size_t k = 0; k < item.buttonBounds.size(); ++k) {
-                    if (item.buttonBounds[k].contains(x, y) &&
-                        n.daemonId != 0) {
-                        actions_->invoke(n.daemonId, item.buttonKeys[k]);
-                        return true;
-                    }
-                }
-                // Click sub-card body → invoke default action.
-                if (n.daemonId != 0) {
-                    for (const auto& a : n.actions) {
-                        if (a.first == "default") {
-                            actions_->invoke(n.daemonId, "default");
-                            return true;
-                        }
-                    }
-                }
-            } else {
-                // Group header.
-                const auto& g = groups_[item.groupIdx];
-
-                // Dismiss group (all notifications in it).
-                if (item.dismissBounds.valid() &&
-                    item.dismissBounds.contains(x, y)) {
-                    for (const auto* n : g.notes)
-                        if (n->daemonId != 0) actions_->close(n->daemonId);
-                    groupExpanded_.erase(g.app);
-                    return true;
-                }
-                // Expand/collapse chevron.
-                if (item.arrowBounds.valid() &&
-                    item.arrowBounds.contains(x, y)) {
-                    toggleGroupExpanded(g.app);
-                    return true;
-                }
-                // Click group header → expand/collapse.
-                if (g.notes.size() > 1) {
-                    toggleGroupExpanded(g.app);
-                    return true;
-                }
-                // Single notification: click to open.
-                if (g.notes[0]->daemonId != 0) {
-                    for (const auto& a : g.notes[0]->actions) {
-                        if (a.first == "default") {
-                            actions_->invoke(g.notes[0]->daemonId, "default");
-                            return true;
-                        }
-                    }
                 }
             }
+            activate(it);  // click the card body
+            return true;
         }
         return false;
     }
 
-    bool handleDrag(double x, double y) override {
-        hoverX_ = x;
-        hoverY_ = y;
-        clearAllHot_ = clearAll_.contains(x, y);
-        return false;
-    }
-
-    bool handleScroll(double, double dy) override {
-        auto groups = buildGroups(list());
-        if (groups.size() <= kMaxVisibleGroups) return false;
-        const size_t maxScroll = groups.size() - kMaxVisibleGroups;
-        if (dy > 0 && scroll_ > 0) --scroll_;
-        else if (dy < 0 && scroll_ < maxScroll) ++scroll_;
-        return true;
-    }
-
 private:
+    double cardHeight(const Notification& n, bool isNewest) const {
+        return kCardH + (isNewest && hasCustomActions(n) ? kActionRowH : 0.0);
+    }
+
+    void requestClose() { closeRequested_ = true; }
+
+    // Click a card body: launch/focus the sending app, then clear the card and
+    // close the centre (Windows behaviour). We launch by desktop entry rather
+    // than firing the app's "default" action because launching works for every
+    // card, whereas swaync can only fire an action on the newest notification.
+    void activate(const Item& it) {
+        const DesktopEntry* e = nullptr;
+        if (apps_) {
+            if (!it.desktopEntry.empty()) e = apps_->resolve(it.desktopEntry);
+            if (!e && !it.app.empty()) e = apps_->resolve(it.app);
+        }
+        if (!e) return;  // can't resolve the app — leave the card up
+        spawnDetached(e->exec, e->terminal);
+        if (it.daemonId != 0 && actions_) actions_->close(it.daemonId);
+        requestClose();
+    }
+
+    void drawEmptyState(Painter& p, const Rect& b, double y) {
+        TextStyle glyph{theme::font::iconFamily, 34.0, PANGO_WEIGHT_NORMAL,
+                        theme::color::textMuted};
+        const Size gs = p.measureText(kBellRing, glyph);
+        p.drawText(b.x + (b.w - gs.w) / 2.0, y + 14.0, kBellRing, glyph);
+        TextStyle t{theme::font::family, 12.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
+        const char* msg = "You're all caught up";
+        const Size ts = p.measureText(msg, t);
+        p.drawText(b.x + (b.w - ts.w) / 2.0, y + 14.0 + gs.h + 8.0, msg, t);
+    }
+
+    void drawGroupHeader(Painter& p, const Rect& b, double y, const NotifyGroup& g,
+                         const Color& accent, bool expanded) {
+        const Rect r{b.x + kPad, y, b.w - kPad * 2.0, kGroupHeaderH};
+        const bool hot = r.contains(hoverX_, hoverY_);
+        if (hot) p.fillRoundedRect(r, 8.0, theme::color::surface.withAlpha(0.5));
+
+        TextStyle appStyle{theme::font::family, 11.0, PANGO_WEIGHT_BOLD, accent};
+        p.drawText(r.x + 8.0, r.y + 6.0, g.app, appStyle, HAlign::Left, r.w - 90.0);
+        const Size appSz = p.measureText(g.app, appStyle);
+        TextStyle cnt{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL, theme::color::textMuted};
+        p.drawText(r.x + 8.0 + std::min(appSz.w, r.w - 90.0) + 6.0, r.y + 7.0,
+                   "(" + std::to_string(g.notes.size()) + ")", cnt);
+
+        Item item{Item::Header};
+        item.bounds = r;
+        item.groupApp = g.app;
+        for (const auto* n : g.notes) item.groupIds.push_back(n->daemonId);
+
+        // Clear-group × (on hover).
+        if (actions_) {
+            const Rect xb{r.x + r.w - 24.0, r.y + 3.0, 20.0, 20.0};
+            const bool xhot = xb.contains(hoverX_, hoverY_);
+            if (hot || xhot) {
+                TextStyle s{theme::font::iconFamily, 10.0, PANGO_WEIGHT_NORMAL,
+                            xhot ? theme::color::error : theme::color::textMuted};
+                const Size gs = p.measureText(kClose, s);
+                p.drawText(xb.x + (xb.w - gs.w) / 2.0, xb.y + (xb.h - gs.h) / 2.0, kClose, s);
+            }
+            item.closeBtn = xb;
+        }
+        // Expand/collapse chevron.
+        const Rect ch{r.x + r.w - 48.0, r.y + 3.0, 20.0, 20.0};
+        TextStyle cs{theme::font::iconFamily, 11.0, PANGO_WEIGHT_NORMAL,
+                     ch.contains(hoverX_, hoverY_) ? theme::color::text : theme::color::textSubtle};
+        const char* glyph = expanded ? kChevronDown : kChevronRight;
+        const Size cgs = p.measureText(glyph, cs);
+        p.drawText(ch.x + (ch.w - cgs.w) / 2.0, ch.y + (ch.h - cgs.h) / 2.0, glyph, cs);
+        item.chevron = ch;
+
+        items_.push_back(std::move(item));
+    }
+
+    void drawCard(Painter& p, const Rect& r, const Notification& n, const Color& accent,
+                  int64_t now, bool isNewest) {
+        const bool hot = r.contains(hoverX_, hoverY_);
+        p.fillRoundedRect(r, 10.0, hot ? theme::color::surfaceHover : theme::color::surface);
+        p.strokeRoundedRect(r, 10.0, theme::color::surfaceHover.withAlpha(0.5), 1.0);
+        // Accent spine.
+        p.fillRoundedRect({r.x, r.y + 8.0, kAccentBarW, r.h - 16.0}, 1.5, accent);
+
+        // Icon tile with the app initial.
+        const Rect tile{r.x + 12.0, r.y + 12.0, kIconTile, kIconTile};
+        p.fillRoundedRect(tile, 9.0, accent);
+        TextStyle init{theme::font::family, 17.0, PANGO_WEIGHT_BOLD, theme::color::background};
+        const std::string letter = initialOf(n.app.empty() ? n.title : n.app);
+        const Size ls = p.measureText(letter, init);
+        p.drawText(tile.x + (tile.w - ls.w) / 2.0, tile.y + (tile.h - ls.h) / 2.0, letter, init);
+
+        const double textX = tile.x + tile.w + 12.0;
+        const double rightPad = 12.0;
+        const double textW = r.x + r.w - rightPad - textX;
+
+        Item item{Item::Card};
+        item.bounds = r;
+        item.daemonId = n.daemonId;
+        item.isNewest = isNewest;
+        item.desktopEntry = n.desktopEntry;
+        item.app = n.app;
+
+        // Age (top-right), swapped for a × on hover.
+        double titleW = textW - 24.0;
+        if (hot && actions_ && n.daemonId != 0) {
+            const Rect xb{r.x + r.w - 30.0, r.y + 10.0, 20.0, 20.0};
+            const bool xhot = xb.contains(hoverX_, hoverY_);
+            TextStyle s{theme::font::iconFamily, 11.0, PANGO_WEIGHT_NORMAL,
+                        xhot ? theme::color::error : theme::color::textSubtle};
+            const Size gs = p.measureText(kClose, s);
+            p.drawText(xb.x + (xb.w - gs.w) / 2.0, xb.y + (xb.h - gs.h) / 2.0, kClose, s);
+            item.closeBtn = xb;
+        } else {
+            const std::string age = ageLabel(n.postedAt, now);
+            if (!age.empty()) {
+                TextStyle as{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL, theme::color::textMuted};
+                const Size asz = p.measureText(age, as);
+                p.drawText(r.x + r.w - rightPad - asz.w, r.y + 13.0, age, as);
+                titleW = textW - asz.w - 8.0;
+            }
+        }
+
+        // Title + body (single line each, ellipsised).
+        const std::string title = n.title.empty() ? (n.app.empty() ? "Notification" : n.app)
+                                                   : n.title;
+        TextStyle ts{theme::font::family, 12.0, PANGO_WEIGHT_BOLD, theme::color::text};
+        p.drawText(textX, r.y + 12.0, title, ts, HAlign::Left, titleW);
+        if (!n.body.empty()) {
+            TextStyle bs{theme::font::family, 11.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
+            p.drawText(textX, r.y + 32.0, n.body, bs, HAlign::Left, textW);
+        }
+
+        // Custom-action row — only on the newest card, since swaync can fire an
+        // action on the latest notification alone. The action index passed to
+        // swaync counts *non-default* actions only (verified: with actions
+        // [default, reply, mute], LatestInvokeAction(1) fires "mute"), so it is
+        // exactly this loop's position `k`.
+        if (isNewest) {
+            std::vector<std::string> labels;  // non-default action labels, in order
+            for (const auto& a : n.actions)
+                if (a.first != "default") labels.push_back(a.second);
+            if (!labels.empty()) {
+                const double bx0 = textX;
+                const double rowW = r.x + r.w - rightPad - bx0;
+                const double gap = 6.0;
+                const double bw = (rowW - (labels.size() - 1) * gap) / labels.size();
+                const double by = r.y + kCardH - 4.0;
+                double bx = bx0;
+                for (size_t k = 0; k < labels.size(); ++k) {
+                    const Rect btn{bx, by, bw, 22.0};
+                    const bool bhot = btn.contains(hoverX_, hoverY_);
+                    p.fillRoundedRect(btn, 6.0,
+                                      bhot ? theme::color::surfaceHover : theme::color::background);
+                    p.strokeRoundedRect(btn, 6.0, theme::color::surfaceHover.withAlpha(0.6), 1.0);
+                    TextStyle bt{theme::font::family, 10.0, PANGO_WEIGHT_BOLD,
+                                 bhot ? theme::color::text : theme::color::textSubtle};
+                    const Size bsz = p.measureText(labels[k], bt);
+                    p.drawText(btn.x + (btn.w - bsz.w) / 2.0, btn.y + (btn.h - bsz.h) / 2.0,
+                               labels[k], bt, HAlign::Left, bw - 8.0);
+                    item.actionBtns.push_back(btn);
+                    item.actionIdx.push_back(static_cast<int>(k));
+                    bx += bw + gap;
+                }
+            }
+        }
+
+        items_.push_back(std::move(item));
+    }
+
     const std::vector<Notification>& list() const {
+        if (!previewNotes_.empty()) return previewNotes_;
         static const std::vector<Notification> kNone;
         return mon_ ? mon_->notifications() : kNone;
     }
 
-    bool isGroupExpanded(const std::string& app) const {
+    bool isExpanded(const std::string& app) const {
         auto it = groupExpanded_.find(app);
         return it != groupExpanded_.end() && it->second;
     }
-
-    Animated& groupProgress(const std::string& app) {
-        return groupProgress_[app];
-    }
-    const Animated& groupProgress(const std::string& app) const {
-        auto it = groupProgress_.find(app);
-        if (it != groupProgress_.end()) return it->second;
-        static const Animated kDefault{0.0};
-        return kDefault;
-    }
-
-    void toggleGroupExpanded(const std::string& app) {
-        bool& exp = groupExpanded_[app];
-        exp = !exp;
-        groupProgress_[app].animateTo(exp ? 1.0 : 0.0, theme::anim::medium,
-                                      ease::inOutQuad);
+    void toggleExpanded(const std::string& app) {
+        auto& e = groupExpanded_[app];
+        e = !e;
     }
 
     const NotificationMonitor* mon_ = nullptr;
     NotificationActions* actions_ = nullptr;
+    DesktopIndex* apps_ = nullptr;
 
-    // Display items rebuilt every draw.
-    std::vector<DisplayItem> items_;
-    // Groups rebuilt every draw (for click hit-testing).
-    std::vector<NotifyGroup> groups_;
+    std::vector<Item> items_;  // rebuilt every draw for hit-testing
     Rect clearAll_{0, 0, 0, 0};
-    bool clearAllHot_ = false;
-    size_t scroll_ = 0;
     double hoverX_ = -1, hoverY_ = -1;
-
-    // Persistent state across redraws.
+    bool closeRequested_ = false;
     std::unordered_map<std::string, bool> groupExpanded_;
-    std::unordered_map<std::string, Animated> groupProgress_;
+    std::vector<Notification> previewNotes_;  // non-empty only in --preview
 };
 
 }  // namespace
+
+// Offline preview of the notification centre with demo data (see Notification.hpp
+// demoNotifications()). Anchored top-right like the live popover.
+void previewNotificationCentre(Painter& p, double anchorX, double anchorY, bool growUp) {
+    NotificationPopover pop(demoNotifications());
+    pop.anchorX = anchorX;
+    pop.anchorY = anchorY;
+    pop.growUp = growUp;
+    pop.draw(p, nowMs());
+}
 
 NotificationIndicator::NotificationIndicator(const SystemBackends& backends)
     : StatusIndicator("notifications", Zone::Right, 650),
       monitor_(backends.notifications),
       actions_(backends.notificationActions),
-      dnd_(backends.dnd) {
+      dnd_(backends.dnd),
+      apps_(backends.desktopIndex) {
     // No monitor (qypr-lock) → the applet does not exist at all.
     visible = monitor_ != nullptr;
 }
@@ -569,7 +527,7 @@ void NotificationIndicator::onBackendUpdate() {
 }
 
 std::unique_ptr<DetailedPopover> NotificationIndicator::createDetailedView() {
-    return std::make_unique<NotificationPopover>(monitor_, actions_);
+    return std::make_unique<NotificationPopover>(monitor_, actions_, apps_);
 }
 
 REGISTER_INDICATOR("notifications", Zone::Right, 650, NotificationIndicator)

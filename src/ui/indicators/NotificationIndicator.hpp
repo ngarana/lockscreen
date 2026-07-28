@@ -20,6 +20,11 @@ namespace qypr {
 class NotificationMonitor;
 class NotificationActions;
 class DndState;
+class DesktopIndex;
+class Painter;
+
+// Render the notification centre with demo data to `p` (offline --preview only).
+void previewNotificationCentre(Painter& p, double anchorX, double anchorY, bool growUp);
 
 class NotificationIndicator : public StatusIndicator {
 public:
@@ -45,6 +50,7 @@ private:
     NotificationMonitor* monitor_ = nullptr;
     NotificationActions* actions_ = nullptr;  // dismiss/clear (null → read-only)
     DndState* dnd_ = nullptr;
+    DesktopIndex* apps_ = nullptr;            // click-to-launch resolution (null ok)
 };
 
 }  // namespace qypr

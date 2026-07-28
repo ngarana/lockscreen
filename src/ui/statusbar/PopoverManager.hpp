@@ -32,6 +32,7 @@ public:
     // Input forwarding. Returns true if handled/consumed.
     bool handleClick(double x, double y);
     bool handleDrag(double x, double y);
+    bool handleMotion(double x, double y);
     bool handleScroll(double dx, double dy);
     bool handleKey(uint32_t keysym);
     bool handleText(const std::string& utf8);

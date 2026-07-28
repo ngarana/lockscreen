@@ -128,8 +128,25 @@ StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& b
 
 StatusBar::~StatusBar() {
     if (tickTimer_ >= 0) loop_.removeTimer(tickTimer_);
+    if (dismissTimer_ >= 0) loop_.removeTimer(dismissTimer_);
     if (measureCr_) cairo_destroy(measureCr_);
     if (measureSurface_) cairo_surface_destroy(measureSurface_);
+}
+
+void StatusBar::resetAutoDismiss() {
+    if (dismissTimer_ >= 0) { loop_.removeTimer(dismissTimer_); dismissTimer_ = -1; }
+    DetailedPopover* p = popovers_.active();
+    if (!p) return;
+    const int ms = p->autoDismissMs();
+    if (ms <= 0) return;  // popover does not opt into auto-dismiss (e.g. QS)
+    dismissTimer_ = loop_.addTimer(ms, /*repeat=*/false, [this] {
+        dismissTimer_ = -1;  // the loop already removed the one-shot fd
+        DetailedPopover* cur = popovers_.active();
+        if (!cur || cur->autoDismissMs() <= 0) return;  // gone or not transient
+        // Keep it up while the pointer rests over it; otherwise let it go.
+        if (cur->contains(lastPtrX_, lastPtrY_)) resetAutoDismiss();
+        else { popovers_.closeActive(); host_.invalidate(); }
+    });
 }
 
 void StatusBar::setSessionContentVisible(bool v) {
@@ -323,13 +340,25 @@ bool StatusBar::animating(int64_t now) const {
 }
 
 bool StatusBar::handlePointerMotion(double x, double y, int64_t now) {
+    lastPtrX_ = x;
+    lastPtrY_ = y;
     if (popovers_.active() == &qsPanel_ && qsPanel_.activeDragTile_) {
         popovers_.handleDrag(x, y);
         host_.invalidate();
         return true;
     }
     // An open popover hides the hover-tooltip (the popover's own title serves).
-    if (popovers_.active()) tooltipTarget_ = nullptr;
+    if (popovers_.active()) {
+        tooltipTarget_ = nullptr;
+        // Let the popover track the cursor for its internal hover states. When
+        // the pointer is inside it, that's the whole story — repaint and stop,
+        // so we don't also light up an indicator behind the panel.
+        if (popovers_.handleMotion(x, y)) {
+            resetAutoDismiss();  // interaction keeps a transient panel alive
+            host_.invalidate();
+            return true;
+        }
+    }
 
     // Hit test indicators. The hovered indicator also drives the hover-tooltip
     // (Phase 6 polish): we record the one pointer is over, and the timestamp
@@ -376,6 +405,7 @@ void StatusBar::activateIndicator(StatusIndicator& ind) {
                                                                      : ind.bounds.x + ind.bounds.w);
             popovers_.open(std::move(view), anchorX, 0);
             anchorPopoverY(*p);
+            resetAutoDismiss();  // arm auto-dismiss if this popover opts in
         }
     }
     host_.invalidate();
@@ -403,6 +433,7 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
                 if (popovers_.active() && popovers_.active()->consumeCloseRequest()) {
                     popovers_.closeActive();
                 }
+                resetAutoDismiss();  // clicking counts as interaction (or re-arms)
             } else if (popovers_.active() == &qsPanel_) {
                 qsPanel_.activeDragTile_ = nullptr;  // release slider drag
             }
@@ -472,6 +503,7 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
 
 void StatusBar::handlePointerLeave(int64_t now) {
     (void)now;
+    lastPtrX_ = lastPtrY_ = -1.0;  // pointer gone → a transient panel may time out
     // Dismiss Quick Settings when the pointer leaves the surface entirely
     // (switching to another window/desktop).
     if (popovers_.active() == &qsPanel_) {
@@ -490,6 +522,7 @@ void StatusBar::handlePointerLeave(int64_t now) {
 
 bool StatusBar::handleScroll(double x, double y, double dx, double dy) {
     if (popovers_.active() && popovers_.active()->contains(x, y)) {
+        resetAutoDismiss();  // scrolling the panel is interaction
         return popovers_.handleScroll(dx, dy);
     }
 
@@ -568,6 +601,7 @@ void StatusBar::toggleQuickSettings() {
         popovers_.openBorrowed(&qsPanel_, bounds.x + bounds.w, 0);
         anchorPopoverY(qsPanel_);
     }
+    resetAutoDismiss();  // QS opts out; this cancels any pending transient timer
 }
 
 bool StatusBar::cycleFocus(bool reverse) {

@@ -272,6 +272,7 @@ void NotificationMonitor::handleNotify(sd_bus_message* m) {
     uint8_t urgency = 1;  // normal
     bool transient = false;
     bool sensitive = isAppSensitive(app ? app : "");
+    std::string desktopEntry;
 
     if (sd_bus_message_enter_container(m, SD_BUS_TYPE_ARRAY, "{sv}") > 0) {
         while (sd_bus_message_enter_container(m, SD_BUS_TYPE_DICT_ENTRY, "sv") > 0) {
@@ -294,6 +295,11 @@ void NotificationMonitor::handleNotify(sd_bus_message* m) {
                 if (key && std::strcmp(key, "visibility") == 0) {
                     if (valStr == "private" || valStr == "secret")
                         sensitive = true;
+                } else if (key && (std::strcmp(key, "desktop-entry") == 0 ||
+                                   std::strcmp(key, "desktop_entry") == 0)) {
+                    // The .desktop id of the sending app — used to launch/focus
+                    // it when the user clicks the card.
+                    desktopEntry = valStr;
                 }
             }
             sd_bus_message_exit_container(m);
@@ -311,6 +317,7 @@ void NotificationMonitor::handleNotify(sd_bus_message* m) {
     n.title = summary ? summary : "";
     n.body = body ? body : "";
     n.icon = icon ? icon : "";
+    n.desktopEntry = std::move(desktopEntry);
     n.urgency = urgency;
     n.sensitive = sensitive;
     n.actions = std::move(actions);

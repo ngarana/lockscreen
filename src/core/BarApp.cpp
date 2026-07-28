@@ -10,6 +10,7 @@
 #include "core/Types.hpp"
 #include "render/Painter.hpp"
 #include "ui/Theme.hpp"
+#include "ui/indicators/NotificationIndicator.hpp"  // previewNotificationCentre()
 #include "wayland/Seat.hpp"  // Mod bits
 
 namespace qypr {
@@ -231,6 +232,19 @@ int BarApp::preview(const std::string& path, int width, int height) {
     }
     usleep(400 * 1000);
     renderToPng(statusBar_, stripExt(path) + "-dnd.png", width, height);
+
+    // 4. Notification centre with demo data (anchored top-right like the live
+    //    popover). Rendered directly — independent of the configured modules.
+    {
+        cairo_surface_t* s = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+        cairo_t* cr = cairo_create(s);
+        Painter p(cr);
+        previewNotificationCentre(p, width - 20.0, statusBar_.bounds.y + statusBar_.bounds.h + 6.0,
+                                  geom_.bottom);
+        cairo_destroy(cr);
+        cairo_surface_write_to_png(s, (stripExt(path) + "-notif.png").c_str());
+        cairo_surface_destroy(s);
+    }
 
     std::fprintf(stderr, "qypr-bar: wrote preview frames near %s\n", path.c_str());
     return 0;

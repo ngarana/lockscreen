@@ -21,6 +21,11 @@ public:
     // Input
     virtual bool handleClick(double x, double y) { return false; }
     virtual bool handleDrag(double x, double y) { return false; }
+    // Pointer moved with no button held. Popovers with internal hover states
+    // (e.g. the notification centre's cards) override this to track the cursor.
+    // Return true when the pointer is inside the popover so the host repaints and
+    // suppresses the indicator hover-tooltip behind it. Default: pointer-only.
+    virtual bool handleMotion(double x, double y) { return false; }
     virtual bool handleScroll(double dx, double dy) { return false; }
     virtual bool handleKey(uint32_t keysym) { return false; }
     // Committed text (UTF-8) from the keyboard. Only reaches a popover whose
@@ -31,6 +36,12 @@ public:
     // (BarApp) grabs keyboard focus for the bar surface while such a popover is
     // open, and releases it on close. Default: pointer-only.
     virtual bool wantsKeyboard() const { return false; }
+
+    // Auto-dismiss: when > 0, the host closes this popover after that many
+    // milliseconds without pointer interaction (motion/click/scroll over it).
+    // Default 0 = stay open until dismissed. The notification centre uses this so
+    // it behaves like a transient panel.
+    virtual int autoDismissMs() const { return 0; }
 
     // Polled by the host right after handleClick: return true (once) to ask the
     // manager to close this popover — e.g. a menu that just fired an item. The

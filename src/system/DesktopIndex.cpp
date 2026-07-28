@@ -146,7 +146,10 @@ void DesktopIndex::load() {
             if (fname.size() < 9 || fname.compare(fname.size() - 8, 8, ".desktop") != 0) continue;
             if (!seen.insert(fname).second) continue;  // already provided by an earlier dir
             DesktopEntry e;
-            if (parseEntry(readFile(dir + "/" + fname), e)) entries_.push_back(std::move(e));
+            if (parseEntry(readFile(dir + "/" + fname), e)) {
+                e.id = fname.substr(0, fname.size() - 8);  // strip ".desktop"
+                entries_.push_back(std::move(e));
+            }
         }
         closedir(d);
     }
@@ -170,6 +173,33 @@ std::vector<const DesktopEntry*> DesktopIndex::search(const std::string& query) 
     }
     prefix.insert(prefix.end(), substr.begin(), substr.end());  // both already alphabetical
     return prefix;
+}
+
+const DesktopEntry* DesktopIndex::resolve(const std::string& key) const {
+    if (key.empty()) return nullptr;
+    const std::string q = lower(key);
+    // The trailing dotted component, so an app-id like "org.telegram.desktop"
+    // also matches an entry keyed "telegram", and vice-versa.
+    auto tail = [](const std::string& s) {
+        const size_t dot = s.rfind('.');
+        return dot == std::string::npos ? s : s.substr(dot + 1);
+    };
+    const std::string qtail = tail(q);
+
+    // 1. exact desktop-file id.
+    for (const auto& e : entries_)
+        if (lower(e.id) == q) return &e;
+    // 2. trailing component of either side matches.
+    for (const auto& e : entries_) {
+        const std::string id = lower(e.id);
+        if (tail(id) == qtail || id == qtail || tail(id) == q) return &e;
+    }
+    // 3. exact display name, then name prefix.
+    for (const auto& e : entries_)
+        if (lower(e.name) == q) return &e;
+    for (const auto& e : entries_)
+        if (lower(e.name).rfind(q, 0) == 0) return &e;
+    return nullptr;
 }
 
 bool spawnDetached(const std::string& cmd, bool terminal) {

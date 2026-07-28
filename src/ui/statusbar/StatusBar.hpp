@@ -101,6 +101,10 @@ private:
     void toggleQuickSettings();
     void activateIndicator(StatusIndicator& ind);
     void notifyBackendUpdate();
+    // (Re)arm the active popover's auto-dismiss timer from its autoDismissMs().
+    // Called on open and on every interaction; a resting pointer over the panel
+    // keeps it alive. No-op for popovers that don't opt in (autoDismissMs() == 0).
+    void resetAutoDismiss();
     // Point a popover away from the anchored screen edge (down for a top bar,
     // up for a bottom bar).
     void anchorPopoverY(DetailedPopover& pop) const;
@@ -143,6 +147,12 @@ private:
     // 1s tick driving indicator poll() — the bar's own timer, never
     // LockScreen's (decoupling principle 1).
     int tickTimer_ = -1;
+
+    // Auto-dismiss timer for transient popovers (the notification centre). Reset
+    // on interaction; the callback keeps the panel up while the pointer rests
+    // over it (tracked by lastPtr*). -1 when unarmed.
+    int dismissTimer_ = -1;
+    double lastPtrX_ = -1.0, lastPtrY_ = -1.0;
 
     // Offscreen 1x1 context so layout() can measure text without a frame.
     cairo_surface_t* measureSurface_ = nullptr;

@@ -125,6 +125,11 @@ bool PopoverManager::handleDrag(double x, double y) {
     return false;
 }
 
+bool PopoverManager::handleMotion(double x, double y) {
+    DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;
+    return cur ? cur->handleMotion(x, y) : false;
+}
+
 bool PopoverManager::handleScroll(double dx, double dy) {
     DetailedPopover* cur = active_.get() ? active_.get() : borrowed_;
     if (cur) {

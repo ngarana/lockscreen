@@ -12,6 +12,7 @@
 namespace qypr {
 
 struct DesktopEntry {
+    std::string id;     // desktop-file id (basename without ".desktop")
     std::string name;   // display name
     std::string exec;   // command, field codes (%f/%U/…) stripped
     std::string icon;   // freedesktop icon name ("" if none)
@@ -30,6 +31,13 @@ public:
     // Entries whose name matches `query` (case-insensitive), prefix matches
     // first, then substring, each alphabetical. Empty query → all, alphabetical.
     std::vector<const DesktopEntry*> search(const std::string& query) const;
+
+    // Best-effort resolve an app to a launchable entry, for click-to-launch from
+    // a notification. `key` is the notification's `desktop-entry` hint or its
+    // app-name. Matched (case-insensitively) as: exact desktop-file id, then the
+    // id's trailing component (org.mozilla.firefox → firefox), then exact display
+    // name, then name prefix. Null when nothing matches.
+    const DesktopEntry* resolve(const std::string& key) const;
 
     // --- pure helpers (static; unit-tested without the filesystem) ---
     // Parse one .desktop file body. False (skip) when it is NoDisplay/Hidden,
