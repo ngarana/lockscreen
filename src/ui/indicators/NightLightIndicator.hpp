@@ -1,4 +1,4 @@
-// NightLightIndicator.hpp - Night Light bar applet + detailed popover.
+// NightLightIndicator.hpp - Night Light bar applet + compact slider popover.
 #pragma once
 
 #include "ui/statusbar/StatusIndicator.hpp"
@@ -16,10 +16,10 @@ public:
     std::string tooltip() const override;
     Color iconColor() const override;
     void onBackendUpdate() override;
-    bool onClick(double x, double y) override;
     bool onScroll(double dx, double dy, double x, double y) override;
 
     std::unique_ptr<QSTile> createTile() override;
+    bool hasDetailedView() const override { return backend_ != nullptr; }
     std::unique_ptr<DetailedPopover> createDetailedView() override;
 
 private:

@@ -206,10 +206,22 @@ double NightLightBackend::sliderValue() const {
 
 void NightLightBackend::setSliderValue(double v) {
     v = std::clamp(v, 0.0, 1.0);
+
+    // Treat the zero end of the slider as off, just like the backlight and
+    // volume controls treat their minimum as a usable endpoint. Keeping the
+    // temperature at daylight while disabled also makes the next drag start
+    // from a neutral reference instead of the previous warm setting.
+    if (v <= 0.0) {
+        temperature_ = kMaxTemperature;
+        if (enabled_) setEnabled(false);
+        return;
+    }
+
     // Map slider 0.0 → 6500 K (off), 1.0 → 2700 K (warmest).
     uint32_t k = static_cast<uint32_t>(
         kMaxTemperature - v * (kMaxTemperature - kMinTemperature));
     setTemperature(k);
+    if (!enabled_) setEnabled(true);
 }
 
 void NightLightBackend::armAll() {
