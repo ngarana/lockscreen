@@ -7,9 +7,14 @@
 //
 // Format:
 //   # full-line comments (# or //)
+//   import theme/gruvbox.conf   ; load another .conf file (relative to this one)
 //   [section]
 //   key = value          ; value keeps inner spaces, ends are trimmed
 //   list = a, b, c        ; getList() splits on commas
+//
+// The `import` directive loads another .conf relative to the importing file's
+// directory.  Imports are processed before the main file's content, so the main
+// file's keys override imported ones.  Circular imports are silently skipped.
 //
 // Only full-line comments are supported: a trailing "#" would mangle values
 // like a strftime format. A missing or unreadable file is never an error —
@@ -18,6 +23,7 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -53,6 +59,9 @@ public:
 
 private:
     static std::string makeKey(const std::string& section, const std::string& key);
+    // Load one file's key=value pairs into values_, with optional import
+    // processing.  `imported` tracks already-loaded paths to break cycles.
+    bool loadFile(const std::string& path, std::set<std::string>& imported, bool processImports);
 
     std::map<std::string, std::string> values_;  // "section.key" -> raw value
     bool loaded_ = false;

@@ -1,6 +1,7 @@
 #include "core/Config.hpp"
 
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 
 namespace qypr {
@@ -26,6 +27,13 @@ bool isComment(const std::string& line) {
     return line.empty() || line[0] == '#' || line.rfind("//", 0) == 0;
 }
 
+std::string resolveImportPath(const std::string& importingFile, const std::string& importArg) {
+    namespace fs = std::filesystem;
+    fs::path parent = fs::path(importingFile).parent_path();
+    fs::path resolved = parent / importArg;
+    return resolved.string();
+}
+
 }  // namespace
 
 std::string Config::configDir() {
@@ -44,15 +52,25 @@ std::string Config::makeKey(const std::string& section, const std::string& key) 
     return section + "." + key;
 }
 
-bool Config::load(const std::string& path) {
-    path_ = path.empty() ? defaultPath() : path;
-    values_.clear();
-    loaded_ = false;
+bool Config::loadFile(const std::string& path, std::set<std::string>& imported,
+                       bool processImports) {
+    // Resolve the real (canonical) path for cycle detection.
+    std::string real;
+    {
+        std::error_code ec;
+        real = std::filesystem::canonical(path, ec);
+        if (ec) real = path;  // file may not exist — still track literal
+    }
+    if (imported.count(real)) return false;  // circular import, silently skip
+    imported.insert(real);
 
-    std::ifstream f(path_);
-    if (!f.is_open()) return false;  // not an error: compiled defaults apply
+    std::ifstream f(path);
+    if (!f.is_open()) return false;
 
     std::string line, section;
+    std::vector<std::pair<std::string, std::string>> localPairs;  // ordered imports
+    std::vector<std::string> imports;
+
     while (std::getline(f, line)) {
         line = trim(line);
         if (isComment(line)) continue;
@@ -64,14 +82,41 @@ bool Config::load(const std::string& path) {
         }
 
         const size_t eq = line.find('=');
-        if (eq == std::string::npos) continue;  // ignore junk rather than fail
-        const std::string key = trim(line.substr(0, eq));
-        if (key.empty()) continue;
-        values_[makeKey(section, key)] = trim(line.substr(eq + 1));
+        if (eq != std::string::npos) {
+            const std::string key = trim(line.substr(0, eq));
+            if (!key.empty()) {
+                localPairs.emplace_back(makeKey(section, key), trim(line.substr(eq + 1)));
+            }
+            continue;
+        }
+
+        // `import` directive: only honoured in the main/top-level file, not in
+        // imported ones (imports inside imports would complicate order guarantees).
+        if (processImports && line.rfind("import", 0) == 0 && line.size() > 6) {
+            const std::string arg = trim(line.substr(6));
+            if (!arg.empty()) imports.push_back(resolveImportPath(path, arg));
+        }
     }
 
-    loaded_ = true;
+    // Load imports first so the local file's keys override them.
+    for (const auto& imp : imports) loadFile(imp, imported, false);
+
+    // Write pairs in file order (last-wins within the same file).
+    for (const auto& [k, v] : localPairs) values_[k] = v;
+
     return true;
+}
+
+bool Config::load(const std::string& path) {
+    path_ = path.empty() ? defaultPath() : path;
+    values_.clear();
+    loaded_ = false;
+
+    std::set<std::string> imported;
+    const bool ok = loadFile(path_, imported, true);
+
+    loaded_ = true;
+    return ok;
 }
 
 bool Config::has(const std::string& section, const std::string& key) const {
