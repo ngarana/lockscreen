@@ -3,6 +3,7 @@
 
 #include "ui/statusbar/IndicatorRegistry.hpp"
 #include "ui/statusbar/QSTile.hpp"
+#include "ui/statusbar/SliderPopover.hpp"
 
 namespace qypr {
 
@@ -68,6 +69,22 @@ std::unique_ptr<QSTile> BrightnessIndicator::createTile() {
         [backend](double v) {
             if (backend) backend->setFraction(v);
         });
+}
+
+std::unique_ptr<DetailedPopover> BrightnessIndicator::createDetailedView() {
+    if (!backend_) return nullptr;
+
+    auto snap = &lastSnap_;
+    auto backend = backend_;
+    auto tile = std::make_unique<QSSliderTile>(
+        "󰃠",
+        [snap]() { return snap->fraction(); },
+        [backend](double v) {
+            if (backend) backend->setFraction(v);
+        },
+        [snap]() { return std::string(brightnessIcon(snap->fraction())); },
+        nullptr, nullptr, "Brightness");
+    return std::make_unique<SliderPopover>(std::move(tile));
 }
 
 REGISTER_INDICATOR("brightness", Zone::Right, 100, BrightnessIndicator)

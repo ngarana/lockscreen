@@ -10,6 +10,7 @@
 #include "ui/Theme.hpp"
 #include "ui/statusbar/IndicatorRegistry.hpp"
 #include "ui/statusbar/QSTile.hpp"
+#include "ui/statusbar/SliderPopover.hpp"
 
 namespace qypr {
 
@@ -229,7 +230,20 @@ std::unique_ptr<QSTile> VolumeIndicator::createTile() {
 
 std::unique_ptr<DetailedPopover> VolumeIndicator::createDetailedView() {
     if (!backend_) return nullptr;
-    return std::make_unique<AudioPopover>(backend_, sessionSurface_);
+
+    auto snap = &lastSnap_;
+    auto backend = backend_;
+    auto tile = std::make_unique<QSVolumeTile>(
+        [snap]() { return snap->level; },
+        [backend](double v) {
+            if (backend) backend->setLevel(v);
+        },
+        [snap]() { return std::string(volumeIcon(*snap)); },
+        [backend]() {
+            if (backend) backend->toggleMute();
+        },
+        [snap]() { return snap->muted; });
+    return std::make_unique<SliderPopover>(std::move(tile));
 }
 
 REGISTER_INDICATOR("volume", Zone::Right, 200, VolumeIndicator)

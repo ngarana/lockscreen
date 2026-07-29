@@ -23,6 +23,8 @@ public:
     bool onScroll(double dx, double dy, double x, double y) override;
 
     std::unique_ptr<QSTile> createTile() override;
+    bool hasDetailedView() const override { return backend_ != nullptr; }
+    std::unique_ptr<DetailedPopover> createDetailedView() override;
 
 private:
     BrightnessBackend* backend_ = nullptr;
