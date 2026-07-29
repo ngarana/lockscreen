@@ -61,24 +61,36 @@ std::array<double, 3> temperatureToRgb(uint32_t kelvin) {
 }
 
 // Fill a gamma ramp (one channel, `size` entries) by scaling the identity
-// ramp by `multiplier`.  The ramp must be monotonically increasing for most
-// compositors; the identity ramp is naturally monotonic, and scaling by a
-// constant preserves that property.
+// ramp by `multiplier`.  The endpoint must not be pinned back to 65535: doing
+// so makes white neutral while lower values are tinted, which produces a
+// discontinuous hue shift instead of a colour-temperature change.
 void fillChannelRamp(uint16_t* dst, uint32_t size, double multiplier) {
+    if (size == 0) return;
+    if (size == 1) {
+        dst[0] = 0;
+        return;
+    }
     for (uint32_t i = 0; i < size; ++i) {
         double val = multiplier * static_cast<double>(i) / (size - 1);
         dst[i] = static_cast<uint16_t>(
             std::clamp(val * kGammaMax, 0.0, static_cast<double>(kGammaMax)));
     }
-    // Pin endpoints for safety.
+    // Preserve the black point without undoing the channel colour balance at
+    // the white point.
     dst[0] = 0;
-    dst[size - 1] = kGammaMax;
 }
 
 // Build the three 16-bit ramps (R, G, B) for the given temperature into the
 // pre-sized buffer `dst` (3 * size * sizeof(uint16_t) bytes).
 void fillRampForTemperature(uint16_t* dst, uint32_t size, uint32_t kelvin) {
-    auto [r, g, b] = temperatureToRgb(kelvin);
+    const auto rgb = temperatureToRgb(kelvin);
+    // The blackbody approximation is not exactly neutral at 6500 K. Normalize
+    // against that daylight reference so the slider's 6500 K/off position is
+    // an actual identity ramp instead of applying a small permanent tint.
+    const auto daylight = temperatureToRgb(NightLightBackend::kMaxTemperature);
+    const double r = std::clamp(rgb[0] / std::max(daylight[0], 1e-9), 0.0, 1.0);
+    const double g = std::clamp(rgb[1] / std::max(daylight[1], 1e-9), 0.0, 1.0);
+    const double b = std::clamp(rgb[2] / std::max(daylight[2], 1e-9), 0.0, 1.0);
     fillChannelRamp(dst + 0 * size, size, r);
     fillChannelRamp(dst + 1 * size, size, g);
     fillChannelRamp(dst + 2 * size, size, b);
