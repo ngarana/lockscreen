@@ -36,6 +36,9 @@ public:
     bool handleScroll(double dx, double dy) override;
     bool handleKey(uint32_t keysym) override;
     bool consumeCloseRequest() override;
+    // Persistent: QS is a deliberate panel with its own pointer-leave dismissal;
+    // it must not time out while open.
+    int autoDismissMs() const override { return 0; }
 
     Rect findTileBounds(const std::string& tileTitle) const;
 

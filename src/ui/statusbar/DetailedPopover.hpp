@@ -39,10 +39,12 @@ public:
     virtual bool wantsKeyboard() const { return false; }
 
     // Auto-dismiss: when > 0, the host closes this popover after that many
-    // milliseconds without pointer interaction (motion/click/scroll over it).
-    // Default 0 = stay open until dismissed. The notification centre uses this so
-    // it behaves like a transient panel.
-    virtual int autoDismissMs() const { return 0; }
+    // milliseconds without *interaction* (click/scroll/drag/keyboard over it — a
+    // parked pointer does not count). Every bar popover is transient by default,
+    // so it defaults to a timeout; the persistent ones (Quick Settings, the
+    // keyboard-driven launcher) override this to 0. The notification centre and
+    // slider popup set their own values.
+    virtual int autoDismissMs() const { return 6000; }
 
     // Polled by the host right after handleClick: return true (once) to ask the
     // manager to close this popover — e.g. a menu that just fired an item. The

@@ -154,6 +154,11 @@ private:
     int dismissTimer_ = -1;
     double lastPtrX_ = -1.0, lastPtrY_ = -1.0;
 
+    // A pointer press landed inside the active (non-QS) popover: route the
+    // following motion to it as a drag so the compact slider popup tracks the
+    // thumb. QS keeps its own activeDragTile_ path. Cleared on release/leave.
+    bool popoverDragging_ = false;
+
     // Offscreen 1x1 context so layout() can measure text without a frame.
     cairo_surface_t* measureSurface_ = nullptr;
     cairo_t* measureCr_ = nullptr;

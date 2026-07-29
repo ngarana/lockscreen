@@ -148,9 +148,11 @@ void StatusBar::resetAutoDismiss() {
         dismissTimer_ = -1;  // the loop already removed the one-shot fd
         DetailedPopover* cur = popovers_.active();
         if (!cur || cur->autoDismissMs() <= 0) return;  // gone or not transient
-        // Keep it up while the pointer rests over it; otherwise let it go.
-        if (cur->contains(lastPtrX_, lastPtrY_)) resetAutoDismiss();
-        else { popovers_.closeActive(); host_.invalidate(); }
+        // This is an inactivity timer, not a hover timer. A parked pointer is
+        // not interaction, so transient popovers close even when the pointer
+        // remains over them. Click, scroll, drag, and keyboard paths re-arm it.
+        popovers_.closeActive();
+        host_.invalidate();
     });
 }
 
@@ -361,6 +363,15 @@ bool StatusBar::handlePointerMotion(double x, double y, int64_t now) {
         host_.invalidate();
         return true;
     }
+    // A press captured a non-QS popover (the slider popup): keep feeding it the
+    // pointer as a drag, even past its bounds, so the thumb follows. Dragging is
+    // interaction, so it re-arms the inactivity timer.
+    if (popoverDragging_ && popovers_.active() && popovers_.active() != &qsPanel_) {
+        popovers_.handleDrag(x, y);
+        resetAutoDismiss();
+        host_.invalidate();
+        return true;
+    }
     // An open popover hides the hover-tooltip (the popover's own title serves).
     if (popovers_.active()) {
         tooltipTarget_ = nullptr;
@@ -368,7 +379,6 @@ bool StatusBar::handlePointerMotion(double x, double y, int64_t now) {
         // the pointer is inside it, that's the whole story — repaint and stop,
         // so we don't also light up an indicator behind the panel.
         if (popovers_.handleMotion(x, y)) {
-            resetAutoDismiss();  // interaction keeps a transient panel alive
             host_.invalidate();
             return true;
         }
@@ -442,19 +452,27 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
     if (popovers_.active()) {
         if (popovers_.active()->contains(x, y)) {
             if (pressed) {
+                const bool isQS = popovers_.active() == &qsPanel_;
                 popovers_.handleClick(x, y);
                 // A menu item may ask to close its popover after firing.
                 if (popovers_.active() && popovers_.active()->consumeCloseRequest()) {
                     popovers_.closeActive();
+                } else if (!isQS) {
+                    // Capture the drag so a slider-style popup tracks the pointer.
+                    popoverDragging_ = true;
                 }
                 resetAutoDismiss();  // clicking counts as interaction (or re-arms)
-            } else if (popovers_.active() == &qsPanel_) {
-                qsPanel_.activeDragTile_ = nullptr;  // release slider drag
+            } else {
+                popoverDragging_ = false;  // release ends any popover drag
+                if (popovers_.active() == &qsPanel_) {
+                    qsPanel_.activeDragTile_ = nullptr;  // release slider drag
+                }
             }
             host_.invalidate();
             return true;
         } else if (pressed) {
             // Clicked outside the active popover: dismiss it
+            popoverDragging_ = false;
             popovers_.closeActive();
             host_.invalidate();
             return true;
@@ -518,6 +536,7 @@ bool StatusBar::handlePointerButton(double x, double y, uint32_t button, bool pr
 void StatusBar::handlePointerLeave(int64_t now) {
     (void)now;
     lastPtrX_ = lastPtrY_ = -1.0;  // pointer gone → a transient panel may time out
+    popoverDragging_ = false;
     // Dismiss Quick Settings when the pointer leaves the surface entirely
     // (switching to another window/desktop).
     if (popovers_.active() == &qsPanel_) {
@@ -568,6 +587,8 @@ bool StatusBar::handleKey(uint32_t keysym) {
         } else if (isQS && !handled) {
             // Close Quick Settings on any unhandled keypress (keyboard dismissal).
             popovers_.closeActive();
+        } else if (handled) {
+            resetAutoDismiss();  // a keyboard change (slider arrows) is interaction
         }
         host_.invalidate();
         return handled || isQS;

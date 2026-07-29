@@ -28,6 +28,8 @@ public:
 
     // Keyboard-first: grab focus while open so the user can just start typing.
     bool wantsKeyboard() const override { return true; }
+    // Persistent: a live search box must not vanish mid-type.
+    int autoDismissMs() const override { return 0; }
     bool handleText(const std::string& utf8) override;  // append to the query
     bool handleKey(uint32_t keysym) override;           // backspace / arrows / enter
     bool handleClick(double x, double y) override;       // click a row to launch

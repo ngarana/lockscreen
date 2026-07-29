@@ -15,8 +15,11 @@ class SliderPopover final : public DetailedPopover {
 public:
     explicit SliderPopover(std::unique_ptr<QSTile> tile) : tile_(std::move(tile)) {}
 
+    // Compact, single-control popup: one QS-style tile plus equal padding on
+    // all sides. It is intentionally much smaller than the full QS panel.
     double contentWidth() const override { return 360.0; }
     double contentHeight() const override { return 84.0; }
+    int autoDismissMs() const override { return 6000; }
 
     void draw(Painter& p, int64_t now) override {
         Rect b = getBounds();
