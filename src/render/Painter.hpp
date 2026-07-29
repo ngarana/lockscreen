@@ -43,8 +43,12 @@ public:
 
     // Shapes
     void fillRect(const Rect& r, const Color& c);
+    void fillRectSource(const Rect& r, const Color& c);
     void fillRoundedRect(const Rect& r, double radius, const Color& c);
+    void fillRoundedRectSource(const Rect& r, double radius, const Color& c);
+    void fillCircleSource(double cx, double cy, double radius, const Color& c);
     void strokeRoundedRect(const Rect& r, double radius, const Color& c, double lineWidth);
+    void strokeRoundedRectSource(const Rect& r, double radius, const Color& c, double lineWidth);
     // Frosted-glass panel: the translucent `base` fill, a soft light sheen that
     // fades from the top edge (the frosted-glass highlight), a bright hairline
     // along the very top, and the `border` stroke — the shared card look for the

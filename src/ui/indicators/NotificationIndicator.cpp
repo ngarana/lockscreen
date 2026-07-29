@@ -154,10 +154,12 @@ public:
         Rect b = getBounds();
         b.y += (growUp ? 1.0 : -1.0) * (1.0 - openProgress_.value(now)) * 6.0;
 
-        // Panel: same themed frosted slab the rest of the suite uses (frosted in
-        // glass mode, opaque in solid) — the cards sit a shade lighter on top.
-        p.fillGlass(b, theme::statusbar::popoverRadius, theme::color::background,
-                    theme::color::surfaceHover.withAlpha(0.6));
+        // The standalone bar uses the same backdrop as the strip; the lock
+        // screen keeps the notification panel's original glass card.
+        if (!drawSharedBackdrop(p, b, theme::statusbar::popoverRadius)) {
+            p.fillGlass(b, theme::statusbar::popoverRadius, theme::color::background,
+                        theme::statusbar::panelSurfaceHover().withAlpha(0.6));
+        }
 
         items_.clear();
         clearAll_ = {0, 0, 0, 0};
@@ -175,7 +177,7 @@ public:
             const double cx = b.x + b.w - kPad - sz.w;
             clearAll_ = {cx - 8.0, y - 4.0, sz.w + 16.0, 22.0};
             if (clearAll_.contains(hoverX_, hoverY_))
-                p.fillRoundedRect(clearAll_, 6.0, theme::color::surfaceHover.withAlpha(0.5));
+            p.fillRoundedRectSource(clearAll_, 6.0, theme::statusbar::panelSurfaceHover().withAlpha(0.5));
             p.drawText(cx, y, "Clear all", ca);
         }
         y += kHeaderH;
@@ -309,7 +311,7 @@ private:
                          const Color& accent, bool expanded) {
         const Rect r{b.x + kPad, y, b.w - kPad * 2.0, kGroupHeaderH};
         const bool hot = r.contains(hoverX_, hoverY_);
-        if (hot) p.fillRoundedRect(r, 8.0, theme::color::surface.withAlpha(0.5));
+        if (hot) p.fillRoundedRectSource(r, 8.0, theme::statusbar::panelSurface().withAlpha(0.5));
 
         TextStyle appStyle{theme::font::family, 11.0, PANGO_WEIGHT_BOLD, accent};
         p.drawText(r.x + 8.0, r.y + 6.0, g.app, appStyle, HAlign::Left, r.w - 90.0);
@@ -350,8 +352,11 @@ private:
     void drawCard(Painter& p, const Rect& r, const Notification& n, const Color& accent,
                   int64_t now, bool isNewest) {
         const bool hot = r.contains(hoverX_, hoverY_);
-        p.fillRoundedRect(r, 10.0, hot ? theme::color::surfaceHover : theme::color::surface);
-        p.strokeRoundedRect(r, 10.0, theme::color::surfaceHover.withAlpha(0.5), 1.0);
+        p.fillRoundedRectSource(r, 10.0,
+                                hot ? theme::statusbar::panelSurfaceHover()
+                                    : theme::statusbar::panelSurface());
+        p.strokeRoundedRectSource(r, 10.0,
+                                  theme::statusbar::panelSurfaceHover().withAlpha(0.5), 1.0);
         // Accent spine.
         p.fillRoundedRect({r.x, r.y + 8.0, kAccentBarW, r.h - 16.0}, 1.5, accent);
 
@@ -424,8 +429,10 @@ private:
                     const Rect btn{bx, by, bw, 22.0};
                     const bool bhot = btn.contains(hoverX_, hoverY_);
                     p.fillRoundedRect(btn, 6.0,
-                                      bhot ? theme::color::surfaceHover : theme::color::background);
-                    p.strokeRoundedRect(btn, 6.0, theme::color::surfaceHover.withAlpha(0.6), 1.0);
+                                      bhot ? theme::statusbar::panelSurfaceHover()
+                                           : theme::color::background);
+                    p.strokeRoundedRectSource(btn, 6.0,
+                                              theme::statusbar::panelSurfaceHover().withAlpha(0.6), 1.0);
                     TextStyle bt{theme::font::family, 10.0, PANGO_WEIGHT_BOLD,
                                  bhot ? theme::color::text : theme::color::textSubtle};
                     const Size bsz = p.measureText(labels[k], bt);
@@ -472,8 +479,10 @@ private:
 
 // Offline preview of the notification centre with demo data (see Notification.hpp
 // demoNotifications()). Anchored top-right like the live popover.
-void previewNotificationCentre(Painter& p, double anchorX, double anchorY, bool growUp) {
+void previewNotificationCentre(Painter& p, double anchorX, double anchorY, bool growUp,
+                               bool backdropEnabled, double backdropAlpha) {
     NotificationPopover pop(demoNotifications());
+    pop.setBackdrop(backdropEnabled, backdropAlpha);
     pop.anchorX = anchorX;
     pop.anchorY = anchorY;
     pop.growUp = growUp;

@@ -18,16 +18,36 @@ Color StatusIndicator::iconColor() const {
     return theme::color::text;
 }
 
+StatusIndicator::~StatusIndicator() {
+    if (themedIconCache_) cairo_surface_destroy(themedIconCache_);
+}
+
 // Lazy theme-resolved surface for the current themedIcon() name; caches the
 // (name → surface) pair so a battery tier change reuses the same raster. The
 // cache key is the icon name (compared by string, since pointer identity is not
 // viable for std::string).
 cairo_surface_t* StatusIndicator::themedIconSurface() {
     const std::string name = themedIcon();
-    if (name.empty()) return nullptr;
+    if (name.empty()) {
+        if (themedIconCache_) {
+            cairo_surface_destroy(themedIconCache_);
+            themedIconCache_ = nullptr;
+        }
+        themedIconCacheKey_.clear();
+        return nullptr;
+    }
     if (name == themedIconCacheKey_ && themedIconCache_) return themedIconCache_;
+
+    if (themedIconCache_) {
+        cairo_surface_destroy(themedIconCache_);
+        themedIconCache_ = nullptr;
+    }
     themedIconCacheKey_ = name;
-    themedIconCache_ = IconResolver::instance().get(name);
+    if (cairo_surface_t* resolved = IconResolver::instance().get(name)) {
+        // IconResolver owns its cache reference and may destroy it during
+        // eviction. Keep an independent reference while this indicator uses it.
+        themedIconCache_ = cairo_surface_reference(resolved);
+    }
     return themedIconCache_;
 }
 

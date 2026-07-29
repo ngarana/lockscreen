@@ -108,7 +108,8 @@ bool LauncherPopover::consumeCloseRequest() {
 void LauncherPopover::draw(Painter& p, int64_t now) {
     Rect b = getBounds();
     b.y += (growUp ? 1.0 : -1.0) * (1.0 - openProgress_.value(now)) * 6.0;
-    p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::surface);
+    if (!drawSharedBackdrop(p, b, theme::statusbar::popoverRadius))
+        p.fillRoundedRectSource(b, theme::statusbar::popoverRadius, theme::statusbar::panelSurface());
 
     // --- Search field ---
     const Rect sr{b.x + kPad, b.y + kPad, b.w - kPad * 2, kSearchH};

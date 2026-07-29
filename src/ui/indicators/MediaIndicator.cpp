@@ -45,7 +45,8 @@ public:
         Rect b = getBounds();
         b.y += (growUp ? 1.0 : -1.0) * (1.0 - openProgress_.value(now)) * 6.0;
 
-        p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::surface);
+        if (!drawSharedBackdrop(p, b, theme::statusbar::popoverRadius))
+            p.fillRoundedRectSource(b, theme::statusbar::popoverRadius, theme::statusbar::panelSurface());
         if (!mpris_) return;
 
         // Source (player identity).

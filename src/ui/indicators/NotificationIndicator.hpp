@@ -24,7 +24,8 @@ class DesktopIndex;
 class Painter;
 
 // Render the notification centre with demo data to `p` (offline --preview only).
-void previewNotificationCentre(Painter& p, double anchorX, double anchorY, bool growUp);
+void previewNotificationCentre(Painter& p, double anchorX, double anchorY, bool growUp,
+                               bool backdropEnabled = false, double backdropAlpha = -1.0);
 
 class NotificationIndicator : public StatusIndicator {
 public:

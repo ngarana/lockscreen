@@ -170,6 +170,16 @@ inline double  barTintAlpha  = 0.80;                        // 0..1 opacity of t
 inline Color   barBorder     = color::text;                 // hairline border colour
 inline double  barBorderAlpha = 0.08;                        // 0..1 opacity of the hairline
 inline bool    barBorderEnabled = true;                      // draw the hairline at all
+
+// Opacity for surfaces nested inside standalone-bar overlays (QS tiles and
+// popup cards). The lock-screen host leaves this at 1.0; qypr-bar updates it
+// alongside barTintAlpha so the whole overlay, not only its outer shell, reads
+// as one themed surface.
+inline double panelSurfaceAlpha = 1.0;
+
+inline Color panelSurface() { return color::surface.withAlpha(panelSurfaceAlpha); }
+inline Color panelSurfaceHover() { return color::surfaceHover.withAlpha(panelSurfaceAlpha); }
+inline Color panelBackground() { return color::background.withAlpha(panelSurfaceAlpha); }
 }  // namespace statusbar
 
 // Read the [theme] section of a Config and override any values present.

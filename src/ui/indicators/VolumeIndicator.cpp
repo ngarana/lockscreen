@@ -59,7 +59,8 @@ public:
     void draw(Painter& p, int64_t now) override {
         Rect b = getBounds();
         b.y += (growUp ? 1.0 : -1.0) * (1.0 - openProgress_.value(now)) * 6.0;
-        p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::surface);
+        if (!drawSharedBackdrop(p, b, theme::statusbar::popoverRadius))
+            p.fillRoundedRectSource(b, theme::statusbar::popoverRadius, theme::statusbar::panelSurface());
 
         sinkRows_.clear();
         streamTracks_.clear();
@@ -112,7 +113,7 @@ public:
                 const double tw = b.w - kAPad * 2;
                 const double ty = y + 26.0;
                 const Rect track{tx, ty, tw, 4.0};
-                p.fillRoundedRect(track, 2.0, theme::color::surface);
+                p.fillRoundedRectSource(track, 2.0, theme::statusbar::panelSurface());
                 Rect fill = track;
                 fill.w = tw * std::clamp(s.level, 0.0, 1.0);
                 const Color fg = s.muted ? theme::color::textSubtle : theme::color::primary;

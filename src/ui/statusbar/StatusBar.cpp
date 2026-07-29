@@ -36,6 +36,11 @@ namespace {
 StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& backends,
                      const IndicatorRegistry::ModuleSelection* sel)
     : loop_(loop), host_(host) {
+    // A bar preview and the lock screen can coexist in the same test process;
+    // do not let the standalone bar's nested-surface alpha leak into a new
+    // lock-screen StatusBar before its host configures the bar backdrop.
+    theme::statusbar::panelSurfaceAlpha = 1.0;
+
     // Create indicators: the config-selected set when the host supplied one,
     // otherwise every registered indicator (the lock screen's behaviour).
     auto all = IndicatorRegistry::instance().createAll(backends, sel);
@@ -174,9 +179,18 @@ int StatusBar::overlayHeight() const {
 void StatusBar::setBackdrop(bool enabled, double alpha) {
     backdrop_ = enabled;
     backdropAlpha_ = alpha;
-    // Keep the Quick Settings panel's backdrop in lock-step with the strip so
-    // the Control Center floats over the wallpaper with the same tint opacity.
-    qsPanel_.setBackdropAlpha(alpha);
+    // Nested QS tiles and popup cards must use the same opacity as the outer
+    // slab; otherwise the panel still looks opaque even when its shell is
+    // translucent.
+    theme::statusbar::panelSurfaceAlpha = enabled
+                                               ? clamp01(alpha >= 0.0
+                                                             ? alpha
+                                                             : theme::statusbar::barTintAlpha)
+                                               : 0.0;
+    // Keep every overlay in lock-step with the strip, including the borrowed
+    // Quick Settings panel and popovers created later by indicators.
+    qsPanel_.setBackdrop(enabled, alpha);
+    popovers_.setBackdrop(enabled, alpha);
     host_.invalidate();
 }
 

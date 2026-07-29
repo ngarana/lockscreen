@@ -52,6 +52,7 @@ void loadTheme(const Config& cfg) {
     statusbar::barTintAlpha = 0.80;
     statusbar::barBorderAlpha = 0.08;
     statusbar::barBorderEnabled = true;
+    statusbar::panelSurfaceAlpha = 1.0;
 
     // Icon rendering resets to Auto (themed-when-available, else Nerd Font glyph).
     icons::mode = icons::Mode::Auto;

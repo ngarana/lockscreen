@@ -240,7 +240,8 @@ int BarApp::preview(const std::string& path, int width, int height) {
         cairo_t* cr = cairo_create(s);
         Painter p(cr);
         previewNotificationCentre(p, width - 20.0, statusBar_.bounds.y + statusBar_.bounds.h + 6.0,
-                                  geom_.bottom);
+                                  geom_.bottom, true,
+                                  config_.getDouble("bar", "backdrop", -1.0));
         cairo_destroy(cr);
         cairo_surface_write_to_png(s, (stripExt(path) + "-notif.png").c_str());
         cairo_surface_destroy(s);
@@ -259,6 +260,8 @@ void BarApp::reloadConfig() {
     std::fprintf(stderr, "qypr-bar: config changed, reloading theme\n");
     config_ = std::move(c);
     theme::loadTheme(config_);
+    const double alpha = config_.getDouble("bar", "backdrop", -1.0);
+    statusBar_.setBackdrop(alpha != 0.0, alpha);
     invalidate();
 }
 

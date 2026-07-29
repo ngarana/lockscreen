@@ -29,11 +29,11 @@ void QSToggleTile::draw(Painter& p, int64_t now) {
     bool active = isActive_ && isActive_();
     double hAlpha = hoverAnim_.value(now);
 
-    Color bg = theme::color::surface;
-    if (hAlpha > 0.01) bg = theme::color::surfaceHover;
+    Color bg = theme::statusbar::panelSurface();
+    if (hAlpha > 0.01) bg = theme::statusbar::panelSurfaceHover();
 
-    p.fillRoundedRect(bounds, kTileRadius, bg);
-    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRectSource(bounds, kTileRadius, bg);
+    p.strokeRoundedRectSource(bounds, kTileRadius, theme::statusbar::panelSurfaceHover(), 1.0);
 
     // Left circular badge
     double badgeR = 16.0;
@@ -139,8 +139,8 @@ void QSSliderTile::updateValueFromCoord(double x) {
 void QSSliderTile::draw(Painter& p, int64_t now) {
     double val = getValue_ ? getValue_() : 0.8;
 
-    p.fillRoundedRect(bounds, kTileRadius, theme::color::surface);
-    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRectSource(bounds, kTileRadius, theme::statusbar::panelSurface());
+    p.strokeRoundedRectSource(bounds, kTileRadius, theme::statusbar::panelSurfaceHover(), 1.0);
 
     double pad = 12.0;
     std::string glyph = currentIcon();
@@ -169,7 +169,7 @@ void QSSliderTile::draw(Painter& p, int64_t now) {
     double trackY = bounds.y + (bounds.h - trackH) / 2.0;
     sliderTrackBounds_ = {trackX, trackY, trackW, trackH};
 
-    p.fillRoundedRect(sliderTrackBounds_, trackH / 2.0, theme::color::background);
+    p.fillRoundedRectSource(sliderTrackBounds_, trackH / 2.0, theme::statusbar::panelBackground());
     Rect filled{trackX, trackY, trackW * val, trackH};
     p.fillRoundedRect(filled, trackH / 2.0, theme::color::yellow);
     p.fillCircle(trackX + trackW * val, trackY + trackH / 2.0, 5.5, theme::color::text);
@@ -181,8 +181,8 @@ void QSInfoTile::draw(Painter& p, int64_t now) {
     double progress = getProgress_ ? getProgress_() : 0.5;
     std::string info = getInfo_ ? getInfo_() : "";
 
-    p.fillRoundedRect(bounds, kTileRadius, theme::color::surface);
-    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRectSource(bounds, kTileRadius, theme::statusbar::panelSurface());
+    p.strokeRoundedRectSource(bounds, kTileRadius, theme::statusbar::panelSurfaceHover(), 1.0);
 
     double pad = 12.0;
 
@@ -210,8 +210,8 @@ void QSInfoTile::draw(Painter& p, int64_t now) {
 // ─── Header tile ──────────────────────────────────────────────────────────
 
 void QSHeaderTile::draw(Painter& p, int64_t) {
-    p.fillRoundedRect(bounds, kTileRadius, theme::color::surface);
-    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRectSource(bounds, kTileRadius, theme::statusbar::panelSurface());
+    p.strokeRoundedRectSource(bounds, kTileRadius, theme::statusbar::panelSurfaceHover(), 1.0);
 
     // Avatar circle
     double avatarR = 17.0;
@@ -255,11 +255,11 @@ void QSPowerTile::onClick(double, double) {
 
 void QSPowerTile::draw(Painter& p, int64_t now) {
     double hAlpha = hoverAnim_.value(now);
-    Color bg = theme::color::surface;
-    if (hAlpha > 0.01) bg = theme::color::surfaceHover;
+    Color bg = theme::statusbar::panelSurface();
+    if (hAlpha > 0.01) bg = theme::statusbar::panelSurfaceHover();
 
-    p.fillRoundedRect(bounds, kTileRadius, bg);
-    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRectSource(bounds, kTileRadius, bg);
+    p.strokeRoundedRectSource(bounds, kTileRadius, theme::statusbar::panelSurfaceHover(), 1.0);
 
     double cx = bounds.x + bounds.w / 2.0;
     double cy = bounds.y + bounds.h / 2.0;
@@ -274,11 +274,11 @@ void QSPowerTile::draw(Painter& p, int64_t now) {
 
 void QSWifiComboTile::draw(Painter& p, int64_t now) {
     double hAlpha = hoverAnim_.value(now);
-    Color bg = theme::color::surface;
-    if (hAlpha > 0.01) bg = theme::color::surfaceHover;
+    Color bg = theme::statusbar::panelSurface();
+    if (hAlpha > 0.01) bg = theme::statusbar::panelSurfaceHover();
 
-    p.fillRoundedRect(bounds, kTileRadius, bg);
-    p.strokeRoundedRect(bounds, kTileRadius, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRectSource(bounds, kTileRadius, bg);
+    p.strokeRoundedRectSource(bounds, kTileRadius, theme::statusbar::panelSurfaceHover(), 1.0);
 
     // Badge circle
     double badgeR = 16.0;
@@ -395,8 +395,8 @@ void QSVolumeTile::draw(Painter& p, int64_t) {
     double val = getValue_ ? getValue_() : 0.7;
     bool isMuted = dimmed_ && dimmed_();
 
-    p.fillRoundedRect(bounds, kSectionRadius, theme::color::surface);
-    p.strokeRoundedRect(bounds, kSectionRadius, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRectSource(bounds, kSectionRadius, theme::statusbar::panelSurface());
+    p.strokeRoundedRectSource(bounds, kSectionRadius, theme::statusbar::panelSurfaceHover(), 1.0);
 
     double pad = 12.0;
 
@@ -431,7 +431,7 @@ void QSVolumeTile::draw(Painter& p, int64_t) {
     double trackY = bounds.y + (bounds.h - trackH) / 2.0;
     trackBounds_ = {trackX, trackY, trackW, trackH};
 
-    p.fillRoundedRect(trackBounds_, trackH / 2.0, theme::color::background);
+    p.fillRoundedRectSource(trackBounds_, trackH / 2.0, theme::statusbar::panelBackground());
     if (!isMuted && val > 0.0) {
         Rect filled{trackX, trackY, trackW * val, trackH};
         p.fillRoundedRect(filled, trackH / 2.0, theme::color::primary);
@@ -449,8 +449,8 @@ void QSMediaTile::onClick(double x, double y) {
 }
 
 void QSMediaTile::draw(Painter& p, int64_t) {
-    p.fillRoundedRect(bounds, kSectionRadius, theme::color::surface);
-    p.strokeRoundedRect(bounds, kSectionRadius, theme::color::surfaceHover, 1.0);
+    p.fillRoundedRectSource(bounds, kSectionRadius, theme::statusbar::panelSurface());
+    p.strokeRoundedRectSource(bounds, kSectionRadius, theme::statusbar::panelSurfaceHover(), 1.0);
 
     double pad = 12.0;
 

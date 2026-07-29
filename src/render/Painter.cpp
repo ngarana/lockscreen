@@ -30,10 +30,31 @@ void Painter::fillRect(const Rect& r, const Color& c) {
     cairo_fill(cr_);
 }
 
+void Painter::fillRectSource(const Rect& r, const Color& c) {
+    cairo_save(cr_);
+    cairo_set_operator(cr_, CAIRO_OPERATOR_SOURCE);
+    fillRect(r, c);
+    cairo_restore(cr_);
+}
+
 void Painter::fillRoundedRect(const Rect& r, double radius, const Color& c) {
     roundedPath(cr_, r, radius);
     setSource(cr_, c);
     cairo_fill(cr_);
+}
+
+void Painter::fillRoundedRectSource(const Rect& r, double radius, const Color& c) {
+    cairo_save(cr_);
+    cairo_set_operator(cr_, CAIRO_OPERATOR_SOURCE);
+    fillRoundedRect(r, radius, c);
+    cairo_restore(cr_);
+}
+
+void Painter::fillCircleSource(double cx, double cy, double radius, const Color& c) {
+    cairo_save(cr_);
+    cairo_set_operator(cr_, CAIRO_OPERATOR_SOURCE);
+    fillCircle(cx, cy, radius, c);
+    cairo_restore(cr_);
 }
 
 void Painter::strokeRoundedRect(const Rect& r, double radius, const Color& c, double lineWidth) {
@@ -43,6 +64,14 @@ void Painter::strokeRoundedRect(const Rect& r, double radius, const Color& c, do
     setSource(cr_, c);
     cairo_set_line_width(cr_, lineWidth);
     cairo_stroke(cr_);
+}
+
+void Painter::strokeRoundedRectSource(const Rect& r, double radius, const Color& c,
+                                      double lineWidth) {
+    cairo_save(cr_);
+    cairo_set_operator(cr_, CAIRO_OPERATOR_SOURCE);
+    strokeRoundedRect(r, radius, c, lineWidth);
+    cairo_restore(cr_);
 }
 
 void Painter::fillGlass(const Rect& r, double radius, const Color& base, const Color& border) {

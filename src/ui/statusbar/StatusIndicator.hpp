@@ -83,7 +83,7 @@ public:
     StatusIndicator(const std::string& id, Zone zone, int priority)
         : id_(id), zone_(zone), priority_(priority) {}
 
-    virtual ~StatusIndicator() = default;
+    ~StatusIndicator() override;
 
     // --- Tray View (compact bar representation) ---
     // icon() may return "" for text-only indicators (e.g. the clock); the

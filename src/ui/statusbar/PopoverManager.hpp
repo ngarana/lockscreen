@@ -17,6 +17,10 @@ public:
     void openBorrowed(DetailedPopover* popover, double anchorX, double anchorY);
     void closeActive();
 
+    // Propagate the standalone bar's backdrop policy to current and future
+    // popovers, including a borrowed Quick Settings panel.
+    void setBackdrop(bool enabled, double alpha);
+
     DetailedPopover* active() const { return active_.get() ? active_.get() : borrowed_; }
     bool isTransitioning() const { return transitioning_.get() != nullptr; }
 
@@ -45,6 +49,9 @@ private:
     DetailedPopover* borrowed_ = nullptr;  // non-owning pointer for stack panels
     std::unique_ptr<DetailedPopover> transitioning_; // owned popover fading out
     DetailedPopover* borrowedClosing_ = nullptr;     // borrowed popover fading out
+
+    bool backdropEnabled_ = false;
+    double backdropAlpha_ = -1.0;
 };
 
 }  // namespace qypr

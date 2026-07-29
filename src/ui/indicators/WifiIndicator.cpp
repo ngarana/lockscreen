@@ -74,7 +74,8 @@ public:
     void draw(Painter& p, int64_t now) override {
         Rect b = getBounds();
         b.y -= (1.0 - openProgress_.value(now)) * 6.0;
-        p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::surface);
+        if (!drawSharedBackdrop(p, b, theme::statusbar::popoverRadius))
+            p.fillRoundedRectSource(b, theme::statusbar::popoverRadius, theme::statusbar::panelSurface());
 
         hits_.clear();
         double y = b.y + kWPad;

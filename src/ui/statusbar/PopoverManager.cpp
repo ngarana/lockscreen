@@ -20,6 +20,7 @@ void PopoverManager::open(std::unique_ptr<DetailedPopover> popover, double ancho
 
     active_ = std::move(popover);
     if (active_) {
+        active_->setBackdrop(backdropEnabled_, backdropAlpha_);
         active_->anchorX = anchorX;
         active_->anchorY = anchorY;
         active_->open();
@@ -34,10 +35,20 @@ void PopoverManager::openBorrowed(DetailedPopover* popover, double anchorX, doub
     }
     borrowed_ = popover;
     if (borrowed_) {
+        borrowed_->setBackdrop(backdropEnabled_, backdropAlpha_);
         borrowed_->anchorX = anchorX;
         borrowed_->anchorY = anchorY;
         borrowed_->open();
     }
+}
+
+void PopoverManager::setBackdrop(bool enabled, double alpha) {
+    backdropEnabled_ = enabled;
+    backdropAlpha_ = alpha;
+    if (active_) active_->setBackdrop(enabled, alpha);
+    if (borrowed_) borrowed_->setBackdrop(enabled, alpha);
+    if (transitioning_) transitioning_->setBackdrop(enabled, alpha);
+    if (borrowedClosing_) borrowedClosing_->setBackdrop(enabled, alpha);
 }
 
 void PopoverManager::closeActive() {

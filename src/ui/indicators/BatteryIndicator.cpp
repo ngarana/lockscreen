@@ -88,7 +88,8 @@ public:
         // Slide down 6px while opening (fade is applied by PopoverManager).
         b.y -= (1.0 - openProgress_.value(now)) * 6.0;
 
-        p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::surface);
+        if (!drawSharedBackdrop(p, b, theme::statusbar::popoverRadius))
+            p.fillRoundedRectSource(b, theme::statusbar::popoverRadius, theme::statusbar::panelSurface());
         drawProfiles(p, b);
 
         const double pad = theme::statusbar::popoverPadding;
@@ -104,7 +105,7 @@ public:
 
         // Charge bar
         const double barH = 8.0;
-        p.fillRoundedRect({x, y, innerW, barH}, barH / 2, theme::color::surface);
+        p.fillRoundedRectSource({x, y, innerW, barH}, barH / 2, theme::statusbar::panelSurface());
         double frac = snap_->percentage / 100.0;
         if (frac > 0.01) {
             Color fill = snap_->percentage > 50   ? theme::color::success
@@ -158,7 +159,7 @@ private:
         const double x = b.x + pad;
 
         double hy = b.y + b.h - 62.0;
-        p.fillRect({x, hy - 12.0, innerW, 1.0}, theme::color::surfaceHover);
+        p.fillRectSource({x, hy - 12.0, innerW, 1.0}, theme::statusbar::panelSurfaceHover());
         TextStyle hdr{theme::font::family, 11.0, PANGO_WEIGHT_BOLD, theme::color::textSubtle};
         p.drawText(x, hy, "POWER PROFILE", hdr);
         hy += 20.0;

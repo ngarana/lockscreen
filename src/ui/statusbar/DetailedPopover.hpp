@@ -2,6 +2,7 @@
 #pragma once
 
 #include "core/Types.hpp"
+#include "render/Painter.hpp"
 #include "ui/Theme.hpp"
 #include <cstdint>
 #include <string>
@@ -75,6 +76,42 @@ public:
     bool isOpen() const { return openProgress_.target() > 0.5; }
     void open() { openProgress_.animateTo(1.0, theme::anim::fast, ease::inOutQuad); }
     void close() { openProgress_.animateTo(0.0, theme::anim::fast, ease::inOutQuad); }
+
+    // Standalone-bar overlays share the bar's backdrop. The lock-screen host
+    // never enables this, so its existing opaque/glass card backgrounds remain
+    // unchanged.
+    void setBackdrop(bool enabled, double alpha) {
+        backdropEnabled_ = enabled;
+        backdropAlpha_ = alpha;
+        backdropConfigured_ = true;
+    }
+
+protected:
+    // Draw the common bar/overlay slab. Returns false when the host did not
+    // configure a shared backdrop, allowing each popover to retain its legacy
+    // lock-screen fallback. A configured alpha of 0 is intentionally a fully
+    // transparent panel, not a request to fall back to the theme default.
+    bool drawSharedBackdrop(Painter& p, const Rect& r, double radius) const {
+        if (!backdropConfigured_) return false;
+        if (!backdropEnabled_) return true;
+
+        const double alpha = clamp01(backdropAlpha_ >= 0.0
+                                         ? backdropAlpha_
+                                         : theme::statusbar::barTintAlpha);
+        p.fillRoundedRect(r, radius, theme::statusbar::barTint.withAlpha(alpha));
+        if (theme::statusbar::barBorderEnabled && theme::statusbar::barBorderAlpha > 0.0) {
+            p.strokeRoundedRect(r, radius,
+                                theme::statusbar::barBorder.withAlpha(
+                                    clamp01(theme::statusbar::barBorderAlpha)),
+                                1.0);
+        }
+        return true;
+    }
+
+private:
+    bool backdropEnabled_ = false;
+    double backdropAlpha_ = -1.0;
+    bool backdropConfigured_ = false;
 };
 
 }  // namespace qypr

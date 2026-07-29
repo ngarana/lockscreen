@@ -447,29 +447,16 @@ void QuickSettingsPanel::draw(Painter& p, int64_t now) {
     layoutTiles();
     Rect popBounds = getBounds();
 
-    // Main panel background: mirror the menu-bar strip's backdrop exactly — a
-    // translucent barTint slab at the strip's resolved alpha, with a hairline
-    // border in the theme's own colour — so the Control Center floats over the
-    // wallpaper the same way the bar does, in BOTH glass and solid modes.
-    // We deliberately do NOT use fillGlass() here: in solid mode it forces the
-    // fill fully opaque (dropping the backdrop entirely) and it paints the
-    // Catppuccin-tinted glassBorder, neither of which the strip does — so the
-    // panel would stop matching the bar. backdropAlpha_ is forwarded from the
-    // [bar] backdrop key via StatusBar; <=0 falls back to the live theme alpha
-    // so a [theme] bar-tint-alpha change still applies on a config reload.
-    const double tintAlpha = backdropAlpha_ > 0.0 ? backdropAlpha_
-                                                  : theme::statusbar::barTintAlpha;
-    p.fillRoundedRect(popBounds, theme::statusbar::qsCornerRadius,
-                      theme::statusbar::barTint.withAlpha(tintAlpha));
-    if (theme::statusbar::barBorderEnabled && theme::statusbar::barBorderAlpha > 0.0) {
-        p.strokeRoundedRect(popBounds, theme::statusbar::qsCornerRadius,
-                            theme::statusbar::barBorder.withAlpha(theme::statusbar::barBorderAlpha),
-                            1.0);
+    // Match the bar's shared backdrop. If this panel is hosted by the lock
+    // screen, draw its original opaque surface instead.
+    if (!drawSharedBackdrop(p, popBounds, theme::statusbar::qsCornerRadius)) {
+        p.fillRoundedRect(popBounds, theme::statusbar::qsCornerRadius, theme::color::surface);
     }
 
     // Close button (×) at top right — a subtle circular button.
     closeBounds_ = {popBounds.x + popBounds.w - kPad - 24.0, popBounds.y + 8.0, 24.0, 24.0};
-    p.fillCircle(closeBounds_.x + 12.0, closeBounds_.y + 12.0, 12.0, theme::color::surfaceHover);
+    p.fillCircleSource(closeBounds_.x + 12.0, closeBounds_.y + 12.0, 12.0,
+                       theme::statusbar::panelSurfaceHover());
     TextStyle closeStyle{theme::font::iconFamily, 11.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
     Size closeSz = p.measureText("󰅖", closeStyle);
     p.drawText(closeBounds_.x + 12.0 - closeSz.w / 2.0, closeBounds_.y + 12.0 - closeSz.h / 2.0, "󰅖", closeStyle);

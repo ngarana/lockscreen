@@ -31,7 +31,8 @@ public:
     void draw(Painter& p, int64_t now) override {
         Rect b = getBounds();
         b.y += (growUp ? 1.0 : -1.0) * (1.0 - openProgress_.value(now)) * 6.0;
-        p.fillRoundedRect(b, theme::statusbar::popoverRadius, theme::color::surface);
+        if (!drawSharedBackdrop(p, b, theme::statusbar::popoverRadius))
+            p.fillRoundedRectSource(b, theme::statusbar::popoverRadius, theme::statusbar::panelSurface());
 
         if (!backend_) return;
 
@@ -45,7 +46,7 @@ public:
         const double trackX = b.x + kPad;
         const double trackW = b.w - kPad * 2;
         sliderBounds_ = {trackX, trackY, trackW, trackH};
-        p.fillRoundedRect(sliderBounds_, trackH / 2.0, theme::color::surface);
+        p.fillRoundedRectSource(sliderBounds_, trackH / 2.0, theme::statusbar::panelSurface());
 
         // Slider fill (from left = warm to right = off).
         double val = backend_->sliderValue();
