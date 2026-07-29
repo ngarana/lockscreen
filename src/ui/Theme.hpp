@@ -139,6 +139,7 @@ inline double topMargin      = spacing::large;
 inline double sideMargin     = spacing::xlarge;
 inline double cornerRadius   = 12.0;
 inline double iconSize       = 16.0;   // Nerd Font glyph point size
+inline double clockIconSize  = 16.0;   // clock label size (independent of iconSize)
 // Render box for themed *-symbolic icons. Independent of the bar height and of
 // the glyph iconSize: symbolic SVGs carry internal padding, so they read a touch
 // smaller than a glyph at the same nominal size — bump this to enlarge just the

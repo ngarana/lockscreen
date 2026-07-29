@@ -128,6 +128,8 @@ void loadTheme(const Config& cfg) {
     overrideDouble(statusbar::iconSize, cfg, s, "bar-icon-size");
     statusbar::symbolicIconSize = 18.0;
     overrideDouble(statusbar::symbolicIconSize, cfg, s, "bar-symbolic-icon-size");
+    statusbar::clockIconSize = statusbar::iconSize;
+    overrideDouble(statusbar::clockIconSize, cfg, s, "bar-clock-icon-size");
     overrideDouble(statusbar::iconSpacing, cfg, s, "bar-icon-spacing");
     overrideDouble(statusbar::padding, cfg, s, "bar-padding");
     overrideDouble(statusbar::cornerRadius, cfg, s, "bar-corner-radius");

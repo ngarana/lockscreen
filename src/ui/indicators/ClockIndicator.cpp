@@ -244,7 +244,7 @@ std::string ClockIndicator::tooltip() const {
 }
 
 double ClockIndicator::labelFontSize() const {
-    return theme::statusbar::iconSize;
+    return theme::statusbar::clockIconSize;
 }
 
 void ClockIndicator::poll(int64_t now) {
