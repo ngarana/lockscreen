@@ -210,14 +210,22 @@ void QuickSettingsPanel::buildTiles(EventLoop&, const SystemBackends& backends,
 
         if (backends.nightLight) {
             auto nl = backends.nightLight;
-            tiles_.push_back(std::make_unique<QSToggleTile>(
+            auto tile = std::make_unique<QSToggleTile>(
                 "Night Light", "",
                 std::function<bool()>([nl]() { return nl && nl->enabled(); }),
                 std::function<void()>([nl]() { if (nl && nl->available()) nl->toggle(); }),
                 std::function<std::string()>([nl]() -> std::string {
                     if (!nl || !nl->available()) return "Off";
                     return nl->enabled() ? "On" : "Off";
-                })));
+                }));
+            tile->setOnScroll([nl](double dx, double dy) {
+                if (!nl || !nl->available()) return false;
+                const double delta = dy != 0.0 ? dy : dx;
+                if (delta == 0.0) return false;
+                nl->setSliderValue(nl->sliderValue() + (delta < 0.0 ? 0.05 : -0.05));
+                return true;
+            });
+            tiles_.push_back(std::move(tile));
         } else {
             tiles_.push_back(std::make_unique<QSToggleTile>(
                 "Night Light", "", []() { return false; }, []() {},
@@ -478,6 +486,12 @@ void QuickSettingsPanel::draw(Painter& p, int64_t now) {
 
 // ─── Input ────────────────────────────────────────────────────────────────
 
+bool QuickSettingsPanel::handleMotion(double x, double y) {
+    curX_ = x;
+    curY_ = y;
+    return getBounds().contains(x, y);
+}
+
 bool QuickSettingsPanel::consumeCloseRequest() {
     if (closeRequested_) {
         closeRequested_ = false;
@@ -534,6 +548,16 @@ bool QuickSettingsPanel::handleDrag(double x, double y) {
     if (activeDragTile_) {
         activeDragTile_->onDrag(x, y);
         return true;
+    }
+    return false;
+}
+
+bool QuickSettingsPanel::handleScroll(double dx, double dy) {
+    if (volume_ && volume_->bounds.contains(curX_, curY_) && volume_->onScroll(dx, dy)) {
+        return true;
+    }
+    for (auto& t : tiles_) {
+        if (t->bounds.contains(curX_, curY_) && t->onScroll(dx, dy)) return true;
     }
     return false;
 }

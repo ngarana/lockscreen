@@ -25,6 +25,10 @@ void QSToggleTile::onClick(double, double) {
     if (onToggle_) onToggle_();
 }
 
+bool QSToggleTile::onScroll(double dx, double dy) {
+    return onScroll_ ? onScroll_(dx, dy) : false;
+}
+
 void QSToggleTile::draw(Painter& p, int64_t now) {
     bool active = isActive_ && isActive_();
     double hAlpha = hoverAnim_.value(now);

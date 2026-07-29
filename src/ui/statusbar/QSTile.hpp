@@ -26,6 +26,7 @@ public:
 
     virtual void onClick(double x, double y) {}
     virtual void onDrag(double x, double y) {}
+    virtual bool onScroll(double dx, double dy) { return false; }
     virtual bool handleKey(uint32_t keysym) { return false; }
 
     Rect bounds;
@@ -47,6 +48,11 @@ public:
     std::string title() const override { return title_; }
     void draw(Painter& p, int64_t now) override;
     void onClick(double x, double y) override;
+    bool onScroll(double dx, double dy) override;
+
+    void setOnScroll(std::function<bool(double, double)> callback) {
+        onScroll_ = std::move(callback);
+    }
 
 private:
     std::string title_;
@@ -55,6 +61,7 @@ private:
     std::function<void()> onToggle_;
     std::function<std::string()> subtitle_;
     Color accent_;
+    std::function<bool(double, double)> onScroll_;
 };
 
 class QSSliderTile : public QSTile {

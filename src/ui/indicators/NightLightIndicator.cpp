@@ -67,7 +67,7 @@ bool NightLightIndicator::onScroll(double dx, double dy, double, double) {
 
 std::unique_ptr<QSTile> NightLightIndicator::createTile() {
     auto* backend = backend_;
-    return std::make_unique<QSToggleTile>(
+    auto tile = std::make_unique<QSToggleTile>(
         "Night Light", kMoonGlyph,
         [backend]() { return backend && backend->enabled(); },
         [backend]() {
@@ -78,6 +78,15 @@ std::unique_ptr<QSTile> NightLightIndicator::createTile() {
             if (!backend->enabled()) return "Off";
             return std::to_string(backend->temperature()) + " K";
         });
+    tile->setOnScroll([backend](double dx, double dy) {
+        if (!backend || !backend->available()) return false;
+        const double delta = dy != 0.0 ? dy : dx;
+        if (delta == 0.0) return false;
+        const double step = delta < 0.0 ? 0.05 : -0.05;
+        backend->setSliderValue(backend->sliderValue() + step);
+        return true;
+    });
+    return tile;
 }
 
 std::unique_ptr<DetailedPopover> NightLightIndicator::createDetailedView() {

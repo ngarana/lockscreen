@@ -30,8 +30,10 @@ public:
     double contentHeight() const override;
     double contentWidth() const override;
 
+    bool handleMotion(double x, double y) override;
     bool handleClick(double x, double y) override;
     bool handleDrag(double x, double y) override;
+    bool handleScroll(double dx, double dy) override;
     bool handleKey(uint32_t keysym) override;
     bool consumeCloseRequest() override;
 
