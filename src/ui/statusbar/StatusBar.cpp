@@ -138,6 +138,52 @@ StatusBar::~StatusBar() {
     if (measureSurface_) cairo_surface_destroy(measureSurface_);
 }
 
+void StatusBar::reloadModules(const SystemBackends& backends,
+                              const IndicatorRegistry::ModuleSelection* sel) {
+    // Close any open popover (QS, detail, etc.) — the indicators are about to
+    // be destroyed, so the popover's backing indicator would dangle.
+    popovers_.closeActive();
+
+    // Clear current indicators.
+    leftIndicators_.clear();
+    centerIndicators_.clear();
+    rightIndicators_.clear();
+
+    // Recreate from the new selection.
+    auto all = IndicatorRegistry::instance().createAll(backends, sel);
+    for (auto& ind : all) {
+        if (ind->zone() == Zone::Left) {
+            leftIndicators_.push_back(std::move(ind));
+        } else if (ind->zone() == Zone::Center) {
+            centerIndicators_.push_back(std::move(ind));
+        } else {
+            rightIndicators_.push_back(std::move(ind));
+        }
+    }
+
+    // Rebuild QS tiles.
+    qsPanel_.clearTiles();
+    for (const auto& ind : leftIndicators_) {
+        if (auto tile = ind->createTile()) qsPanel_.addTile(std::move(tile));
+    }
+    for (const auto& ind : centerIndicators_) {
+        if (auto tile = ind->createTile()) qsPanel_.addTile(std::move(tile));
+    }
+    for (const auto& ind : rightIndicators_) {
+        if (auto tile = ind->createTile()) qsPanel_.addTile(std::move(tile));
+    }
+    qsPanel_.buildTiles(loop_, backends, [this]() {
+        for (auto& ind : rightIndicators_) {
+            if (ind->id() == "power" && ind->hasDetailedView()) {
+                activateIndicator(*ind);
+                return;
+            }
+        }
+    });
+
+    host_.invalidate();
+}
+
 void StatusBar::resetAutoDismiss() {
     if (dismissTimer_ >= 0) { loop_.removeTimer(dismissTimer_); dismissTimer_ = -1; }
     DetailedPopover* p = popovers_.active();

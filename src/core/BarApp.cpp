@@ -257,11 +257,26 @@ void BarApp::reloadConfig() {
     Config c;
     if (!c.load(config_.path())) return;  // file vanished or unreadable — keep current theme
 
-    std::fprintf(stderr, "qypr-bar: config changed, reloading theme\n");
+    std::fprintf(stderr, "qypr-bar: config changed, reloading\n");
     config_ = std::move(c);
+
+    // Reload theme (colours, fonts, spacing, style).
     theme::loadTheme(config_);
+
+    // Reload bar geometry (height, margin, position).
+    geom_ = readGeometry(config_);
+    statusBar_.setGeometry(geom_);
+    const int reserved = reservedFor(geom_);
+    display_.setOverlayHeight(reserved);  // update exclusive zone
+
+    // Reload backdrop.
     const double alpha = config_.getDouble("bar", "backdrop", -1.0);
     statusBar_.setBackdrop(alpha != 0.0, alpha);
+
+    // Reload modules (recreate indicators from new module list).
+    modules_ = readModules(config_);
+    statusBar_.reloadModules(backends_, modules_ ? &*modules_ : nullptr);
+
     invalidate();
 }
 

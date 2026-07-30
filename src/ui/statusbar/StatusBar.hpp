@@ -67,6 +67,12 @@ public:
     QuickSettingsPanel& quickSettings() { return qsPanel_; }
     PopoverManager& popovers() { return popovers_; }
 
+    // Hot-reload: rebuild indicators from a new module selection. Called by the
+    // host when bar.conf changes. Clears the current indicators, recreates them
+    // from the new selection, and rebuilds QS tiles.
+    void reloadModules(const SystemBackends& backends,
+                       const IndicatorRegistry::ModuleSelection* sel);
+
     // Opt into showing session-sensitive indicators (workspaces, active
     // window). The lock screen never enables this, so those widgets stay
     // hidden while locked; the standalone (unlocked) bar turns it on.

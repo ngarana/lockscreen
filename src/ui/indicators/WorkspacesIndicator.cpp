@@ -9,7 +9,7 @@
 namespace qypr {
 
 namespace {
-opconstexpr double kPillPadX = 9.0;   // horizontal padding inside each pill
+constexpr double kPillPadX = 9.0;   // horizontal padding inside each pill
 constexpr double kPillGap = 5.0;    // between pills
 constexpr double kSidePad = 6.0;    // indicator edge padding
 constexpr double kPillH = 24.0;     // pill height (within the 36px bar)
