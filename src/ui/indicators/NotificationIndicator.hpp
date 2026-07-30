@@ -37,6 +37,9 @@ public:
     std::string tooltip() const override;
     Color iconColor() const override;
 
+    double measureWidth(Painter& p) override;
+    void draw(Painter& p, int64_t now) override;
+
     bool hasDetailedView() const override { return true; }
     std::unique_ptr<DetailedPopover> createDetailedView() override;
 
@@ -47,6 +50,10 @@ public:
 
 private:
     size_t count() const;
+
+    static constexpr double kSuperscriptSize = 9.0;
+    static constexpr double kSuperscriptOffsetX = 2.0;
+    static constexpr double kSuperscriptOffsetY = -4.0;
 
     NotificationMonitor* monitor_ = nullptr;
     NotificationActions* actions_ = nullptr;  // dismiss/clear (null → read-only)

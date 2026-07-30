@@ -531,6 +531,107 @@ Color NotificationIndicator::iconColor() const {
     return count() > 0 ? theme::color::primary : theme::color::textSubtle;
 }
 
+double NotificationIndicator::measureWidth(Painter& p) {
+    // Measure the icon glyph.
+    double w = 0;
+    cairo_surface_t* themed = displayIconSurface();
+    if (themed) {
+        w = theme::statusbar::symbolicIconSize;
+    } else {
+        const std::string ic = icon();
+        if (!ic.empty()) {
+            TextStyle iconStyle{theme::font::iconFamily, theme::statusbar::iconSize,
+                                PANGO_WEIGHT_NORMAL, iconColor()};
+            w = p.measureText(ic, iconStyle).w;
+        }
+    }
+    // Superscript count extends slightly past the icon's right edge.
+    const size_t n = count();
+    if (n > 0) {
+        TextStyle supSt{theme::font::family, kSuperscriptSize, PANGO_WEIGHT_NORMAL,
+                        theme::color::primary};
+        std::string countStr = std::to_string(n);
+        double supW = p.measureText(countStr, supSt).w;
+        w += kSuperscriptOffsetX + supW;
+    }
+    return w + 2 * 8.0;  // kSidePad from base class
+}
+
+void NotificationIndicator::draw(Painter& p, int64_t now) {
+    // Delegate hover background and focus ring to the base class, but we handle
+    // the content layout ourselves (bell icon + superscript count badge).
+    if (!visible) return;
+
+    double alpha = hoverAlpha_.value(now);
+    double scale = hoverScale_.value(now);
+
+    // Hover background pill
+    if (alpha > 0.01) {
+        Color bg = theme::color::surfaceHover.withAlpha(alpha * 0.5);
+        Rect hoverRect = bounds;
+        hoverRect.y += 2.0;
+        hoverRect.h -= 4.0;
+        p.fillRoundedRect(hoverRect, 8.0, bg);
+    }
+
+    // Focus ring
+    if (focused) {
+        Rect focusRect = bounds;
+        focusRect.y += 1.0;
+        focusRect.h -= 2.0;
+        p.strokeRoundedRect(focusRect, 8.0, theme::color::primary, 1.5);
+    }
+
+    // Icon
+    cairo_surface_t* themedSurf = displayIconSurface();
+    const std::string ic = icon();
+    const double iconPx = theme::statusbar::symbolicIconSize * (scale > 1.001 ? scale : 1.0);
+    const double shadowA = theme::effects::shadowOpacity;
+    const double shadowOff = theme::effects::shadowOffset;
+
+    // Measure icon width for centering.
+    double iconW = 0;
+    if (themedSurf) {
+        iconW = iconPx;
+    } else if (!ic.empty()) {
+        TextStyle iconStyle{theme::font::iconFamily, theme::statusbar::iconSize,
+                            PANGO_WEIGHT_NORMAL, iconColor()};
+        iconW = p.measureText(ic, iconStyle).w;
+    }
+
+    // Account for superscript width when centering.
+    const size_t n = count();
+    double extraW = 0;
+    if (n > 0) {
+        TextStyle supSt{theme::font::family, kSuperscriptSize, PANGO_WEIGHT_NORMAL,
+                        theme::color::primary};
+        std::string countStr = std::to_string(n);
+        extraW = kSuperscriptOffsetX + p.measureText(countStr, supSt).w;
+    }
+
+    double x = bounds.x + (bounds.w - iconW - extraW) / 2.0;
+    const double iconY = bounds.y + (bounds.h - iconPx) / 2.0;
+
+    if (themedSurf) {
+        p.drawSurfaceTinted(themedSurf, {x, iconY, iconPx, iconPx}, iconColor());
+    } else if (!ic.empty()) {
+        TextStyle iconStyle{theme::font::iconFamily, theme::statusbar::iconSize,
+                            PANGO_WEIGHT_NORMAL, iconColor()};
+        if (scale > 1.001) iconStyle.size *= scale;
+        p.drawTextShadowed(x, iconY, ic, iconStyle, HAlign::Left, shadowA, shadowOff);
+    }
+
+    // Superscript count badge (top-right of icon).
+    if (n > 0) {
+        TextStyle supSt{theme::font::family, kSuperscriptSize, PANGO_WEIGHT_BOLD,
+                        theme::color::primary};
+        std::string countStr = std::to_string(n);
+        double sx = x + iconW + kSuperscriptOffsetX;
+        double sy = iconY + kSuperscriptOffsetY;
+        p.drawText(sx, sy, countStr, supSt, HAlign::Left);
+    }
+}
+
 void NotificationIndicator::onBackendUpdate() {
     if (monitor_) visible = true;  // count/label re-read on draw
 }
