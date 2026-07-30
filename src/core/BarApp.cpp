@@ -93,10 +93,7 @@ int BarApp::run() {
 
     // Wayland-local wiring only — these talk to the compositor we just connected
     // to (present and fast), never to an external daemon, so they are safe on the
-    // pre-first-paint path. Everything that touches D-Bus or the filesystem is
-    // deferred to startBackends() (fired after the first frame) so a cold session
-    // start — where UPower/BlueZ/NetworkManager may still be coming up — cannot
-    // hold the bar window off screen behind a synchronous fetch.
+    // pre-first-paint path.
     idleInhibitor_.init(display_.idleInhibitManager(), display_.anchorSurface(),
                         display_.display());
     nightLight_.init(display_.gammaControlManager(), display_.display());
@@ -105,24 +102,10 @@ int BarApp::run() {
     workspace_.start(display_.display());
     toplevel_.start(display_.display());
 
-    // Live config reload: watch bar.conf for edits and re-apply the [theme]
-    // section without a restart. Structural changes (modules, position) still
-    // need a restart — but colours, fonts, and spacing update instantly.
-    configWatcher_.watch(config_.path(), [this] { reloadConfig(); });
-
-    loop_.run();
-    return 0;
-}
-
-void BarApp::startBackends() {
-    // Called exactly once, from the first draw()'s deferred post (guarded by
-    // backendsScheduled_ there).
-    //
-    // Status bar backends: one startup fetch, push-only afterwards (each is
-    // non-fatal — a missing daemon just hides its indicator). These run now,
-    // after the first paint, so any synchronous D-Bus round-trip that blocks on
-    // a still-starting service delays only the indicator's first data, not the
-    // appearance of the bar itself.
+    // Start all backends eagerly so modules have data on the first frame.
+    // Each backend's start() is non-blocking (async D-Bus or filesystem);
+    // a missing daemon simply hides its indicator. This eliminates the
+    // one-frame-empty lag that a deferred start would cause.
     battery_.start();
     brightness_.start();
     wifi_.start();
@@ -130,31 +113,31 @@ void BarApp::startBackends() {
     volume_.start();
     sni_.start();
     powerProfiles_.setOnChange([this] { invalidate(); });
-    powerProfiles_.start();  // no-op/degrades if power-profiles-daemon is absent
-
-    // Notification centre: the monitor already pushes on the loop's fd. No
-    // backlog seed — that is the lock screen's concern (the pre-lock queue);
-    // a live bar collects from the moment it starts.
+    powerProfiles_.start();
     notifications_.setOnChange([this] { invalidate(); });
     if (!notifications_.start(/*seedFromLog=*/false)) {
         std::fprintf(stderr, "qypr-bar: notification monitor unavailable\n");
     }
-
-    // Media: push mode (decision D4). The lock screen re-polls MPRIS on its 1s
-    // tick, which an always-on panel must not do — enablePush() subscribes to
-    // PropertiesChanged and dispatches the bus from this loop instead.
-    mpris_.enablePush(loop_);  // StatusBar subscribed to it like any other backend
-
-    // Application launcher: scan the .desktop index once at startup (pure
-    // filesystem read, no daemon). The launcher indicator is otherwise inert.
+    mpris_.enablePush(loop_);
     desktopIndex_.load();
 
-    invalidate();  // repaint now that the indicators have data
+    // Live config reload: watch bar.conf for edits and re-apply all sections
+    // without a restart (theme, geometry, modules, per-indicator config).
+    configWatcher_.watch(config_.path(), [this] { reloadConfig(); });
+
+    loop_.run();
+    return 0;
 }
 
-// ---------------------------------------------------------------------------
-// Offline preview: render bar frames to PNG without a Wayland connection.
-// ---------------------------------------------------------------------------
+void BarApp::draw(cairo_t* cr, int w, int h, int scale) {
+    Painter p(cr);
+    statusBar_.layout(w, h);
+    statusBar_.draw(p, nowMs());
+
+    // Keep the surface height in step with the overlay state (deferred; never
+    // resize mid-render).
+    syncOverlay();
+}
 namespace {
 void renderToPng(StatusBar& bar, const std::string& path, int w, int h) {
     cairo_surface_t* surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
@@ -278,26 +261,6 @@ void BarApp::reloadConfig() {
     statusBar_.reloadModules(backends_, modules_ ? &*modules_ : nullptr);
 
     invalidate();
-}
-
-void BarApp::draw(cairo_t* cr, int w, int h, int scale) {
-    Painter p(cr);
-    statusBar_.layout(w, h);
-    statusBar_.draw(p, nowMs());
-
-    // First frame is now rendered: schedule the deferred backend startup on the
-    // loop so it runs after this buffer is committed/flushed (addPrepare flush
-    // → next epoll_wait → the posted task), never before the window is on
-    // screen. Posted (not called inline) precisely so the paint wins the race.
-    // Flag set here so the one-shot post cannot be duplicated by a later frame.
-    if (!backendsScheduled_) {
-        backendsScheduled_ = true;
-        loop_.post([this] { startBackends(); });
-    }
-
-    // Keep the surface height in step with the overlay state (deferred; never
-    // resize mid-render).
-    syncOverlay();
 }
 
 void BarApp::syncOverlay() {

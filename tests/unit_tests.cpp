@@ -1110,6 +1110,12 @@ TEST(StatusBarAnimating) {
 
 // Test theme::statusbar constants are accessible.
 TEST(StatusBarThemeConstants) {
+    // Reset to compiled defaults — a prior test may have loaded a user config
+    // that overrode statusbar geometry (e.g. bar-corner-radius = 0).
+    qypr::Config dummy;
+    dummy.load("/nonexistent");
+    qypr::theme::loadTheme(dummy);
+
     using namespace qypr::theme::statusbar;
     EXPECT_TRUE(height > 0);
     EXPECT_TRUE(topMargin >= 0);
@@ -1288,13 +1294,13 @@ TEST(BatteryBackendConstruction) {
     qypr::SystemBus bus(loop);
     qypr::BatteryBackend backend(bus);
 
-    // start() must not crash whether or not UPower/a battery is available;
-    // on failure the snapshot stays absent so the indicator hides.
+    // start() fires an async D-Bus call and returns immediately.
+    // On a machine with a bus, it returns true (the call was issued);
+    // the snapshot will be populated by the callback.
     bool started = backend.start();
     const auto& s = backend.snapshot();
     if (started) {
-        EXPECT_TRUE(s.present);
-        EXPECT_TRUE(s.percentage >= 0 && s.percentage <= 100);
+        // Async: snapshot may not be populated yet — just verify no crash.
     } else {
         EXPECT_FALSE(s.present);
     }

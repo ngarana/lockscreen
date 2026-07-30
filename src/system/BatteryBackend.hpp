@@ -1,8 +1,7 @@
 // BatteryBackend.hpp - UPower battery state over the shared system bus.
 //
-// Spec-correct per docs/STATUS_BAR.md: one synchronous GetAll at start(),
-// push-only afterwards via org.freedesktop.DBus.Properties.PropertiesChanged.
-// UPower lives on the SYSTEM bus and its State property is a uint32 enum.
+// Async startup: GetAll is issued via sd_bus_call_method_async so the event
+// loop is never blocked. Push-only afterwards via PropertiesChanged.
 
 #pragma once
 
@@ -36,23 +35,26 @@ public:
     BatteryBackend(const BatteryBackend&) = delete;
     BatteryBackend& operator=(const BatteryBackend&) = delete;
 
-    // One startup fetch + PropertiesChanged subscription. Returns false when
-    // the bus, UPower, or a battery is unavailable (indicator stays hidden).
+    // Non-blocking: fires an async GetAll, returns immediately.
+    // The indicator stays hidden until the first onChange_ fires with real data.
     bool start();
 
     const BatterySnapshot& snapshot() const { return snap_; }
 
-    // Fires on every pushed update (and once after the successful start fetch).
     void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
 
 private:
+    // Async call chain: DisplayDevice GetAll → (fallback) EnumerateDevices → device GetAll
+    static int onGetAllDisplay(sd_bus_message* reply, void* userdata, sd_bus_error* err);
+    static int onEnumerateDevices(sd_bus_message* reply, void* userdata, sd_bus_error* err);
+    static int onGetAllDevice(sd_bus_message* reply, void* userdata, sd_bus_error* err);
+    void subscribeSignal();
+    bool parseProps(sd_bus_message* m);
+
     static int onPropertiesChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
-    bool fetchAll(const char* devicePath);
-    bool parseProps(sd_bus_message* m);   // a{sv} at cursor → snapshot fields
-    std::string findBatteryDevice();      // fallback: EnumerateDevices, Type==2
 
     SystemBus& bus_;
-    sd_bus_slot* slot_ = nullptr;
+    sd_bus_slot* signalSlot_ = nullptr;
     std::string devicePath_;
     BatterySnapshot snap_;
     std::function<void()> onChange_;

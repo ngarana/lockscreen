@@ -1,4 +1,4 @@
-// WifiBackend.cpp - NetworkManager monitor implementation (push-driven).
+// WifiBackend.cpp - NetworkManager monitor implementation (async startup, push-driven).
 #include "system/WifiBackend.hpp"
 
 #include <systemd/sd-bus.h>
@@ -26,10 +26,8 @@ constexpr const char* kSettingsPath = "/org/freedesktop/NetworkManager/Settings"
 constexpr const char* kSettingsIface = "org.freedesktop.NetworkManager.Settings";
 constexpr const char* kSettingsConnIface = "org.freedesktop.NetworkManager.Settings.Connection";
 
-constexpr uint32_t kDeviceTypeWifi = 2;
-constexpr uint32_t kApFlagPrivacy = 0x1;  // NM_802_11_AP_FLAGS_PRIVACY
+constexpr uint32_t kApFlagPrivacy = 0x1;
 
-// Read an SSID byte-array property ("ay") from an object; empty on failure.
 std::string readSsidProp(sd_bus* bus, const char* path, const char* iface) {
     sd_bus_error err = SD_BUS_ERROR_NULL;
     sd_bus_message* reply = nullptr;
@@ -62,7 +60,6 @@ uint8_t getY(sd_bus* bus, const char* path, const char* iface, const char* prop)
     return v;
 }
 
-// The SSID of a saved Settings.Connection (its 802-11-wireless.ssid), or "".
 std::string connectionSsid(sd_bus* bus, const char* conn) {
     sd_bus_error err = SD_BUS_ERROR_NULL;
     sd_bus_message* r = nullptr;
@@ -74,7 +71,6 @@ std::string connectionSsid(sd_bus* bus, const char* conn) {
     sd_bus_error_free(&err);
 
     std::string ssid;
-    // a{sa{sv}}: setting group → key → value.
     if (sd_bus_message_enter_container(r, 'a', "{sa{sv}}") >= 0) {
         while (sd_bus_message_enter_container(r, 'e', "sa{sv}") > 0) {
             const char* group = nullptr;
@@ -94,13 +90,13 @@ std::string connectionSsid(sd_bus* bus, const char* conn) {
                     } else {
                         sd_bus_message_skip(r, "v");
                     }
-                    sd_bus_message_exit_container(r);  // sv
+                    sd_bus_message_exit_container(r);
                 }
-                sd_bus_message_exit_container(r);  // a{sv}
+                sd_bus_message_exit_container(r);
             } else {
                 sd_bus_message_skip(r, "a{sv}");
             }
-            sd_bus_message_exit_container(r);  // sa{sv}
+            sd_bus_message_exit_container(r);
         }
         sd_bus_message_exit_container(r);
     }
@@ -108,7 +104,6 @@ std::string connectionSsid(sd_bus* bus, const char* conn) {
     return ssid;
 }
 
-// (ssid → connection path) for every saved wireless connection.
 std::vector<std::pair<std::string, std::string>> savedConnections(sd_bus* bus) {
     std::vector<std::pair<std::string, std::string>> out;
     sd_bus_error err = SD_BUS_ERROR_NULL;
@@ -132,20 +127,8 @@ std::vector<std::pair<std::string, std::string>> savedConnections(sd_bus* bus) {
     return out;
 }
 
-bool getBool(sd_bus* bus, const char* path, const char* iface, const char* prop, bool* out) {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    int v = 0;
-    int r = sd_bus_get_property_trivial(bus, kNM, path, iface, prop, &err, 'b', &v);
-    sd_bus_error_free(&err);
-    if (r < 0) return false;
-    *out = v != 0;
-    return true;
-}
-
 bool getObjectPath(sd_bus* bus, const char* path, const char* iface, const char* prop,
                    std::string* out) {
-    // Object-path properties are type "o" — sd_bus_get_property_string only
-    // reads "s" and fails on the variant type mismatch.
     sd_bus_error err = SD_BUS_ERROR_NULL;
     sd_bus_message* reply = nullptr;
     int r = sd_bus_get_property(bus, kNM, path, iface, prop, &err, &reply, "o");
@@ -156,6 +139,64 @@ bool getObjectPath(sd_bus* bus, const char* path, const char* iface, const char*
     if (r >= 0 && s) *out = s;
     sd_bus_message_unref(reply);
     return r >= 0 && s != nullptr;
+}
+
+// Helpers to extract values from a Get property reply (v{type} container).
+bool extractBool(sd_bus_message* m, bool* out) {
+    if (sd_bus_message_enter_container(m, 'v', "b") < 0) {
+        sd_bus_message_skip(m, "v");
+        return false;
+    }
+    int v = 0;
+    int r = sd_bus_message_read_basic(m, 'b', &v);
+    sd_bus_message_exit_container(m);
+    if (r < 0) return false;
+    *out = v != 0;
+    return true;
+}
+
+bool extractObjPath(sd_bus_message* m, std::string* out) {
+    if (sd_bus_message_enter_container(m, 'v', "o") < 0) {
+        sd_bus_message_skip(m, "v");
+        return false;
+    }
+    const char* s = nullptr;
+    int r = sd_bus_message_read_basic(m, 'o', &s);
+    sd_bus_message_exit_container(m);
+    if (r < 0 || !s) return false;
+    *out = s;
+    return true;
+}
+
+bool extractByteArray(sd_bus_message* m, std::string* out) {
+    if (sd_bus_message_enter_container(m, 'v', "ay") < 0) {
+        sd_bus_message_skip(m, "v");
+        return false;
+    }
+    const void* data = nullptr;
+    size_t len = 0;
+    int r = sd_bus_message_read_array(m, 'y', &data, &len);
+    sd_bus_message_exit_container(m);
+    if (r < 0 || !data || len == 0) return false;
+    out->assign(static_cast<const char*>(data), len);
+    return true;
+}
+
+bool extractByte(sd_bus_message* m, uint8_t* out) {
+    if (sd_bus_message_enter_container(m, 'v', "y") < 0) {
+        sd_bus_message_skip(m, "v");
+        return false;
+    }
+    int r = sd_bus_message_read_basic(m, 'y', out);
+    sd_bus_message_exit_container(m);
+    return r >= 0;
+}
+
+// Issue an async Properties.Get for a single property.
+void asyncGetProp(sd_bus* bus, const char* dest, const char* path, const char* iface,
+                  const char* prop, sd_bus_message_handler_t cb, void* userdata) {
+    sd_bus_call_method_async(bus, nullptr, dest, path, kPropsIface, "Get", cb, userdata, "ss", iface,
+                             prop);
 }
 }  // namespace
 
@@ -168,25 +209,114 @@ WifiBackend::~WifiBackend() {
 bool WifiBackend::start() {
     if (!bus_.available()) return false;
 
-    device_ = findWifiDevice();
-    if (device_.empty()) {
+    // Async GetDevices → callback finds WiFi device → refreshAsync().
+    sd_bus_call_method_async(bus_.get(), nullptr, kNM, kNMPath, kNM, "GetDevices",
+                             &WifiBackend::onGetDevices, this, "");
+    return true;
+}
+
+int WifiBackend::onGetDevices(sd_bus_message* reply, void* userdata, sd_bus_error*) {
+    auto* self = static_cast<WifiBackend*>(userdata);
+    if (sd_bus_message_is_method_error(reply, nullptr)) return 0;
+
+    if (sd_bus_message_enter_container(reply, 'a', "o") < 0) return 0;
+    const char* path = nullptr;
+    std::string found;
+    while (sd_bus_message_read(reply, "o", &path) > 0 && path) {
+        if (std::strstr(path, "/wireless") || std::strstr(path, "/wlan")) {
+            found = path;
+            break;
+        }
+    }
+    sd_bus_message_exit_container(reply);
+
+    if (found.empty()) {
         std::fprintf(stderr, "qypr: no WiFi device via NetworkManager; wifi indicator disabled\n");
-        return false;
+        return 0;
     }
 
-    refresh();
-    if (!snap_.available) return false;
+    self->device_ = found;
+    self->refreshAsync();
+    return 0;
+}
 
-    // One broad match on NM's PropertiesChanged; the handler reacts only to
-    // the root, our device, and the current AP (other APs' strength updates
-    // are ignored without a refetch).
+void WifiBackend::refreshAsync() {
+    sd_bus* bus = bus_.get();
+    if (!bus || device_.empty()) return;
+
+    refreshStep_ = RefreshStep::WirelessEnabled;
+    pendingSnap_ = {};
+    asyncGetProp(bus, kNM, kNMPath, kNM, "WirelessEnabled", &WifiBackend::onRefreshStep, this);
+}
+
+int WifiBackend::onRefreshStep(sd_bus_message* reply, void* userdata, sd_bus_error*) {
+    auto* self = static_cast<WifiBackend*>(userdata);
+    if (sd_bus_message_is_method_error(reply, nullptr)) return 0;
+    sd_bus* bus = self->bus_.get();
+    if (!bus) return 0;
+
+    switch (self->refreshStep_) {
+        case RefreshStep::WirelessEnabled: {
+            bool enabled = false;
+            if (!extractBool(reply, &enabled)) return 0;
+            self->pendingSnap_.enabled = enabled;
+            self->pendingSnap_.available = true;
+            if (!enabled) {
+                self->activeAp_.clear();
+                self->snap_ = self->pendingSnap_;
+                self->subscribeSignal();
+                if (self->onChange_) self->onChange_();
+                return 0;
+            }
+            self->refreshStep_ = RefreshStep::ActiveAccessPoint;
+            asyncGetProp(bus, kNM, self->device_.c_str(), kWirelessIface, "ActiveAccessPoint",
+                         &WifiBackend::onRefreshStep, self);
+            return 0;
+        }
+        case RefreshStep::ActiveAccessPoint: {
+            std::string ap;
+            if (!extractObjPath(reply, &ap) || ap.empty() || ap == "/") {
+                self->activeAp_.clear();
+                self->snap_ = self->pendingSnap_;
+                self->subscribeSignal();
+                if (self->onChange_) self->onChange_();
+                return 0;
+            }
+            self->activeAp_ = ap;
+            self->pendingSnap_.connected = true;
+            self->refreshStep_ = RefreshStep::Ssid;
+            asyncGetProp(bus, kNM, ap.c_str(), kApIface, "Ssid", &WifiBackend::onRefreshStep,
+                         self);
+            return 0;
+        }
+        case RefreshStep::Ssid: {
+            std::string ssid;
+            extractByteArray(reply, &ssid);
+            self->pendingSnap_.ssid = std::move(ssid);
+            self->refreshStep_ = RefreshStep::Strength;
+            asyncGetProp(bus, kNM, self->activeAp_.c_str(), kApIface, "Strength",
+                         &WifiBackend::onRefreshStep, self);
+            return 0;
+        }
+        case RefreshStep::Strength: {
+            uint8_t strength = 0;
+            extractByte(reply, &strength);
+            self->pendingSnap_.strength = strength;
+            self->snap_ = self->pendingSnap_;
+            self->subscribeSignal();
+            if (self->onChange_) self->onChange_();
+            return 0;
+        }
+    }
+    return 0;
+}
+
+void WifiBackend::subscribeSignal() {
+    if (slot_) return;  // already subscribed
     slot_ = bus_.addMatch(
         "type='signal',sender='org.freedesktop.NetworkManager',"
         "interface='org.freedesktop.DBus.Properties',member='PropertiesChanged'",
         &WifiBackend::onPropsChanged, this);
-
-    if (onChange_) onChange_();
-    return true;
 }
 
 int WifiBackend::onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_error*) {
@@ -198,89 +328,14 @@ int WifiBackend::onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_error*
         return 0;
     }
 
-    WifiSnapshot before = self->snap_;
-    self->refresh();
-    if (!(self->snap_ == before) && self->onChange_) self->onChange_();
+    // On any relevant property change, do a full async refresh.
+    self->refreshAsync();
     return 0;
-}
-
-void WifiBackend::refresh() {
-    sd_bus* bus = bus_.get();
-    if (!bus || device_.empty()) return;
-
-    WifiSnapshot next;
-    next.available = getBool(bus, kNMPath, kNM, "WirelessEnabled", &next.enabled);
-    if (!next.available) {
-        snap_ = next;
-        return;
-    }
-
-    activeAp_.clear();
-    std::string ap;
-    if (next.enabled &&
-        getObjectPath(bus, device_.c_str(), kWirelessIface, "ActiveAccessPoint", &ap) &&
-        ap != "/") {
-        activeAp_ = ap;
-        next.connected = true;
-
-        // Ssid is a byte array (not NUL-terminated, not guaranteed UTF-8).
-        sd_bus_error err = SD_BUS_ERROR_NULL;
-        sd_bus_message* reply = nullptr;
-        if (sd_bus_get_property(bus, kNM, ap.c_str(), kApIface, "Ssid", &err, &reply, "ay") >= 0 &&
-            reply) {
-            const void* data = nullptr;
-            size_t len = 0;
-            if (sd_bus_message_read_array(reply, 'y', &data, &len) >= 0 && data && len > 0) {
-                next.ssid.assign(static_cast<const char*>(data), len);
-            }
-            sd_bus_message_unref(reply);
-        }
-        sd_bus_error_free(&err);
-
-        sd_bus_error serr = SD_BUS_ERROR_NULL;
-        uint8_t strength = 0;
-        if (sd_bus_get_property_trivial(bus, kNM, ap.c_str(), kApIface, "Strength", &serr, 'y',
-                                        &strength) >= 0) {
-            next.strength = strength;
-        }
-        sd_bus_error_free(&serr);
-    }
-
-    snap_ = next;
-}
-
-std::string WifiBackend::findWifiDevice() {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    int r = sd_bus_call_method(bus_.get(), kNM, kNMPath, kNM, "GetDevices", &err, &reply, "");
-    sd_bus_error_free(&err);
-    if (r < 0 || !reply) return {};
-
-    std::string found;
-    if (sd_bus_message_enter_container(reply, 'a', "o") >= 0) {
-        const char* path = nullptr;
-        while (sd_bus_message_read(reply, "o", &path) > 0 && path) {
-            sd_bus_error derr = SD_BUS_ERROR_NULL;
-            uint32_t type = 0;
-            int tr = sd_bus_get_property_trivial(bus_.get(), kNM, path, kDeviceIface,
-                                                 "DeviceType", &derr, 'u', &type);
-            sd_bus_error_free(&derr);
-            if (tr >= 0 && type == kDeviceTypeWifi) {
-                found = path;
-                break;
-            }
-        }
-        sd_bus_message_exit_container(reply);
-    }
-    sd_bus_message_unref(reply);
-    return found;
 }
 
 void WifiBackend::setEnabled(bool on) {
     if (!bus_.available()) return;
 
-    // Optimistic: the radio flip is reflected immediately; NM's
-    // PropertiesChanged confirms (or corrects) shortly after.
     snap_.enabled = on;
     if (!on) {
         snap_.connected = false;
@@ -307,11 +362,9 @@ std::vector<WifiAp> WifiBackend::scanNetworks() const {
     sd_bus* bus = bus_.get();
     if (!bus || device_.empty()) return out;
 
-    // Which SSIDs NM already has a profile for (→ joinable without an agent).
     std::unordered_set<std::string> saved;
     for (auto& p : savedConnections(bus)) saved.insert(p.first);
 
-    // The active AP (to flag it), and the device's AP list.
     std::string active;
     getObjectPath(bus, device_.c_str(), kWirelessIface, "ActiveAccessPoint", &active);
 
@@ -333,7 +386,6 @@ std::vector<WifiAp> WifiBackend::scanNetworks() const {
     }
     sd_bus_message_unref(reply);
 
-    // Dedup by SSID keeping the strongest (a network is often several BSSIDs).
     std::unordered_map<std::string, size_t> bySsid;
     for (const auto& ap : paths) {
         std::string ssid = readSsidProp(bus, ap.c_str(), kApIface);
@@ -356,7 +408,7 @@ std::vector<WifiAp> WifiBackend::scanNetworks() const {
     }
 
     std::stable_sort(out.begin(), out.end(), [](const WifiAp& a, const WifiAp& b) {
-        if (a.active != b.active) return a.active > b.active;  // active first
+        if (a.active != b.active) return a.active > b.active;
         return a.strength > b.strength;
     });
     return out;
@@ -369,7 +421,7 @@ void WifiBackend::requestScan() {
     if (sd_bus_message_new_method_call(bus, &msg, kNM, device_.c_str(), kWirelessIface,
                                        "RequestScan") < 0)
         return;
-    sd_bus_message_open_container(msg, 'a', "{sv}");  // empty options
+    sd_bus_message_open_container(msg, 'a', "{sv}");
     sd_bus_message_close_container(msg);
     sd_bus_call_async(bus, nullptr, msg, nullptr, nullptr, 0);
     sd_bus_message_unref(msg);
@@ -387,9 +439,7 @@ void WifiBackend::connectSsid(const std::string& ssid) {
     sd_bus* bus = bus_.get();
     if (!bus || ssid.empty() || device_.empty()) return;
     const std::string conn = findSavedConnection(ssid);
-    if (conn.empty()) return;  // unsaved network → needs a secret agent (out of scope)
-    // ActivateConnection(connection, device, specific_object="/"). NM already has
-    // the credentials, so no agent is involved.
+    if (conn.empty()) return;
     sd_bus_call_method_async(bus, nullptr, kNM, kNMPath, kNM, "ActivateConnection", nullptr,
                              nullptr, "ooo", conn.c_str(), device_.c_str(), "/");
 }

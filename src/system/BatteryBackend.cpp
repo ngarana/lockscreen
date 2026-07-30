@@ -1,4 +1,4 @@
-// BatteryBackend.cpp - UPower monitor implementation (push via PropertiesChanged).
+// BatteryBackend.cpp - UPower monitor implementation (async startup, push via PropertiesChanged).
 #include "system/BatteryBackend.hpp"
 
 #include <systemd/sd-bus.h>
@@ -17,24 +17,20 @@ constexpr const char* kDisplayDevice = "/org/freedesktop/UPower/devices/DisplayD
 constexpr const char* kDeviceIface = "org.freedesktop.UPower.Device";
 constexpr const char* kPropsIface = "org.freedesktop.DBus.Properties";
 
-// org.freedesktop.UPower.Device.Type: 2 = battery.
 constexpr uint32_t kTypeBattery = 2;
 
-// org.freedesktop.UPower.Device.State (uint32).
 BatterySnapshot::State mapState(uint32_t s) {
     switch (s) {
         case 1: return BatterySnapshot::Charging;
         case 2: return BatterySnapshot::Discharging;
-        case 3: return BatterySnapshot::Discharging;  // empty
+        case 3: return BatterySnapshot::Discharging;
         case 4: return BatterySnapshot::Full;
         case 5: return BatterySnapshot::PendingCharge;
-        case 6: return BatterySnapshot::Discharging;  // pending discharge
+        case 6: return BatterySnapshot::Discharging;
         default: return BatterySnapshot::Unknown;
     }
 }
 
-// Read one variant holding the expected basic type; skips the variant whole
-// when the daemon sends something else.
 bool readVariant(sd_bus_message* m, const char* contents, void* out) {
     if (sd_bus_message_enter_container(m, 'v', contents) < 0) {
         sd_bus_message_skip(m, "v");
@@ -49,56 +45,90 @@ bool readVariant(sd_bus_message* m, const char* contents, void* out) {
 BatteryBackend::BatteryBackend(SystemBus& bus) : bus_(bus) {}
 
 BatteryBackend::~BatteryBackend() {
-    if (slot_) sd_bus_slot_unref(slot_);
+    if (signalSlot_) sd_bus_slot_unref(signalSlot_);
 }
 
 bool BatteryBackend::start() {
     if (!bus_.available()) return false;
 
-    devicePath_ = kDisplayDevice;
-    bool ok = fetchAll(devicePath_.c_str());
-    if (!ok || !snap_.present) {
-        // Desktop machines expose a DisplayDevice with IsPresent=false.
-        std::string alt = findBatteryDevice();
-        if (!alt.empty()) {
-            devicePath_ = alt;
-            ok = fetchAll(devicePath_.c_str());
-        }
-    }
-    if (!ok || !snap_.present) {
-        std::fprintf(stderr, "qypr: no battery via UPower; battery indicator disabled\n");
-        return false;
-    }
-
-    std::string rule = std::string("type='signal',sender='") + kUPower + "',path='" +
-                       devicePath_ + "',interface='" + kPropsIface +
-                       "',member='PropertiesChanged'";
-    slot_ = bus_.addMatch(rule.c_str(), &BatteryBackend::onPropertiesChanged, this);
-
-    if (onChange_) onChange_();
+    // Async: GetAll on DisplayDevice → callback decides next step.
+    sd_bus_call_method_async(bus_.get(), nullptr, kUPower, kDisplayDevice, kPropsIface, "GetAll",
+                             &BatteryBackend::onGetAllDisplay, this, "s", kDeviceIface);
     return true;
 }
 
-int BatteryBackend::onPropertiesChanged(sd_bus_message* m, void* userdata, sd_bus_error*) {
+int BatteryBackend::onGetAllDisplay(sd_bus_message* reply, void* userdata, sd_bus_error*) {
     auto* self = static_cast<BatteryBackend*>(userdata);
-    const char* iface = nullptr;
-    if (sd_bus_message_read(m, "s", &iface) < 0 || !iface) return 0;
-    if (std::strcmp(iface, kDeviceIface) != 0) return 0;
-    if (self->parseProps(m) && self->onChange_) self->onChange_();
+    if (sd_bus_message_is_method_error(reply, nullptr)) {
+        // DisplayDevice unavailable — try EnumerateDevices fallback.
+        sd_bus_call_method_async(self->bus_.get(), nullptr, kUPower, kUPowerPath, kUPower,
+                                 "EnumerateDevices", &BatteryBackend::onEnumerateDevices, self, "");
+        return 0;
+    }
+
+    if (self->parseProps(reply) && self->snap_.present) {
+        self->devicePath_ = kDisplayDevice;
+        self->subscribeSignal();
+        if (self->onChange_) self->onChange_();
+        return 0;
+    }
+
+    // DisplayDevice says not present — try EnumerateDevices fallback.
+    sd_bus_call_method_async(self->bus_.get(), nullptr, kUPower, kUPowerPath, kUPower,
+                             "EnumerateDevices", &BatteryBackend::onEnumerateDevices, self, "");
     return 0;
 }
 
-bool BatteryBackend::fetchAll(const char* devicePath) {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    int r = sd_bus_call_method(bus_.get(), kUPower, devicePath, kPropsIface, "GetAll",
-                               &err, &reply, "s", kDeviceIface);
-    sd_bus_error_free(&err);
-    if (r < 0 || !reply) return false;
+int BatteryBackend::onEnumerateDevices(sd_bus_message* reply, void* userdata, sd_bus_error*) {
+    auto* self = static_cast<BatteryBackend*>(userdata);
+    if (sd_bus_message_is_method_error(reply, nullptr)) return 0;
 
-    bool ok = parseProps(reply);
-    sd_bus_message_unref(reply);
-    return ok;
+    // Walk object paths, find first that looks like a battery.
+    if (sd_bus_message_enter_container(reply, 'a', "o") < 0) return 0;
+    const char* path = nullptr;
+    std::string found;
+    while (sd_bus_message_read(reply, "o", &path) > 0 && path) {
+        if (std::strstr(path, "/devices/bat")) {
+            found = path;
+            break;
+        }
+    }
+    sd_bus_message_exit_container(reply);
+
+    if (found.empty()) {
+        std::fprintf(stderr, "qypr: no battery via UPower; battery indicator disabled\n");
+        return 0;
+    }
+
+    self->devicePath_ = found;
+    sd_bus_call_method_async(self->bus_.get(), nullptr, kUPower, found.c_str(), kPropsIface,
+                             "GetAll", &BatteryBackend::onGetAllDevice, self, "s", kDeviceIface);
+    return 0;
+}
+
+int BatteryBackend::onGetAllDevice(sd_bus_message* reply, void* userdata, sd_bus_error*) {
+    auto* self = static_cast<BatteryBackend*>(userdata);
+    if (sd_bus_message_is_method_error(reply, nullptr)) {
+        std::fprintf(stderr, "qypr: no battery via UPower; battery indicator disabled\n");
+        return 0;
+    }
+
+    self->parseProps(reply);
+    if (!self->snap_.present) {
+        std::fprintf(stderr, "qypr: no battery via UPower; battery indicator disabled\n");
+        return 0;
+    }
+
+    self->subscribeSignal();
+    if (self->onChange_) self->onChange_();
+    return 0;
+}
+
+void BatteryBackend::subscribeSignal() {
+    std::string rule = std::string("type='signal',sender='") + kUPower + "',path='" +
+                       devicePath_ + "',interface='" + kPropsIface +
+                       "',member='PropertiesChanged'";
+    signalSlot_ = bus_.addMatch(rule.c_str(), &BatteryBackend::onPropertiesChanged, this);
 }
 
 bool BatteryBackend::parseProps(sd_bus_message* m) {
@@ -164,32 +194,13 @@ bool BatteryBackend::parseProps(sd_bus_message* m) {
     return any;
 }
 
-std::string BatteryBackend::findBatteryDevice() {
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    int r = sd_bus_call_method(bus_.get(), kUPower, kUPowerPath, kUPower,
-                               "EnumerateDevices", &err, &reply, "");
-    sd_bus_error_free(&err);
-    if (r < 0 || !reply) return {};
-
-    std::string found;
-    if (sd_bus_message_enter_container(reply, 'a', "o") >= 0) {
-        const char* path = nullptr;
-        while (sd_bus_message_read(reply, "o", &path) > 0 && path) {
-            sd_bus_error derr = SD_BUS_ERROR_NULL;
-            uint32_t type = 0;
-            int tr = sd_bus_get_property_trivial(bus_.get(), kUPower, path, kDeviceIface,
-                                                 "Type", &derr, 'u', &type);
-            sd_bus_error_free(&derr);
-            if (tr >= 0 && type == kTypeBattery) {
-                found = path;
-                break;
-            }
-        }
-        sd_bus_message_exit_container(reply);
-    }
-    sd_bus_message_unref(reply);
-    return found;
+int BatteryBackend::onPropertiesChanged(sd_bus_message* m, void* userdata, sd_bus_error*) {
+    auto* self = static_cast<BatteryBackend*>(userdata);
+    const char* iface = nullptr;
+    if (sd_bus_message_read(m, "s", &iface) < 0 || !iface) return 0;
+    if (std::strcmp(iface, kDeviceIface) != 0) return 0;
+    if (self->parseProps(m) && self->onChange_) self->onChange_();
+    return 0;
 }
 
 }  // namespace qypr

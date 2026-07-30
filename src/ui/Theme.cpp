@@ -54,6 +54,25 @@ void loadTheme(const Config& cfg) {
     statusbar::barBorderEnabled = true;
     statusbar::panelSurfaceAlpha = 1.0;
 
+    // Statusbar geometry resets to compiled-in defaults.
+    statusbar::height = 36.0;
+    statusbar::topMargin = spacing::large;
+    statusbar::sideMargin = spacing::xlarge;
+    statusbar::cornerRadius = 12.0;
+    statusbar::iconSize = 16.0;
+    statusbar::clockIconSize = 16.0;
+    statusbar::symbolicIconSize = 18.0;
+    statusbar::iconSpacing = 18.0;
+    statusbar::padding = 14.0;
+    statusbar::separatorWidth = 1.0;
+    statusbar::qsPanelWidth = 380.0;
+    statusbar::qsTileSize = 110.0;
+    statusbar::qsTileHeight = 64.0;
+    statusbar::qsTileGap = 8.0;
+    statusbar::qsSliderHeight = 40.0;
+    statusbar::qsPadding = 16.0;
+    statusbar::qsCornerRadius = 16.0;
+
     // Icon rendering resets to Auto (themed-when-available, else Nerd Font glyph).
     icons::mode = icons::Mode::Auto;
 

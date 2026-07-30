@@ -1,4 +1,4 @@
-// BluetoothBackend.cpp - BlueZ monitor implementation (push-driven).
+// BluetoothBackend.cpp - BlueZ monitor implementation (async startup, push-driven).
 #include "system/BluetoothBackend.hpp"
 
 #include <systemd/sd-bus.h>
@@ -20,8 +20,6 @@ constexpr const char* kDeviceIface = "org.bluez.Device1";
 constexpr const char* kBatteryIface = "org.bluez.Battery1";
 constexpr const char* kPropsIface = "org.freedesktop.DBus.Properties";
 
-// Returns true if the a{sv} dict at the cursor contains any of the keys.
-// Consumes the dict either way.
 bool dictHasKey(sd_bus_message* m, std::initializer_list<const char*> keys) {
     bool found = false;
     if (sd_bus_message_enter_container(m, 'a', "{sv}") < 0) return false;
@@ -50,12 +48,134 @@ BluetoothBackend::~BluetoothBackend() {
 bool BluetoothBackend::start() {
     if (!bus_.available()) return false;
 
-    refresh();
-    if (!snap_.available) {
+    // Async GetManagedObjects → callback parses and fires onChange_.
+    sd_bus_call_method_async(bus_.get(), nullptr, kBlueZ, "/",
+                             "org.freedesktop.DBus.ObjectManager", "GetManagedObjects",
+                             &BluetoothBackend::onGetManagedObjects, this, "");
+    return true;
+}
+
+int BluetoothBackend::onGetManagedObjects(sd_bus_message* reply, void* userdata, sd_bus_error*) {
+    auto* self = static_cast<BluetoothBackend*>(userdata);
+    if (sd_bus_message_is_method_error(reply, nullptr)) {
         std::fprintf(stderr, "qypr: no Bluetooth adapter via BlueZ; indicator disabled\n");
-        return false;
+        return 0;
     }
 
+    self->parseManagedObjects(reply);
+    if (!self->snap_.available) {
+        std::fprintf(stderr, "qypr: no Bluetooth adapter via BlueZ; indicator disabled\n");
+        return 0;
+    }
+
+    self->subscribeSignals();
+    if (self->onChange_) self->onChange_();
+    return 0;
+}
+
+void BluetoothBackend::parseManagedObjects(sd_bus_message* m) {
+    BluetoothSnapshot next;
+    adapter_.clear();
+
+    if (sd_bus_message_enter_container(m, 'a', "{oa{sa{sv}}}") < 0) return;
+    while (sd_bus_message_enter_container(m, 'e', "oa{sa{sv}}") > 0) {
+        const char* path = nullptr;
+        sd_bus_message_read(m, "o", &path);
+
+        BtDevice dev;
+        if (path) dev.path = path;
+        bool isDeviceObj = false;
+
+        sd_bus_message_enter_container(m, 'a', "{sa{sv}}");
+        while (sd_bus_message_enter_container(m, 'e', "sa{sv}") > 0) {
+            const char* iface = nullptr;
+            sd_bus_message_read(m, "s", &iface);
+
+            const bool isAdapter = iface && std::strcmp(iface, kAdapterIface) == 0;
+            const bool isDevice = iface && std::strcmp(iface, kDeviceIface) == 0;
+            const bool isBattery = iface && std::strcmp(iface, kBatteryIface) == 0;
+            if (!isAdapter && !isDevice && !isBattery) {
+                sd_bus_message_skip(m, "a{sv}");
+                sd_bus_message_exit_container(m);
+                continue;
+            }
+            if (isDevice) isDeviceObj = true;
+
+            sd_bus_message_enter_container(m, 'a', "{sv}");
+            while (sd_bus_message_enter_container(m, 'e', "sv") > 0) {
+                const char* key = nullptr;
+                sd_bus_message_read(m, "s", &key);
+                auto readBool = [&](bool& out) {
+                    int b = 0;
+                    if (sd_bus_message_enter_container(m, 'v', "b") >= 0) {
+                        sd_bus_message_read_basic(m, 'b', &b);
+                        sd_bus_message_exit_container(m);
+                        out = b != 0;
+                    } else {
+                        sd_bus_message_skip(m, "v");
+                    }
+                };
+                auto readStr = [&](std::string& out, bool overwrite) {
+                    if (sd_bus_message_enter_container(m, 'v', "s") >= 0) {
+                        const char* s = nullptr;
+                        sd_bus_message_read_basic(m, 's', &s);
+                        sd_bus_message_exit_container(m);
+                        if (s && (overwrite || out.empty())) out = s;
+                    } else {
+                        sd_bus_message_skip(m, "v");
+                    }
+                };
+                if (isAdapter && key && std::strcmp(key, "Powered") == 0) {
+                    readBool(next.powered);
+                } else if (isDevice && key && std::strcmp(key, "Connected") == 0) {
+                    readBool(dev.connected);
+                } else if (isDevice && key && std::strcmp(key, "Paired") == 0) {
+                    readBool(dev.paired);
+                } else if (isDevice && key && std::strcmp(key, "Alias") == 0) {
+                    readStr(dev.name, true);
+                } else if (isDevice && key && std::strcmp(key, "Name") == 0) {
+                    readStr(dev.name, false);
+                } else if (isDevice && key && std::strcmp(key, "Icon") == 0) {
+                    readStr(dev.icon, true);
+                } else if (isBattery && key && std::strcmp(key, "Percentage") == 0) {
+                    uint8_t pct = 0;
+                    if (sd_bus_message_enter_container(m, 'v', "y") >= 0) {
+                        sd_bus_message_read_basic(m, 'y', &pct);
+                        sd_bus_message_exit_container(m);
+                        dev.battery = pct;
+                    } else {
+                        sd_bus_message_skip(m, "v");
+                    }
+                } else {
+                    sd_bus_message_skip(m, "v");
+                }
+                sd_bus_message_exit_container(m);
+            }
+            sd_bus_message_exit_container(m);
+
+            if (isAdapter) {
+                next.available = true;
+                if (adapter_.empty() && path) adapter_ = path;
+            }
+            sd_bus_message_exit_container(m);
+        }
+        sd_bus_message_exit_container(m);
+
+        if (isDeviceObj) {
+            if (dev.connected) {
+                ++next.connectedCount;
+                if (next.firstDevice.empty()) next.firstDevice = dev.name;
+            }
+            next.devices.push_back(std::move(dev));
+        }
+        sd_bus_message_exit_container(m);
+    }
+    sd_bus_message_exit_container(m);
+
+    snap_ = std::move(next);
+}
+
+void BluetoothBackend::subscribeSignals() {
     propsSlot_ = bus_.addMatch(
         "type='signal',sender='org.bluez',interface='org.freedesktop.DBus.Properties',"
         "member='PropertiesChanged'",
@@ -64,9 +184,6 @@ bool BluetoothBackend::start() {
         "type='signal',sender='org.bluez',"
         "interface='org.freedesktop.DBus.ObjectManager'",
         &BluetoothBackend::onInterfacesChanged, this);
-
-    if (onChange_) onChange_();
-    return true;
 }
 
 int BluetoothBackend::onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_error*) {
@@ -74,8 +191,6 @@ int BluetoothBackend::onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_e
     const char* iface = nullptr;
     if (sd_bus_message_read(m, "s", &iface) < 0 || !iface) return 0;
 
-    // Only adapter power flips and device connect/disconnect matter; RSSI
-    // updates from discovery would otherwise cause a GetManagedObjects storm.
     if (std::strcmp(iface, kAdapterIface) == 0) {
         if (!dictHasKey(m, {"Powered", "PowerState"})) return 0;
     } else if (std::strcmp(iface, kDeviceIface) == 0) {
@@ -86,144 +201,25 @@ int BluetoothBackend::onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_e
         return 0;
     }
 
-    self->refreshAndNotify();
+    // Re-fetch: async GetManagedObjects.
+    sd_bus_call_method_async(self->bus_.get(), nullptr, kBlueZ, "/",
+                             "org.freedesktop.DBus.ObjectManager", "GetManagedObjects",
+                             &BluetoothBackend::onGetManagedObjects, self, "");
     return 0;
 }
 
 int BluetoothBackend::onInterfacesChanged(sd_bus_message*, void* userdata, sd_bus_error*) {
-    static_cast<BluetoothBackend*>(userdata)->refreshAndNotify();
+    auto* self = static_cast<BluetoothBackend*>(userdata);
+    // Re-fetch: async GetManagedObjects.
+    sd_bus_call_method_async(self->bus_.get(), nullptr, kBlueZ, "/",
+                             "org.freedesktop.DBus.ObjectManager", "GetManagedObjects",
+                             &BluetoothBackend::onGetManagedObjects, self, "");
     return 0;
-}
-
-void BluetoothBackend::refreshAndNotify() {
-    BluetoothSnapshot before = snap_;
-    refresh();
-    if (!(snap_ == before) && onChange_) onChange_();
-}
-
-void BluetoothBackend::refresh() {
-    sd_bus* bus = bus_.get();
-    if (!bus) return;
-
-    sd_bus_error err = SD_BUS_ERROR_NULL;
-    sd_bus_message* reply = nullptr;
-    int r = sd_bus_call_method(bus, kBlueZ, "/", "org.freedesktop.DBus.ObjectManager",
-                               "GetManagedObjects", &err, &reply, "");
-    sd_bus_error_free(&err);
-    if (r < 0 || !reply) {
-        snap_ = {};
-        return;
-    }
-
-    BluetoothSnapshot next;
-    adapter_.clear();
-
-    // a{oa{sa{sv}}}: object path → interface → properties. A device object can
-    // carry both Device1 and Battery1, so accumulate per object across its
-    // interface blocks and emit one BtDevice at the end.
-    sd_bus_message_enter_container(reply, 'a', "{oa{sa{sv}}}");
-    while (sd_bus_message_enter_container(reply, 'e', "oa{sa{sv}}") > 0) {
-        const char* path = nullptr;
-        sd_bus_message_read(reply, "o", &path);
-
-        BtDevice dev;
-        if (path) dev.path = path;
-        bool isDeviceObj = false;
-
-        sd_bus_message_enter_container(reply, 'a', "{sa{sv}}");
-        while (sd_bus_message_enter_container(reply, 'e', "sa{sv}") > 0) {
-            const char* iface = nullptr;
-            sd_bus_message_read(reply, "s", &iface);
-
-            const bool isAdapter = iface && std::strcmp(iface, kAdapterIface) == 0;
-            const bool isDevice = iface && std::strcmp(iface, kDeviceIface) == 0;
-            const bool isBattery = iface && std::strcmp(iface, kBatteryIface) == 0;
-            if (!isAdapter && !isDevice && !isBattery) {
-                sd_bus_message_skip(reply, "a{sv}");
-                sd_bus_message_exit_container(reply);
-                continue;
-            }
-            if (isDevice) isDeviceObj = true;
-
-            sd_bus_message_enter_container(reply, 'a', "{sv}");
-            while (sd_bus_message_enter_container(reply, 'e', "sv") > 0) {
-                const char* key = nullptr;
-                sd_bus_message_read(reply, "s", &key);
-                auto readBool = [&](bool& out) {
-                    int b = 0;
-                    if (sd_bus_message_enter_container(reply, 'v', "b") >= 0) {
-                        sd_bus_message_read_basic(reply, 'b', &b);
-                        sd_bus_message_exit_container(reply);
-                        out = b != 0;
-                    } else {
-                        sd_bus_message_skip(reply, "v");
-                    }
-                };
-                auto readStr = [&](std::string& out, bool overwrite) {
-                    if (sd_bus_message_enter_container(reply, 'v', "s") >= 0) {
-                        const char* s = nullptr;
-                        sd_bus_message_read_basic(reply, 's', &s);
-                        sd_bus_message_exit_container(reply);
-                        if (s && (overwrite || out.empty())) out = s;
-                    } else {
-                        sd_bus_message_skip(reply, "v");
-                    }
-                };
-                if (isAdapter && key && std::strcmp(key, "Powered") == 0) {
-                    readBool(next.powered);
-                } else if (isDevice && key && std::strcmp(key, "Connected") == 0) {
-                    readBool(dev.connected);
-                } else if (isDevice && key && std::strcmp(key, "Paired") == 0) {
-                    readBool(dev.paired);
-                } else if (isDevice && key && std::strcmp(key, "Alias") == 0) {
-                    readStr(dev.name, /*overwrite=*/true);  // Alias beats Name
-                } else if (isDevice && key && std::strcmp(key, "Name") == 0) {
-                    readStr(dev.name, /*overwrite=*/false);
-                } else if (isDevice && key && std::strcmp(key, "Icon") == 0) {
-                    readStr(dev.icon, /*overwrite=*/true);
-                } else if (isBattery && key && std::strcmp(key, "Percentage") == 0) {
-                    uint8_t pct = 0;
-                    if (sd_bus_message_enter_container(reply, 'v', "y") >= 0) {
-                        sd_bus_message_read_basic(reply, 'y', &pct);
-                        sd_bus_message_exit_container(reply);
-                        dev.battery = pct;
-                    } else {
-                        sd_bus_message_skip(reply, "v");
-                    }
-                } else {
-                    sd_bus_message_skip(reply, "v");
-                }
-                sd_bus_message_exit_container(reply);
-            }
-            sd_bus_message_exit_container(reply);
-
-            if (isAdapter) {
-                next.available = true;
-                if (adapter_.empty() && path) adapter_ = path;
-            }
-            sd_bus_message_exit_container(reply);
-        }
-        sd_bus_message_exit_container(reply);
-
-        if (isDeviceObj) {
-            if (dev.connected) {
-                ++next.connectedCount;
-                if (next.firstDevice.empty()) next.firstDevice = dev.name;
-            }
-            next.devices.push_back(std::move(dev));
-        }
-        sd_bus_message_exit_container(reply);
-    }
-    sd_bus_message_exit_container(reply);
-    sd_bus_message_unref(reply);
-
-    snap_ = std::move(next);
 }
 
 void BluetoothBackend::setPowered(bool on) {
     if (!bus_.available() || adapter_.empty()) return;
 
-    // Optimistic flip; BlueZ's PropertiesChanged confirms shortly after.
     snap_.powered = on;
     if (!on) {
         snap_.connectedCount = 0;
@@ -246,8 +242,6 @@ void BluetoothBackend::setPowered(bool on) {
 
 void BluetoothBackend::connectDevice(const std::string& path) {
     if (!bus_.available() || path.empty()) return;
-    // Connect can take seconds; fire-and-forget. The Connected PropertiesChanged
-    // refreshes the list when it lands.
     sd_bus_call_method_async(bus_.get(), nullptr, kBlueZ, path.c_str(), kDeviceIface, "Connect",
                              nullptr, nullptr, "");
 }

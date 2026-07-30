@@ -115,7 +115,7 @@ bool Config::load(const std::string& path) {
     std::set<std::string> imported;
     const bool ok = loadFile(path_, imported, true);
 
-    loaded_ = true;
+    loaded_ = ok;
     return ok;
 }
 
