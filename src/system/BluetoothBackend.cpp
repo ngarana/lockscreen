@@ -59,12 +59,15 @@ int BluetoothBackend::onGetManagedObjects(sd_bus_message* reply, void* userdata,
     auto* self = static_cast<BluetoothBackend*>(userdata);
     if (sd_bus_message_is_method_error(reply, nullptr)) {
         std::fprintf(stderr, "qypr: no Bluetooth adapter via BlueZ; indicator disabled\n");
+        self->snap_.available = false;
+        if (self->onChange_) self->onChange_();  // hide the placeholder
         return 0;
     }
 
     self->parseManagedObjects(reply);
     if (!self->snap_.available) {
         std::fprintf(stderr, "qypr: no Bluetooth adapter via BlueZ; indicator disabled\n");
+        if (self->onChange_) self->onChange_();  // hide the placeholder
         return 0;
     }
 

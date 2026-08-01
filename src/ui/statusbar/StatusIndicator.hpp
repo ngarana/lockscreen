@@ -174,6 +174,16 @@ protected:
     Zone zone_;
     int priority_;
 
+    // Placeholder-until-loaded (instant startup, waybar/polybar style). A
+    // hardware-presence indicator (battery, wifi, bluetooth, volume, brightness)
+    // reserves its slot and draws a neutral resting glyph with no value text from
+    // the first frame, then flips this true on the first backend push so real
+    // data replaces the placeholder in place — no appear-and-reflow lag. It is
+    // set true immediately when the indicator has no backend (tests / registry
+    // previews render their sample defaults). Content indicators (media, tray,
+    // taskbar, …) ignore this and stay hidden until they have something to show.
+    bool loaded_ = false;
+
     // ── Icon crossfade (Phase 6 polish) ─────────────────────────────────
     // When icon() changes between draws, the base draws the outgoing glyph
     // fading out under the incoming one over `theme::anim::medium` (300ms,

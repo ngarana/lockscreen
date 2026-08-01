@@ -207,15 +207,18 @@ private:
 
 WifiIndicator::WifiIndicator(const SystemBackends& backends)
     : StatusIndicator("wifi", Zone::Right, 300), backend_(backends.wifi) {
-    // Hidden until the backend pushes real data; render defaults without one.
-    if (backend_) visible = false;
+    // Reserve the slot and show a neutral placeholder until the first push
+    // (instant load, no reflow). Render defaults without a backend.
+    loaded_ = !backend_;
 }
 
 std::string WifiIndicator::icon() const {
+    if (!loaded_) return "󰖩";  // neutral wifi glyph while state is pending
     return wifiIcon(lastSnap_);
 }
 
 std::string WifiIndicator::themedIcon() const {
+    if (!loaded_) return "";  // fall back to the neutral glyph until loaded
     return wifiThemedIcon(lastSnap_);
 }
 
@@ -228,6 +231,7 @@ std::string WifiIndicator::tooltip() const {
 void WifiIndicator::onBackendUpdate() {
     if (!backend_) return;
     lastSnap_ = backend_->snapshot();
+    loaded_ = true;  // real data has landed; drop the placeholder
     visible = lastSnap_.available;
 }
 

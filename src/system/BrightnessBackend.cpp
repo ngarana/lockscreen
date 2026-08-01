@@ -59,6 +59,8 @@ bool BrightnessBackend::start() {
     closedir(dir);
     if (snap_.device.empty() || !readSysfs()) {
         std::fprintf(stderr, "qypr: no backlight device; brightness indicator disabled\n");
+        snap_.available = false;
+        if (onChange_) onChange_();  // hide the placeholder
         return false;
     }
 

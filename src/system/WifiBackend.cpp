@@ -232,6 +232,8 @@ int WifiBackend::onGetDevices(sd_bus_message* reply, void* userdata, sd_bus_erro
 
     if (found.empty()) {
         std::fprintf(stderr, "qypr: no WiFi device via NetworkManager; wifi indicator disabled\n");
+        self->snap_ = {};  // available=false → hide the placeholder
+        if (self->onChange_) self->onChange_();
         return 0;
     }
 
@@ -268,6 +270,13 @@ int WifiBackend::onRefreshStep(sd_bus_message* reply, void* userdata, sd_bus_err
                 if (self->onChange_) self->onChange_();
                 return 0;
             }
+            // Publish the enabled/available state now so the module appears
+            // within a single round trip; the AP/SSID/strength steps below refine
+            // it in place. subscribeSignal() guards against a double subscribe.
+            self->snap_ = self->pendingSnap_;
+            self->subscribeSignal();
+            if (self->onChange_) self->onChange_();
+
             self->refreshStep_ = RefreshStep::ActiveAccessPoint;
             asyncGetProp(bus, kNM, self->device_.c_str(), kWirelessIface, "ActiveAccessPoint",
                          &WifiBackend::onRefreshStep, self);

@@ -193,18 +193,21 @@ BatteryIndicator::BatteryIndicator(const SystemBackends& backends)
     : StatusIndicator("battery", Zone::Right, 500),
       backend_(backends.battery),
       profiles_(backends.powerProfiles) {
-    // With a backend, stay hidden until it pushes real data (no fake 0%).
-    // Without one (tests, registry previews) render the defaults.
-    if (backend_) visible = false;
+    // Reserve the slot and show a neutral placeholder until the first push
+    // (instant load, no reflow). Without a backend (tests, registry previews)
+    // render the sample defaults immediately.
+    loaded_ = !backend_;
 }
 
 std::string BatteryIndicator::icon() const {
+    if (!loaded_) return "󰂑";  // neutral "unknown" battery while loading
     bool charging = lastSnap_.state == BatterySnapshot::Charging ||
                     lastSnap_.state == BatterySnapshot::PendingCharge;
     return batteryIcon(lastSnap_.percentage, charging);
 }
 
 std::string BatteryIndicator::themedIcon() const {
+    if (!loaded_) return "";  // fall back to the neutral glyph until loaded
     bool charging = lastSnap_.state == BatterySnapshot::Charging ||
                     lastSnap_.state == BatterySnapshot::PendingCharge;
     bool full = lastSnap_.state == BatterySnapshot::Full;
@@ -212,6 +215,7 @@ std::string BatteryIndicator::themedIcon() const {
 }
 
 std::string BatteryIndicator::label() const {
+    if (!loaded_) return "";  // no fake "0%" during the placeholder frame
     return std::to_string(lastSnap_.percentage) + "%";
 }
 
@@ -276,6 +280,7 @@ void BatteryIndicator::draw(Painter& p, int64_t now) {
 void BatteryIndicator::onBackendUpdate() {
     if (!backend_) return;
     lastSnap_ = backend_->snapshot();
+    loaded_ = true;  // real data has landed; drop the placeholder
     visible = lastSnap_.present;
 }
 

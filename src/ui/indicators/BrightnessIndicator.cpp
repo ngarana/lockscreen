@@ -27,15 +27,18 @@ const char* brightnessThemedIcon(double frac) {
 
 BrightnessIndicator::BrightnessIndicator(const SystemBackends& backends)
     : StatusIndicator("brightness", Zone::Right, 100), backend_(backends.brightness) {
-    // Hidden until the backend pushes real data; render defaults without one.
-    if (backend_) visible = false;
+    // Reserve the slot and show a neutral placeholder until the first push
+    // (instant load, no reflow). Render defaults without a backend.
+    loaded_ = !backend_;
 }
 
 std::string BrightnessIndicator::icon() const {
+    if (!loaded_) return "󰃟";  // neutral mid-brightness glyph while loading
     return brightnessIcon(lastSnap_.fraction());
 }
 
 std::string BrightnessIndicator::themedIcon() const {
+    if (!loaded_) return "";  // fall back to the neutral glyph until loaded
     return brightnessThemedIcon(lastSnap_.fraction());
 }
 
@@ -47,6 +50,7 @@ std::string BrightnessIndicator::tooltip() const {
 void BrightnessIndicator::onBackendUpdate() {
     if (!backend_) return;
     lastSnap_ = backend_->snapshot();
+    loaded_ = true;  // real data has landed; drop the placeholder
     visible = lastSnap_.available;
 }
 

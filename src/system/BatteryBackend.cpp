@@ -97,6 +97,8 @@ int BatteryBackend::onEnumerateDevices(sd_bus_message* reply, void* userdata, sd
 
     if (found.empty()) {
         std::fprintf(stderr, "qypr: no battery via UPower; battery indicator disabled\n");
+        self->snap_.present = false;
+        if (self->onChange_) self->onChange_();  // hide the placeholder
         return 0;
     }
 
@@ -110,12 +112,15 @@ int BatteryBackend::onGetAllDevice(sd_bus_message* reply, void* userdata, sd_bus
     auto* self = static_cast<BatteryBackend*>(userdata);
     if (sd_bus_message_is_method_error(reply, nullptr)) {
         std::fprintf(stderr, "qypr: no battery via UPower; battery indicator disabled\n");
+        self->snap_.present = false;
+        if (self->onChange_) self->onChange_();  // hide the placeholder
         return 0;
     }
 
     self->parseProps(reply);
     if (!self->snap_.present) {
         std::fprintf(stderr, "qypr: no battery via UPower; battery indicator disabled\n");
+        if (self->onChange_) self->onChange_();  // hide the placeholder
         return 0;
     }
 

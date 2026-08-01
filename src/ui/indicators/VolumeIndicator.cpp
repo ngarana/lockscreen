@@ -177,15 +177,18 @@ VolumeIndicator::VolumeIndicator(const SystemBackends& backends)
     : StatusIndicator("volume", Zone::Right, 200),
       backend_(backends.volume),
       sessionSurface_(backends.sessionSurface) {
-    // Hidden until the backend pushes real data; render defaults without one.
-    if (backend_) visible = false;
+    // Reserve the slot and show a neutral placeholder until the first push
+    // (instant load, no reflow). Render defaults without a backend.
+    loaded_ = !backend_;
 }
 
 std::string VolumeIndicator::icon() const {
+    if (!loaded_) return "󰕾";  // generic speaker glyph while level is pending
     return volumeIcon(lastSnap_);
 }
 
 std::string VolumeIndicator::themedIcon() const {
+    if (!loaded_) return "";  // fall back to the neutral glyph until loaded
     return volumeThemedIcon(lastSnap_);
 }
 
@@ -198,6 +201,7 @@ std::string VolumeIndicator::tooltip() const {
 void VolumeIndicator::onBackendUpdate() {
     if (!backend_) return;
     lastSnap_ = backend_->snapshot();
+    loaded_ = true;  // real data has landed; drop the placeholder
     visible = lastSnap_.available;
 }
 

@@ -45,6 +45,8 @@ bool VolumeBackend::start() {
                      pa_strerror(pa_context_errno(ctx_)));
         pa_context_unref(ctx_);
         ctx_ = nullptr;
+        snap_.available = false;
+        if (onChange_) onChange_();  // hide the placeholder
         return false;
     }
     return true;

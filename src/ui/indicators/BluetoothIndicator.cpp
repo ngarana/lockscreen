@@ -139,16 +139,19 @@ private:
 
 BluetoothIndicator::BluetoothIndicator(const SystemBackends& backends)
     : StatusIndicator("bluetooth", Zone::Right, 350), backend_(backends.bluetooth) {
-    // Hidden until the backend pushes real data; render defaults without one.
-    if (backend_) visible = false;
+    // Reserve the slot and show a neutral placeholder until the first push
+    // (instant load, no reflow). Render defaults without a backend.
+    loaded_ = !backend_;
 }
 
 std::string BluetoothIndicator::icon() const {
+    if (!loaded_) return "󰂯";  // generic bluetooth glyph while state is pending
     if (!lastSnap_.powered) return "󰂲";
     return lastSnap_.connectedCount > 0 ? "󰂱" : "󰂯";
 }
 
 std::string BluetoothIndicator::themedIcon() const {
+    if (!loaded_) return "";  // fall back to the neutral glyph until loaded
     if (!lastSnap_.powered) return "bluetooth-disabled-symbolic";
     return lastSnap_.connectedCount > 0 ? "bluetooth-active-symbolic" : "bluetooth-paired-symbolic";
 }
@@ -169,6 +172,7 @@ Color BluetoothIndicator::iconColor() const {
 void BluetoothIndicator::onBackendUpdate() {
     if (!backend_) return;
     lastSnap_ = backend_->snapshot();
+    loaded_ = true;  // real data has landed; drop the placeholder
     visible = lastSnap_.available;
 }
 
