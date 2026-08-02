@@ -21,10 +21,10 @@ struct BatterySnapshot {
     int percentage = 0;
     enum State { Unknown, Charging, Discharging, Full, PendingCharge } state = Unknown;
     bool present = false;
-    int64_t timeToEmpty = 0;    // seconds
-    int64_t timeToFull = 0;     // seconds
-    double energyRate = 0.0;    // watts (power draw)
-    std::string nativePath;     // e.g. "BAT0"
+    int64_t timeToEmpty = 0;  // seconds
+    int64_t timeToFull = 0;   // seconds
+    double energyRate = 0.0;  // watts (power draw)
+    std::string nativePath;   // e.g. "BAT0"
 };
 
 class BatteryBackend {
@@ -43,6 +43,11 @@ public:
 
     void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
 
+    // True once the backend has produced its first result — real data or a
+    // definitive "absent". Indicators show a neutral placeholder until then, so
+    // an unrelated backend's push cannot prematurely mark this one loaded.
+    bool ready() const { return ready_; }
+
 private:
     // Async call chain: DisplayDevice GetAll → (fallback) EnumerateDevices → device GetAll
     static int onGetAllDisplay(sd_bus_message* reply, void* userdata, sd_bus_error* err);
@@ -58,6 +63,13 @@ private:
     std::string devicePath_;
     BatterySnapshot snap_;
     std::function<void()> onChange_;
+    // Every result path calls this instead of onChange_ directly, so ready()
+    // flips true exactly when the first real snapshot is published.
+    void notifyReady() {
+        ready_ = true;
+        if (onChange_) onChange_();
+    }
+    bool ready_ = false;
 };
 
 }  // namespace qypr

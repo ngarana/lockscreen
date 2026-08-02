@@ -18,17 +18,17 @@ namespace {
 constexpr double kScrollStep = 0.05;  // ±5% per scroll tick
 
 const char* volumeIcon(const VolumeSnapshot& s) {
-    if (s.muted || s.level <= 0.001) return "󰝟";
-    if (s.level >= 0.66) return "󰕾";
-    if (s.level >= 0.33) return "󰖀";
+    if (s.muted || s.level <= 0.001) { return "󰝟"; }
+    if (s.level >= 0.66) { return "󰕾"; }
+    if (s.level >= 0.33) { return "󰖀"; }
     return "󰕿";
 }
 
 // freedesktop symbolic names (resolved against the active icon theme).
 const char* volumeThemedIcon(const VolumeSnapshot& s) {
-    if (s.muted || s.level <= 0.001) return "audio-volume-muted-symbolic";
-    if (s.level >= 0.66) return "audio-volume-high-symbolic";
-    if (s.level >= 0.33) return "audio-volume-medium-symbolic";
+    if (s.muted || s.level <= 0.001) { return "audio-volume-muted-symbolic"; }
+    if (s.level >= 0.66) { return "audio-volume-high-symbolic"; }
+    if (s.level >= 0.33) { return "audio-volume-medium-symbolic"; }
     return "audio-volume-low-symbolic";
 }
 
@@ -45,14 +45,15 @@ public:
     // `showStreams` is false on the lock screen: per-app names would disclose
     // what is running, so only device switching is offered there.
     AudioPopover(VolumeBackend* backend, bool showStreams)
-        : backend_(backend), showStreams_(showStreams) {}
+        : backend_(backend),
+          showStreams_(showStreams) {}
 
-    double contentWidth() const override { return kAW; }
-    double contentHeight() const override {
+    [[nodiscard]] double contentWidth() const override { return kAW; }
+    [[nodiscard]] double contentHeight() const override {
         const size_t nSinks = std::max<size_t>(backend_->sinks().size(), 1);
-        double h = kAPad * 2 + kSecHdr + nSinks * kSinkH;
+        double h = (kAPad * 2) + kSecHdr + (static_cast<double>(nSinks) * kSinkH);
         if (showStreams_ && !backend_->streams().empty()) {
-            h += kDiv + kSecHdr + backend_->streams().size() * kStreamH;
+            h += kDiv + kSecHdr + (static_cast<double>(backend_->streams().size()) * kStreamH);
         }
         return h;
     }
@@ -60,37 +61,50 @@ public:
     void draw(Painter& p, int64_t now) override {
         Rect b = getBounds();
         b.y += (growUp ? 1.0 : -1.0) * (1.0 - openProgress_.value(now)) * 6.0;
-        if (!drawSharedBackdrop(p, b, theme::statusbar::popoverRadius))
-            p.fillRoundedRectSource(b, theme::statusbar::popoverRadius, theme::statusbar::panelSurface());
+        if (!drawSharedBackdrop(p, b, theme::statusbar::popoverRadius)) {
+            p.fillRoundedRectSource(b, theme::statusbar::popoverRadius,
+                                    theme::statusbar::panelSurface());
+        }
 
         sinkRows_.clear();
         streamTracks_.clear();
         double y = b.y + kAPad;
 
         // ── Output devices ───────────────────────────────────────────────────
-        TextStyle hdr{theme::font::family, 11.0, PANGO_WEIGHT_BOLD, theme::color::textSubtle};
+        TextStyle const hdr{.family = theme::font::family,
+                            .size = 11.0,
+                            .weight = PANGO_WEIGHT_BOLD,
+                            .color = theme::color::textSubtle};
         p.drawText(b.x + kAPad, y, "OUTPUT", hdr);
         y += kSecHdr;
 
         const auto& sinks = backend_->sinks();
         if (sinks.empty()) {
-            TextStyle e{theme::font::family, 12.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
+            TextStyle const e{.family = theme::font::family,
+                              .size = 12.0,
+                              .weight = PANGO_WEIGHT_NORMAL,
+                              .color = theme::color::textSubtle};
             p.drawText(b.x + kAPad, y + 6.0, "No output devices", e);
             y += kSinkH;
         }
         for (const auto& s : sinks) {
-            const Rect row{b.x + kAPad, y, b.w - kAPad * 2, kSinkH};
-            if (row.contains(hoverX_, hoverY_))
+            const Rect row{.x = b.x + kAPad, .y = y, .w = b.w - (kAPad * 2), .h = kSinkH};
+            if (row.contains(hoverX_, hoverY_)) {
                 p.fillRoundedRect(row, 6.0, theme::color::glassHover);
-            TextStyle dot{theme::font::family, 12.0, PANGO_WEIGHT_NORMAL,
-                          s.isDefault ? theme::color::primary : theme::color::textSubtle};
-            p.drawText(row.x + 4.0, y + (kSinkH - 14.0) / 2.0, s.isDefault ? "●" : "○", dot);
-            TextStyle ls{theme::font::family, 12.0,
-                         s.isDefault ? PANGO_WEIGHT_BOLD : PANGO_WEIGHT_NORMAL,
-                         theme::color::text};
-            p.drawText(row.x + 24.0, y + (kSinkH - 14.0) / 2.0, s.description, ls, HAlign::Left,
+            }
+            TextStyle const dot{.family = theme::font::family,
+                                .size = 12.0,
+                                .weight = PANGO_WEIGHT_NORMAL,
+                                .color =
+                                    s.isDefault ? theme::color::primary : theme::color::textSubtle};
+            p.drawText(row.x + 4.0, y + ((kSinkH - 14.0) / 2.0), s.isDefault ? "●" : "○", dot);
+            TextStyle const ls{.family = theme::font::family,
+                               .size = 12.0,
+                               .weight = s.isDefault ? PANGO_WEIGHT_BOLD : PANGO_WEIGHT_NORMAL,
+                               .color = theme::color::text};
+            p.drawText(row.x + 24.0, y + ((kSinkH - 14.0) / 2.0), s.description, ls, HAlign::Left,
                        row.w - 28.0);
-            sinkRows_.push_back({row, s.name});
+            sinkRows_.push_back({.rect = row, .name = s.name});
             y += kSinkH;
         }
 
@@ -98,29 +112,38 @@ public:
         const auto& streams = backend_->streams();
         if (showStreams_ && !streams.empty()) {
             y += kDiv;  // gap after the device list
-            p.fillRect({b.x + kAPad, y - 6.0, b.w - kAPad * 2, 1.0}, theme::color::glassBorder);
+            p.fillRect({.x = b.x + kAPad, .y = y - 6.0, .w = b.w - (kAPad * 2), .h = 1.0},
+                       theme::color::glassBorder);
             p.drawText(b.x + kAPad, y, "APPLICATIONS", hdr);
             y += kSecHdr;
             for (const auto& s : streams) {
                 // Name + percentage.
-                TextStyle ns{theme::font::family, 12.0, PANGO_WEIGHT_NORMAL, theme::color::text};
-                p.drawText(b.x + kAPad, y + 2.0, s.appName, ns, HAlign::Left, b.w - kAPad * 2 - 48.0);
+                TextStyle const ns{.family = theme::font::family,
+                                   .size = 12.0,
+                                   .weight = PANGO_WEIGHT_NORMAL,
+                                   .color = theme::color::text};
+                p.drawText(b.x + kAPad, y + 2.0, s.appName, ns, HAlign::Left,
+                           b.w - (kAPad * 2) - 48.0);
                 const int pct = static_cast<int>(std::round(s.level * 100.0));
-                TextStyle ps{theme::font::family, 11.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
-                p.drawText(b.x + b.w - kAPad, y + 2.0, std::to_string(pct) + "%", ps, HAlign::Right);
+                TextStyle const ps{.family = theme::font::family,
+                                   .size = 11.0,
+                                   .weight = PANGO_WEIGHT_NORMAL,
+                                   .color = theme::color::textSubtle};
+                p.drawText(b.x + b.w - kAPad, y + 2.0, std::to_string(pct) + "%", ps,
+                           HAlign::Right);
 
                 // Slider track.
                 const double tx = b.x + kAPad;
-                const double tw = b.w - kAPad * 2;
+                const double tw = b.w - (kAPad * 2);
                 const double ty = y + 26.0;
-                const Rect track{tx, ty, tw, 4.0};
+                const Rect track{.x = tx, .y = ty, .w = tw, .h = 4.0};
                 p.fillRoundedRectSource(track, 2.0, theme::statusbar::panelSurface());
                 Rect fill = track;
                 fill.w = tw * std::clamp(s.level, 0.0, 1.0);
                 const Color fg = s.muted ? theme::color::textSubtle : theme::color::primary;
                 p.fillRoundedRect(fill, 2.0, fg);
                 p.fillCircle(tx + fill.w, ty + 2.0, 6.0, fg);
-                streamTracks_.push_back({track, s.index});
+                streamTracks_.push_back({.track = track, .index = s.index});
                 y += kStreamH;
             }
         }
@@ -158,7 +181,7 @@ private:
             Rect hit = t.track;
             hit.y -= 12.0;
             hit.h += 24.0;  // generous vertical target
-            if (!hit.contains(x, y) || t.track.w <= 0) continue;
+            if (!hit.contains(x, y) || t.track.w <= 0) { continue; }
             backend_->setStreamVolume(t.index, (x - t.track.x) / t.track.w);
             return true;
         }
@@ -179,35 +202,42 @@ VolumeIndicator::VolumeIndicator(const SystemBackends& backends)
       sessionSurface_(backends.sessionSurface) {
     // Reserve the slot and show a neutral placeholder until the first push
     // (instant load, no reflow). Render defaults without a backend.
-    loaded_ = !backend_;
+    loaded_ = (backend_ == nullptr);
 }
 
 std::string VolumeIndicator::icon() const {
-    if (!loaded_) return "󰕾";  // generic speaker glyph while level is pending
+    if (!loaded_) {
+        return "󰕾";  // generic speaker glyph while level is pending
+    }
     return volumeIcon(lastSnap_);
 }
 
 std::string VolumeIndicator::themedIcon() const {
-    if (!loaded_) return "";  // fall back to the neutral glyph until loaded
+    if (!loaded_) {
+        return "";  // fall back to the neutral glyph until loaded
+    }
     return volumeThemedIcon(lastSnap_);
 }
 
 std::string VolumeIndicator::tooltip() const {
-    if (lastSnap_.muted) return "Muted — " + lastSnap_.sinkName;
-    return "Volume " + std::to_string(static_cast<int>(lastSnap_.level * 100 + 0.5)) + "% — " +
-           lastSnap_.sinkName;
+    if (lastSnap_.muted) { return "Muted — " + lastSnap_.sinkName; }
+    return "Volume " + std::to_string(static_cast<int>(std::lround(lastSnap_.level * 100.0))) +
+           "% — " + lastSnap_.sinkName;
 }
 
 void VolumeIndicator::onBackendUpdate() {
-    if (!backend_) return;
+    if (backend_ == nullptr) { return; }
     lastSnap_ = backend_->snapshot();
-    loaded_ = true;  // real data has landed; drop the placeholder
-    visible = lastSnap_.available;
+    // Only *this* backend's readiness clears the placeholder — a push from an
+    // unrelated backend must not mark us loaded with a still-empty snapshot.
+    loaded_ = backend_->ready();
+    visible = loaded_ ? lastSnap_.available : true;
 }
 
-bool VolumeIndicator::onScroll(double dx, double dy, double x, double y) {
-    (void)x; (void)y;
-    if (!backend_ || !lastSnap_.available) return false;
+bool VolumeIndicator::onScroll(double /*dx*/, double dy, double x, double y) {
+    (void)x;
+    (void)y;
+    if ((backend_ == nullptr) || !lastSnap_.available) { return false; }
     // Scroll up (negative dy in Wayland) raises the volume.
     const double delta = dy < 0 ? kScrollStep : -kScrollStep;
     backend_->setLevel(lastSnap_.level + delta);
@@ -215,38 +245,35 @@ bool VolumeIndicator::onScroll(double dx, double dy, double x, double y) {
 }
 
 std::unique_ptr<QSTile> VolumeIndicator::createTile() {
-    auto snap = &lastSnap_;
-    auto backend = backend_;
+    auto* snap = &lastSnap_;
+    auto* backend = backend_;
     return std::make_unique<QSSliderTile>(
-        "󰕾",
-        [snap]() { return snap->level; },
+        "󰕾", [snap]() { return snap->level; },
         [backend](double v) {
-            if (backend) backend->setLevel(v);
+            if (backend) { backend->setLevel(v); }
         },
         // Icon follows live mute/level state
         [snap]() { return volumeIcon(*snap); },
         [backend]() {
-            if (backend) backend->toggleMute();
+            if (backend) { backend->toggleMute(); }
         },
-        [snap]() { return snap->muted; },
-        "Volume");
+        [snap]() { return snap->muted; }, "Volume");
 }
 
 std::unique_ptr<DetailedPopover> VolumeIndicator::createDetailedView() {
-    if (!backend_) return nullptr;
+    if (backend_ == nullptr) { return nullptr; }
 
-    auto snap = &lastSnap_;
-    auto backend = backend_;
-    auto tile = std::make_unique<QSVolumeTile>(
-        [snap]() { return snap->level; },
-        [backend](double v) {
-            if (backend) backend->setLevel(v);
-        },
-        [snap]() { return std::string(volumeIcon(*snap)); },
-        [backend]() {
-            if (backend) backend->toggleMute();
-        },
-        [snap]() { return snap->muted; });
+    auto* snap = &lastSnap_;
+    auto* backend = backend_;
+    auto tile = std::make_unique<QSVolumeTile>([snap]() { return snap->level; },
+                                               [backend](double v) {
+                                                   if (backend) { backend->setLevel(v); }
+                                               },
+                                               [snap]() { return std::string(volumeIcon(*snap)); },
+                                               [backend]() {
+                                                   if (backend) { backend->toggleMute(); }
+                                               },
+                                               [snap]() { return snap->muted; });
     return std::make_unique<SliderPopover>(std::move(tile));
 }
 

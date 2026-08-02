@@ -22,10 +22,10 @@ namespace qypr {
 class EventLoop;
 
 struct VolumeSnapshot {
-    bool available = false;   // connected and a default sink resolved
-    double level = 0.0;       // 0..1 (PA_VOLUME_NORM = 1.0)
+    bool available = false;  // connected and a default sink resolved
+    double level = 0.0;      // 0..1 (PA_VOLUME_NORM = 1.0)
     bool muted = false;
-    std::string sinkName;     // human-readable description
+    std::string sinkName;  // human-readable description
 
     bool operator==(const VolumeSnapshot&) const = default;
 };
@@ -74,6 +74,11 @@ public:
     // stream lists.
     void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
 
+    // True once the backend has produced its first result — real data or a
+    // definitive "absent". Indicators show a neutral placeholder until then, so
+    // an unrelated backend's push cannot prematurely mark this one loaded.
+    bool ready() const { return ready_; }
+
     // Set the default sink volume 0..1 / toggle mute (async, optimistic).
     void setLevel(double frac);
     void toggleMute();
@@ -104,14 +109,21 @@ private:
 
     PulseLoop pulseLoop_;
     pa_context* ctx_ = nullptr;
-    std::string defaultSink_;   // internal sink name (write target)
+    std::string defaultSink_;  // internal sink name (write target)
     uint8_t channels_ = 2;
     VolumeSnapshot snap_;
     std::vector<AudioSink> sinks_;
-    std::vector<AudioSink> sinksBuilding_;      // accumulates during enumeration
+    std::vector<AudioSink> sinksBuilding_;  // accumulates during enumeration
     std::vector<AudioStream> streams_;
     std::vector<AudioStream> streamsBuilding_;
     std::function<void()> onChange_;
+    // Every result path calls this instead of onChange_ directly, so ready()
+    // flips true exactly when the first real snapshot is published.
+    void notifyReady() {
+        ready_ = true;
+        if (onChange_) onChange_();
+    }
+    bool ready_ = false;
 };
 
 }  // namespace qypr

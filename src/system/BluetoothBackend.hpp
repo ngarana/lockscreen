@@ -52,6 +52,11 @@ public:
 
     void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
 
+    // True once the backend has produced its first result — real data or a
+    // definitive "absent". Indicators show a neutral placeholder until then, so
+    // an unrelated backend's push cannot prematurely mark this one loaded.
+    bool ready() const { return ready_; }
+
     void setPowered(bool on);
     void connectDevice(const std::string& path);
     void disconnectDevice(const std::string& path);
@@ -70,6 +75,13 @@ private:
     std::string adapter_;
     BluetoothSnapshot snap_;
     std::function<void()> onChange_;
+    // Every result path calls this instead of onChange_ directly, so ready()
+    // flips true exactly when the first real snapshot is published.
+    void notifyReady() {
+        ready_ = true;
+        if (onChange_) onChange_();
+    }
+    bool ready_ = false;
 };
 
 }  // namespace qypr

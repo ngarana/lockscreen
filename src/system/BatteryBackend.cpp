@@ -3,6 +3,7 @@
 
 #include <systemd/sd-bus.h>
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -17,17 +18,20 @@ constexpr const char* kDisplayDevice = "/org/freedesktop/UPower/devices/DisplayD
 constexpr const char* kDeviceIface = "org.freedesktop.UPower.Device";
 constexpr const char* kPropsIface = "org.freedesktop.DBus.Properties";
 
-constexpr uint32_t kTypeBattery = 2;
-
 BatterySnapshot::State mapState(uint32_t s) {
     switch (s) {
-        case 1: return BatterySnapshot::Charging;
-        case 2: return BatterySnapshot::Discharging;
-        case 3: return BatterySnapshot::Discharging;
-        case 4: return BatterySnapshot::Full;
-        case 5: return BatterySnapshot::PendingCharge;
-        case 6: return BatterySnapshot::Discharging;
-        default: return BatterySnapshot::Unknown;
+        case 1:
+            return BatterySnapshot::Charging;
+        case 2:
+        case 3:
+        case 6:
+            return BatterySnapshot::Discharging;
+        case 4:
+            return BatterySnapshot::Full;
+        case 5:
+            return BatterySnapshot::PendingCharge;
+        default:
+            return BatterySnapshot::Unknown;
     }
 }
 
@@ -36,7 +40,7 @@ bool readVariant(sd_bus_message* m, const char* contents, void* out) {
         sd_bus_message_skip(m, "v");
         return false;
     }
-    int r = sd_bus_message_read_basic(m, contents[0], out);
+    int const r = sd_bus_message_read_basic(m, contents[0], out);
     sd_bus_message_exit_container(m);
     return r >= 0;
 }
@@ -45,11 +49,11 @@ bool readVariant(sd_bus_message* m, const char* contents, void* out) {
 BatteryBackend::BatteryBackend(SystemBus& bus) : bus_(bus) {}
 
 BatteryBackend::~BatteryBackend() {
-    if (signalSlot_) sd_bus_slot_unref(signalSlot_);
+    if (signalSlot_ != nullptr) { sd_bus_slot_unref(signalSlot_); }
 }
 
 bool BatteryBackend::start() {
-    if (!bus_.available()) return false;
+    if (!bus_.available()) { return false; }
 
     // Async: GetAll on DisplayDevice → callback decides next step.
     sd_bus_call_method_async(bus_.get(), nullptr, kUPower, kDisplayDevice, kPropsIface, "GetAll",
@@ -57,9 +61,10 @@ bool BatteryBackend::start() {
     return true;
 }
 
-int BatteryBackend::onGetAllDisplay(sd_bus_message* reply, void* userdata, sd_bus_error*) {
+int BatteryBackend::onGetAllDisplay(sd_bus_message* reply, void* userdata,
+                                    sd_bus_error* /*unused*/) {
     auto* self = static_cast<BatteryBackend*>(userdata);
-    if (sd_bus_message_is_method_error(reply, nullptr)) {
+    if (sd_bus_message_is_method_error(reply, nullptr) != 0) {
         // DisplayDevice unavailable — try EnumerateDevices fallback.
         sd_bus_call_method_async(self->bus_.get(), nullptr, kUPower, kUPowerPath, kUPower,
                                  "EnumerateDevices", &BatteryBackend::onEnumerateDevices, self, "");
@@ -69,7 +74,7 @@ int BatteryBackend::onGetAllDisplay(sd_bus_message* reply, void* userdata, sd_bu
     if (self->parseProps(reply) && self->snap_.present) {
         self->devicePath_ = kDisplayDevice;
         self->subscribeSignal();
-        if (self->onChange_) self->onChange_();
+        self->notifyReady();
         return 0;
     }
 
@@ -79,16 +84,17 @@ int BatteryBackend::onGetAllDisplay(sd_bus_message* reply, void* userdata, sd_bu
     return 0;
 }
 
-int BatteryBackend::onEnumerateDevices(sd_bus_message* reply, void* userdata, sd_bus_error*) {
+int BatteryBackend::onEnumerateDevices(sd_bus_message* reply, void* userdata,
+                                       sd_bus_error* /*unused*/) {
     auto* self = static_cast<BatteryBackend*>(userdata);
-    if (sd_bus_message_is_method_error(reply, nullptr)) return 0;
+    if (sd_bus_message_is_method_error(reply, nullptr) != 0) { return 0; }
 
     // Walk object paths, find first that looks like a battery.
-    if (sd_bus_message_enter_container(reply, 'a', "o") < 0) return 0;
+    if (sd_bus_message_enter_container(reply, 'a', "o") < 0) { return 0; }
     const char* path = nullptr;
     std::string found;
-    while (sd_bus_message_read(reply, "o", &path) > 0 && path) {
-        if (std::strstr(path, "/devices/bat")) {
+    while (sd_bus_message_read(reply, "o", &path) > 0 && (path != nullptr)) {
+        if (std::strstr(path, "/devices/bat") != nullptr) {
             found = path;
             break;
         }
@@ -98,7 +104,7 @@ int BatteryBackend::onEnumerateDevices(sd_bus_message* reply, void* userdata, sd
     if (found.empty()) {
         std::fprintf(stderr, "qypr: no battery via UPower; battery indicator disabled\n");
         self->snap_.present = false;
-        if (self->onChange_) self->onChange_();  // hide the placeholder
+        self->notifyReady();  // hide the placeholder
         return 0;
     }
 
@@ -108,41 +114,42 @@ int BatteryBackend::onEnumerateDevices(sd_bus_message* reply, void* userdata, sd
     return 0;
 }
 
-int BatteryBackend::onGetAllDevice(sd_bus_message* reply, void* userdata, sd_bus_error*) {
+int BatteryBackend::onGetAllDevice(sd_bus_message* reply, void* userdata,
+                                   sd_bus_error* /*unused*/) {
     auto* self = static_cast<BatteryBackend*>(userdata);
-    if (sd_bus_message_is_method_error(reply, nullptr)) {
+    if (sd_bus_message_is_method_error(reply, nullptr) != 0) {
         std::fprintf(stderr, "qypr: no battery via UPower; battery indicator disabled\n");
         self->snap_.present = false;
-        if (self->onChange_) self->onChange_();  // hide the placeholder
+        self->notifyReady();  // hide the placeholder
         return 0;
     }
 
     self->parseProps(reply);
     if (!self->snap_.present) {
         std::fprintf(stderr, "qypr: no battery via UPower; battery indicator disabled\n");
-        if (self->onChange_) self->onChange_();  // hide the placeholder
+        self->notifyReady();  // hide the placeholder
         return 0;
     }
 
     self->subscribeSignal();
-    if (self->onChange_) self->onChange_();
+    self->notifyReady();
     return 0;
 }
 
 void BatteryBackend::subscribeSignal() {
-    std::string rule = std::string("type='signal',sender='") + kUPower + "',path='" +
-                       devicePath_ + "',interface='" + kPropsIface +
-                       "',member='PropertiesChanged'";
+    std::string const rule = std::string("type='signal',sender='") + kUPower + "',path='" +
+                             devicePath_ + "',interface='" + kPropsIface +
+                             "',member='PropertiesChanged'";
     signalSlot_ = bus_.addMatch(rule.c_str(), &BatteryBackend::onPropertiesChanged, this);
 }
 
 bool BatteryBackend::parseProps(sd_bus_message* m) {
-    if (sd_bus_message_enter_container(m, 'a', "{sv}") < 0) return false;
+    if (sd_bus_message_enter_container(m, 'a', "{sv}") < 0) { return false; }
 
     bool any = false;
     while (sd_bus_message_enter_container(m, 'e', "sv") > 0) {
         const char* key = nullptr;
-        if (sd_bus_message_read(m, "s", &key) < 0 || !key) {
+        if (sd_bus_message_read(m, "s", &key) < 0 || (key == nullptr)) {
             sd_bus_message_skip(m, "v");
             sd_bus_message_exit_container(m);
             continue;
@@ -151,7 +158,7 @@ bool BatteryBackend::parseProps(sd_bus_message* m) {
         if (std::strcmp(key, "Percentage") == 0) {
             double d = 0;
             if (readVariant(m, "d", &d)) {
-                snap_.percentage = static_cast<int>(d + 0.5);
+                snap_.percentage = static_cast<int>(std::lround(d));
                 any = true;
             }
         } else if (std::strcmp(key, "State") == 0) {
@@ -186,7 +193,7 @@ bool BatteryBackend::parseProps(sd_bus_message* m) {
             }
         } else if (std::strcmp(key, "NativePath") == 0) {
             const char* s = nullptr;
-            if (readVariant(m, "s", &s) && s) {
+            if (readVariant(m, "s", static_cast<void*>(&s)) && (s != nullptr)) {
                 snap_.nativePath = s;
                 any = true;
             }
@@ -199,12 +206,13 @@ bool BatteryBackend::parseProps(sd_bus_message* m) {
     return any;
 }
 
-int BatteryBackend::onPropertiesChanged(sd_bus_message* m, void* userdata, sd_bus_error*) {
+int BatteryBackend::onPropertiesChanged(sd_bus_message* m, void* userdata,
+                                        sd_bus_error* /*unused*/) {
     auto* self = static_cast<BatteryBackend*>(userdata);
     const char* iface = nullptr;
-    if (sd_bus_message_read(m, "s", &iface) < 0 || !iface) return 0;
-    if (std::strcmp(iface, kDeviceIface) != 0) return 0;
-    if (self->parseProps(m) && self->onChange_) self->onChange_();
+    if (sd_bus_message_read(m, "s", &iface) < 0 || (iface == nullptr)) { return 0; }
+    if (std::strcmp(iface, kDeviceIface) != 0) { return 0; }
+    if (self->parseProps(m)) { self->notifyReady(); }
     return 0;
 }
 

@@ -6,6 +6,9 @@
 #include <string>
 #include <functional>
 #include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace qypr {
 
@@ -52,14 +55,22 @@ private:
     std::vector<Entry> entries_;
 };
 
+// Registration helper for static-init time (see REGISTER_INDICATOR below).
+// The factory only constructs the indicator when the bar asks for it, so any
+// throw happens at run time, not during static initialization. noexcept keeps
+// a failed registration (e.g. OOM building the id string) from aborting
+// startup: the module is simply dropped.
+template <typename Type>
+inline bool registerIndicatorNow(const char* id, Zone zone, int priority) noexcept {
+    try {
+        IndicatorRegistry::instance().registerIndicator(
+            id, zone, priority, [](const SystemBackends& b) { return std::make_unique<Type>(b); });
+        return true;
+    } catch (...) { return false; }
+}
+
 // Macro to self-register an indicator at static-init time.
-#define REGISTER_INDICATOR(id, zone, priority, Type)                           \
-    static const bool _reg_##Type = [] {                                       \
-        IndicatorRegistry::instance().registerIndicator(                       \
-            id, zone, priority,                                                \
-            [](const SystemBackends& b) { return std::make_unique<Type>(b); }  \
-        );                                                                     \
-        return true;                                                           \
-    }();
+#define REGISTER_INDICATOR(id, zone, priority, Type)                                               \
+    static const bool _reg_##Type = registerIndicatorNow<Type>(id, zone, priority);
 
 }  // namespace qypr

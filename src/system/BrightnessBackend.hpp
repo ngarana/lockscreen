@@ -23,10 +23,10 @@ class EventLoop;
 class SystemBus;
 
 struct BrightnessSnapshot {
-    int current = 0;            // raw hardware value
-    int max = 0;                // raw hardware maximum
+    int current = 0;  // raw hardware value
+    int max = 0;      // raw hardware maximum
     bool available = false;
-    std::string device;         // e.g. "intel_backlight"
+    std::string device;  // e.g. "intel_backlight"
 
     double fraction() const { return max > 0 ? static_cast<double>(current) / max : 0.0; }
 };
@@ -48,6 +48,11 @@ public:
     // Fires on every pushed update (and once after a successful start).
     void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
 
+    // True once the backend has produced its first result — real data or a
+    // definitive "absent". Indicators show a neutral placeholder until then, so
+    // an unrelated backend's push cannot prematurely mark this one loaded.
+    bool ready() const { return ready_; }
+
     // Set brightness as a fraction 0..1 (clamped; never fully off). Applied
     // optimistically to the snapshot, written asynchronously via logind.
     void setFraction(double frac);
@@ -60,6 +65,13 @@ private:
     SystemBus& bus_;
     BrightnessSnapshot snap_;
     std::function<void()> onChange_;
+    // Every result path calls this instead of onChange_ directly, so ready()
+    // flips true exactly when the first real snapshot is published.
+    void notifyReady() {
+        ready_ = true;
+        if (onChange_) onChange_();
+    }
+    bool ready_ = false;
 
     struct udev* udev_ = nullptr;
     struct udev_monitor* mon_ = nullptr;

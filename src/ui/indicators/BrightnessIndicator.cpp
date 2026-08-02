@@ -5,59 +5,69 @@
 #include "ui/statusbar/QSTile.hpp"
 #include "ui/statusbar/SliderPopover.hpp"
 
+#include <cmath>
+
 namespace qypr {
 
 namespace {
 constexpr double kScrollStep = 0.05;  // ±5% per scroll tick
 
 const char* brightnessIcon(double frac) {
-    if (frac >= 0.66) return "󰃠";
-    if (frac >= 0.33) return "󰃟";
+    if (frac >= 0.66) { return "󰃠"; }
+    if (frac >= 0.33) { return "󰃟"; }
     return "󰃞";
 }
 
 // freedesktop symbolic names — display-brightness icons.
 const char* brightnessThemedIcon(double frac) {
-    if (frac >= 0.66) return "display-brightness-high-symbolic";
-    if (frac >= 0.33) return "display-brightness-medium-symbolic";
-    if (frac > 0.001) return "display-brightness-low-symbolic";
+    if (frac >= 0.66) { return "display-brightness-high-symbolic"; }
+    if (frac >= 0.33) { return "display-brightness-medium-symbolic"; }
+    if (frac > 0.001) { return "display-brightness-low-symbolic"; }
     return "display-brightness-off-symbolic";
 }
 }  // namespace
 
 BrightnessIndicator::BrightnessIndicator(const SystemBackends& backends)
-    : StatusIndicator("brightness", Zone::Right, 100), backend_(backends.brightness) {
+    : StatusIndicator("brightness", Zone::Right, 100),
+      backend_(backends.brightness) {
     // Reserve the slot and show a neutral placeholder until the first push
     // (instant load, no reflow). Render defaults without a backend.
-    loaded_ = !backend_;
+    loaded_ = (backend_ == nullptr);
 }
 
 std::string BrightnessIndicator::icon() const {
-    if (!loaded_) return "󰃟";  // neutral mid-brightness glyph while loading
+    if (!loaded_) {
+        return "󰃟";  // neutral mid-brightness glyph while loading
+    }
     return brightnessIcon(lastSnap_.fraction());
 }
 
 std::string BrightnessIndicator::themedIcon() const {
-    if (!loaded_) return "";  // fall back to the neutral glyph until loaded
+    if (!loaded_) {
+        return "";  // fall back to the neutral glyph until loaded
+    }
     return brightnessThemedIcon(lastSnap_.fraction());
 }
 
 std::string BrightnessIndicator::tooltip() const {
-    return "Brightness " + std::to_string(static_cast<int>(lastSnap_.fraction() * 100 + 0.5)) +
-           "%";
+    return "Brightness " +
+           std::to_string(static_cast<int>(std::lround(lastSnap_.fraction() * 100.0))) + "%";
 }
 
 void BrightnessIndicator::onBackendUpdate() {
-    if (!backend_) return;
+    if (backend_ == nullptr) { return; }
     lastSnap_ = backend_->snapshot();
-    loaded_ = true;  // real data has landed; drop the placeholder
-    visible = lastSnap_.available;
+    // Only *this* backend's readiness clears the placeholder — a push from an
+    // unrelated backend must not mark us loaded with a still-empty snapshot.
+    loaded_ = backend_->ready();
+    visible = loaded_ ? lastSnap_.available : true;
 }
 
 bool BrightnessIndicator::onScroll(double dx, double dy, double x, double y) {
-    (void)x; (void)y;
+    (void)x;
+    (void)y;
     (void)dx;
-    if (!backend_ || !lastSnap_.available) return false;
+    if ((backend_ == nullptr) || !lastSnap_.available) { return false; }
     // Scroll up (negative dy in Wayland) brightens.
     const double delta = dy < 0 ? kScrollStep : -kScrollStep;
     backend_->setFraction(lastSnap_.fraction() + delta);
@@ -65,29 +75,27 @@ bool BrightnessIndicator::onScroll(double dx, double dy, double x, double y) {
 }
 
 std::unique_ptr<QSTile> BrightnessIndicator::createTile() {
-    auto snap = &lastSnap_;
-    auto backend = backend_;
+    auto* snap = &lastSnap_;
+    auto* backend = backend_;
     return std::make_unique<QSSliderTile>(
-        "󰃠",
-        [snap]() { return snap->fraction(); },
+        "󰃠", [snap]() { return snap->fraction(); },
         [backend](double v) {
-            if (backend) backend->setFraction(v);
+            if (backend) { backend->setFraction(v); }
         });
 }
 
 std::unique_ptr<DetailedPopover> BrightnessIndicator::createDetailedView() {
-    if (!backend_) return nullptr;
+    if (backend_ == nullptr) { return nullptr; }
 
-    auto snap = &lastSnap_;
-    auto backend = backend_;
+    auto* snap = &lastSnap_;
+    auto* backend = backend_;
     auto tile = std::make_unique<QSSliderTile>(
-        "󰃠",
-        [snap]() { return snap->fraction(); },
+        "󰃠", [snap]() { return snap->fraction(); },
         [backend](double v) {
-            if (backend) backend->setFraction(v);
+            if (backend) { backend->setFraction(v); }
         },
-        [snap]() { return std::string(brightnessIcon(snap->fraction())); },
-        nullptr, nullptr, "Brightness");
+        [snap]() { return std::string(brightnessIcon(snap->fraction())); }, nullptr, nullptr,
+        "Brightness");
     return std::make_unique<SliderPopover>(std::move(tile));
 }
 
