@@ -19,6 +19,7 @@
 
 struct wl_display;
 struct wl_registry;
+struct wl_callback;
 struct ext_workspace_manager_v1;
 struct ext_workspace_handle_v1;
 
@@ -59,9 +60,11 @@ public:
     WorkspaceBackend(const WorkspaceBackend&) = delete;
     WorkspaceBackend& operator=(const WorkspaceBackend&) = delete;
 
-    // Bind ext-workspace-v1 on the given display and take one startup sync.
-    // Returns false when the compositor does not expose the protocol.
-    bool start(wl_display* display);
+    // Bind ext-workspace-v1 on the given display. Non-blocking: the manager
+    // (if the compositor offers it) is bound from the registry callback and the
+    // initial workspace set arrives as push events on the host's normal
+    // dispatch; a wl_display sync reports a missing protocol for diagnostics.
+    void start(wl_display* display);
 
     const WorkspaceSnapshot& snapshot() const { return snap_; }
     void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
@@ -70,18 +73,21 @@ public:
     void activate(const std::string& name);
 
     // --- C listener trampolines (public; not for external use) ---
+    void onRegistryGlobal(wl_registry*, uint32_t name, const char* iface, uint32_t version);
     void onManagerWorkspace(ext_workspace_handle_v1* h);
     void onManagerDone();
-    void onHandleName(WsHandle*, const char* name);
-    void onHandleCoordinates(WsHandle*, const uint32_t* coords, size_t n);
-    void onHandleState(WsHandle*, uint32_t state);
+    static void onHandleName(WsHandle*, const char* name);
+    static void onHandleCoordinates(WsHandle*, const uint32_t* coords, size_t n);
+    static void onHandleState(WsHandle*, uint32_t state);
     void onHandleRemoved(WsHandle*);
+    void onSyncDone(wl_callback* cb, uint32_t time);
 
 private:
     void rebuildAndNotify();
 
     wl_display* display_ = nullptr;
     wl_registry* registry_ = nullptr;
+    wl_callback* syncCallback_ = nullptr;
     ext_workspace_manager_v1* manager_ = nullptr;
     std::vector<std::unique_ptr<WsHandle>> handles_;
     WorkspaceSnapshot snap_;

@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
@@ -61,22 +62,54 @@ public:
     void disconnect();
 
 private:
-    enum class RefreshStep { WirelessEnabled, ActiveAccessPoint, Ssid, Strength };
-
-    static int onGetDevices(sd_bus_message* reply, void* userdata, sd_bus_error* err);
+    // Standard NM-client lifecycle: signals are subscribed *before* the initial
+    // fetch, refreshes are serialized (never overlapping), and every terminal
+    // path publishes a definitive snapshot so the placeholder always resolves.
+    // NetworkManager 1.58 dropped the org.freedesktop.DBus.ObjectManager
+    // interface, so enumeration is a GetDevices → per-device GetAll chain
+    // (DeviceType/State → Wireless.ActiveAccessPoint → AP Ssid/Strength)
+    // instead of one GetManagedObjects reply.
+    static int onFetchStep(sd_bus_message* reply, void* userdata, sd_bus_error* err);
+    void stepDevices(sd_bus_message* reply);
+    void stepDeviceProps(sd_bus_message* reply);
+    void stepWirelessProps(sd_bus_message* reply);
+    void stepApProps(sd_bus_message* reply);
+    void fetchDeviceAt(size_t index);
     void refreshAsync();
-    static int onRefreshStep(sd_bus_message* reply, void* userdata, sd_bus_error* err);
-    void subscribeSignal();
+    void publish();
+    void publishWifiFailure(const char* what);
+    void finishNoWifi();
+    void endFetch();
+    void subscribeSignals();
     std::string findSavedConnection(const std::string& ssid) const;
 
     static int onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
+    static int onDeviceAdded(sd_bus_message* m, void* userdata, sd_bus_error* err);
+    static int onDeviceRemoved(sd_bus_message* m, void* userdata, sd_bus_error* err);
+    static int onNameOwnerChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
 
     SystemBus& bus_;
-    sd_bus_slot* slot_ = nullptr;
-    std::string device_;
-    std::string activeAp_;
-    RefreshStep refreshStep_ = RefreshStep::WirelessEnabled;
-    WifiSnapshot pendingSnap_;  // built up across async refresh steps
+    sd_bus_slot* propsSlot_ = nullptr;    // PropertiesChanged on the NM object tree
+    sd_bus_slot* addedSlot_ = nullptr;    // DeviceAdded (adapter hotplug)
+    sd_bus_slot* removedSlot_ = nullptr;  // DeviceRemoved
+    sd_bus_slot* ownerSlot_ = nullptr;    // NM service (re)appearance
+    std::string device_;                  // WiFi device path ("" = none)
+    std::string activeAp_;                // active AP path ("" = not connected)
+    // Refresh serialization: while one fetch chain is in flight a change only
+    // marks pendingRefresh_, and the next fetch runs when the chain lands.
+    // Overlapping chains used to consume each other's replies and die silently.
+    bool fetchInFlight_ = false;
+    bool pendingRefresh_ = false;
+    bool subscribed_ = false;
+    // Fetch-chain state (valid between start() and endFetch()).
+    std::vector<std::string> devices_;
+    size_t devIndex_ = 0;
+    uint32_t devState_ = 0;         // Device.State of the WiFi device
+    uint8_t apStrength_ = 0;        // Strength of the active AP
+    std::string apSsid_;            // Ssid of the active AP
+    bool wirelessEnabled_ = false;  // NM root WirelessEnabled
+    // Which reply the chain is waiting for next (dispatches onFetchStep).
+    int fetchStep_ = 0;  // 0=devices, 1=props, 2=wireless, 3=ap
     WifiSnapshot snap_;
     std::function<void()> onChange_;
     // Every result path calls this instead of onChange_ directly, so ready()

@@ -19,6 +19,7 @@ constexpr const char* kAdapterIface = "org.bluez.Adapter1";
 constexpr const char* kDeviceIface = "org.bluez.Device1";
 constexpr const char* kBatteryIface = "org.bluez.Battery1";
 constexpr const char* kPropsIface = "org.freedesktop.DBus.Properties";
+constexpr const char* kObjectManagerIface = "org.freedesktop.DBus.ObjectManager";
 
 bool dictHasKey(sd_bus_message* m, std::initializer_list<const char*> keys) {
     bool found = false;
@@ -41,26 +42,55 @@ bool dictHasKey(sd_bus_message* m, std::initializer_list<const char*> keys) {
 BluetoothBackend::BluetoothBackend(SystemBus& bus) : bus_(bus) {}
 
 BluetoothBackend::~BluetoothBackend() {
-    if (propsSlot_ != nullptr) { sd_bus_slot_unref(propsSlot_); }
-    if (ifacesSlot_ != nullptr) { sd_bus_slot_unref(ifacesSlot_); }
+    sd_bus_slot_unref(propsSlot_);
+    sd_bus_slot_unref(ifacesSlot_);
+    sd_bus_slot_unref(ownerSlot_);
 }
 
 bool BluetoothBackend::start() {
     if (!bus_.available()) { return false; }
 
-    // Async GetManagedObjects → callback parses and fires onChange_.
-    sd_bus_call_method_async(bus_.get(), nullptr, kBlueZ, "/", "org.freedesktop.DBus.ObjectManager",
-                             "GetManagedObjects", &BluetoothBackend::onGetManagedObjects, this, "");
+    // Subscribe before the first fetch so no state change can fall in the gap
+    // (standard subscribe-then-fetch order).
+    subscribeSignals();
+    refetch();
     return true;
+}
+
+// One GetManagedObjects in flight at a time: a signal during a fetch only marks
+// pendingFetch_, and the next fetch runs when the current reply lands. This is
+// what keeps two replies from arriving out of order and regressing the
+// snapshot to stale state.
+void BluetoothBackend::refetch() {
+    if (!bus_.available()) { return; }
+    if (fetchInFlight_) {
+        pendingFetch_ = true;
+        return;
+    }
+    fetchInFlight_ = true;
+    sd_bus_call_method_async(bus_.get(), nullptr, kBlueZ, "/", kObjectManagerIface,
+                             "GetManagedObjects", &BluetoothBackend::onGetManagedObjects, this, "");
+}
+
+void BluetoothBackend::endFetch() {
+    fetchInFlight_ = false;
+    if (pendingFetch_) {
+        pendingFetch_ = false;
+        refetch();
+    }
 }
 
 int BluetoothBackend::onGetManagedObjects(sd_bus_message* reply, void* userdata,
                                           sd_bus_error* /*unused*/) {
     auto* self = static_cast<BluetoothBackend*>(userdata);
     if (sd_bus_message_is_method_error(reply, nullptr) != 0) {
-        std::fprintf(stderr, "qypr: no Bluetooth adapter via BlueZ; indicator disabled\n");
+        const sd_bus_error* e = sd_bus_message_get_error(reply);
+        std::fprintf(stderr, "qypr: BlueZ unavailable (%s: %s); bluetooth indicator disabled\n",
+                     e != nullptr && e->name != nullptr ? e->name : "unknown",
+                     e != nullptr && e->message != nullptr ? e->message : "");
         self->snap_.available = false;
         self->notifyReady();  // hide the placeholder
+        self->endFetch();
         return 0;
     }
 
@@ -68,11 +98,12 @@ int BluetoothBackend::onGetManagedObjects(sd_bus_message* reply, void* userdata,
     if (!self->snap_.available) {
         std::fprintf(stderr, "qypr: no Bluetooth adapter via BlueZ; indicator disabled\n");
         self->notifyReady();  // hide the placeholder
+        self->endFetch();
         return 0;
     }
 
-    self->subscribeSignals();
     self->notifyReady();
+    self->endFetch();
     return 0;
 }
 
@@ -179,6 +210,8 @@ void BluetoothBackend::parseManagedObjects(sd_bus_message* m) {
 }
 
 void BluetoothBackend::subscribeSignals() {
+    if (subscribed_) { return; }
+    subscribed_ = true;
     propsSlot_ = bus_.addMatch(
         "type='signal',sender='org.bluez',interface='org.freedesktop.DBus.Properties',"
         "member='PropertiesChanged'",
@@ -186,6 +219,11 @@ void BluetoothBackend::subscribeSignals() {
     ifacesSlot_ = bus_.addMatch("type='signal',sender='org.bluez',"
                                 "interface='org.freedesktop.DBus.ObjectManager'",
                                 &BluetoothBackend::onInterfacesChanged, this);
+    // BlueZ may not be up when the bar starts; re-fetch when it (re)appears.
+    ownerSlot_ = bus_.addMatch(
+        "type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',"
+        "member='NameOwnerChanged',arg0='org.bluez'",
+        &BluetoothBackend::onNameOwnerChanged, this);
 }
 
 int BluetoothBackend::onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_error* /*unused*/) {
@@ -203,20 +241,29 @@ int BluetoothBackend::onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_e
         return 0;
     }
 
-    // Re-fetch: async GetManagedObjects.
-    sd_bus_call_method_async(self->bus_.get(), nullptr, kBlueZ, "/",
-                             "org.freedesktop.DBus.ObjectManager", "GetManagedObjects",
-                             &BluetoothBackend::onGetManagedObjects, self, "");
+    // Re-fetch: async GetManagedObjects (serialized against any in-flight one).
+    self->refetch();
     return 0;
 }
 
 int BluetoothBackend::onInterfacesChanged(sd_bus_message* /*unused*/, void* userdata,
                                           sd_bus_error* /*unused*/) {
+    // Re-fetch: async GetManagedObjects (serialized against any in-flight one).
+    static_cast<BluetoothBackend*>(userdata)->refetch();
+    return 0;
+}
+
+int BluetoothBackend::onNameOwnerChanged(sd_bus_message* m, void* userdata,
+                                         sd_bus_error* /*unused*/) {
     auto* self = static_cast<BluetoothBackend*>(userdata);
-    // Re-fetch: async GetManagedObjects.
-    sd_bus_call_method_async(self->bus_.get(), nullptr, kBlueZ, "/",
-                             "org.freedesktop.DBus.ObjectManager", "GetManagedObjects",
-                             &BluetoothBackend::onGetManagedObjects, self, "");
+    const char* name = nullptr;
+    const char* oldOwner = nullptr;
+    const char* newOwner = nullptr;
+    if (sd_bus_message_read(m, "sss", &name, &oldOwner, &newOwner) < 0 || (name == nullptr)) {
+        return 0;
+    }
+    if (newOwner == nullptr || *newOwner == '\0') { return 0; }  // gone: keep last state
+    self->refetch();                                             // (re)appeared: re-fetch
     return 0;
 }
 

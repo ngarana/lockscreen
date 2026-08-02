@@ -22,11 +22,14 @@ constexpr const char* kDeviceIface = "org.freedesktop.NetworkManager.Device";
 constexpr const char* kWirelessIface = "org.freedesktop.NetworkManager.Device.Wireless";
 constexpr const char* kApIface = "org.freedesktop.NetworkManager.AccessPoint";
 constexpr const char* kPropsIface = "org.freedesktop.DBus.Properties";
+constexpr const char* kObjectManagerIface = "org.freedesktop.DBus.ObjectManager";
 constexpr const char* kSettingsPath = "/org/freedesktop/NetworkManager/Settings";
 constexpr const char* kSettingsIface = "org.freedesktop.NetworkManager.Settings";
 constexpr const char* kSettingsConnIface = "org.freedesktop.NetworkManager.Settings.Connection";
 
 constexpr uint32_t kApFlagPrivacy = 0x1;
+constexpr uint32_t kWifiDeviceType = 2;          // NM_DEVICE_TYPE_WIFI
+constexpr uint32_t kDeviceStateActivated = 100;  // NM_DEVICE_STATE_ACTIVATED
 
 std::string readSsidProp(sd_bus* bus, const char* path, const char* iface) {
     sd_bus_error err = SD_BUS_ERROR_NULL;
@@ -196,141 +199,304 @@ bool extractByte(sd_bus_message* m, uint8_t* out) {
     return r >= 0;
 }
 
-// Issue an async Properties.Get for a single property.
-void asyncGetProp(sd_bus* bus, const char* dest, const char* path, const char* iface,
-                  const char* prop, sd_bus_message_handler_t cb, void* userdata) {
-    sd_bus_call_method_async(bus, nullptr, dest, path, kPropsIface, "Get", cb, userdata, "ss",
-                             iface, prop);
+bool extractU32(sd_bus_message* m, uint32_t* out) {
+    if (sd_bus_message_enter_container(m, 'v', "u") < 0) {
+        sd_bus_message_skip(m, "v");
+        return false;
+    }
+    int const r = sd_bus_message_read_basic(m, 'u', out);
+    sd_bus_message_exit_container(m);
+    return r >= 0;
 }
 }  // namespace
 
 WifiBackend::WifiBackend(SystemBus& bus) : bus_(bus) {}
 
 WifiBackend::~WifiBackend() {
-    if (slot_ != nullptr) { sd_bus_slot_unref(slot_); }
+    sd_bus_slot_unref(propsSlot_);
+    sd_bus_slot_unref(addedSlot_);
+    sd_bus_slot_unref(removedSlot_);
+    sd_bus_slot_unref(ownerSlot_);
 }
 
 bool WifiBackend::start() {
     if (!bus_.available()) { return false; }
 
-    // Async GetDevices → callback finds WiFi device → refreshAsync().
-    sd_bus_call_method_async(bus_.get(), nullptr, kNM, kNMPath, kNM, "GetDevices",
-                             &WifiBackend::onGetDevices, this, "");
+    // Subscribe before the first fetch: a change landing between the fetch and
+    // the subscription would be lost (standard subscribe-then-fetch order).
+    subscribeSignals();
+    refreshAsync();
     return true;
 }
 
-int WifiBackend::onGetDevices(sd_bus_message* reply, void* userdata, sd_bus_error* /*unused*/) {
-    auto* self = static_cast<WifiBackend*>(userdata);
-    if (sd_bus_message_is_method_error(reply, nullptr) != 0) { return 0; }
+void WifiBackend::subscribeSignals() {
+    if (subscribed_) { return; }
+    subscribed_ = true;
+    // Scoped to the NM object tree; the handler still filters by path.
+    propsSlot_ =
+        bus_.addMatch("type='signal',sender='org.freedesktop.NetworkManager',"
+                      "path_namespace='/org/freedesktop/NetworkManager',"
+                      "interface='org.freedesktop.DBus.Properties',member='PropertiesChanged'",
+                      &WifiBackend::onPropsChanged, this);
+    // Adapters appear/disappear (USB dongles) outside PropertiesChanged.
+    addedSlot_ = bus_.addMatch("type='signal',sender='org.freedesktop.NetworkManager',"
+                               "interface='org.freedesktop.NetworkManager',member='DeviceAdded'",
+                               &WifiBackend::onDeviceAdded, this);
+    removedSlot_ =
+        bus_.addMatch("type='signal',sender='org.freedesktop.NetworkManager',"
+                      "interface='org.freedesktop.NetworkManager',member='DeviceRemoved'",
+                      &WifiBackend::onDeviceRemoved, this);
+    // NM may not be up when the bar starts; re-enumerate when it (re)appears.
+    ownerSlot_ = bus_.addMatch(
+        "type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',"
+        "member='NameOwnerChanged',arg0='org.freedesktop.NetworkManager'",
+        &WifiBackend::onNameOwnerChanged, this);
+}
 
-    if (sd_bus_message_enter_container(reply, 'a', "o") < 0) { return 0; }
-    const char* path = nullptr;
-    std::string found;
-    while (sd_bus_message_read(reply, "o", &path) > 0 && (path != nullptr)) {
-        if ((std::strstr(path, "/wireless") != nullptr) ||
-            (std::strstr(path, "/wlan") != nullptr)) {
-            found = path;
-            break;
-        }
+// One fetch chain in flight at a time: a signal during the chain only marks
+// pendingRefresh_, and the next chain runs when the current one lands. This is
+// what keeps replies from different chains from arriving out of order and
+// regressing the snapshot to stale state.
+void WifiBackend::refreshAsync() {
+    if (!bus_.available()) { return; }
+    if (fetchInFlight_) {
+        pendingRefresh_ = true;  // a change arrived mid-fetch; re-run after
+        return;
     }
-    sd_bus_message_exit_container(reply);
+    fetchInFlight_ = true;
+    devices_.clear();
+    devIndex_ = 0;
+    devState_ = 0;
+    apStrength_ = 0;
+    apSsid_.clear();
+    fetchStep_ = 0;  // waiting for GetDevices
+    // NetworkManager 1.58 removed org.freedesktop.DBus.ObjectManager, so
+    // enumerate with GetDevices and read the properties we need per object.
+    sd_bus_call_method_async(bus_.get(), nullptr, kNM, kNMPath, kNM, "GetDevices",
+                             &WifiBackend::onFetchStep, this, "");
+}
 
-    if (found.empty()) {
-        std::fprintf(stderr, "qypr: no WiFi device via NetworkManager; wifi indicator disabled\n");
-        self->snap_ = {};  // available=false → hide the placeholder
-        self->notifyReady();
+void WifiBackend::endFetch() {
+    fetchInFlight_ = false;
+    if (pendingRefresh_) {
+        pendingRefresh_ = false;
+        refreshAsync();
+    }
+}
+
+int WifiBackend::onFetchStep(sd_bus_message* reply, void* userdata, sd_bus_error* /*unused*/) {
+    auto* self = static_cast<WifiBackend*>(userdata);
+    if (sd_bus_message_is_method_error(reply, nullptr) != 0) {
+        // Transient failure (NM restarting at bar start): publish a definitive
+        // "absent" instead of leaving the placeholder pending forever.
+        self->publishWifiFailure("NetworkManager unavailable; wifi indicator disabled");
+        self->endFetch();
         return 0;
     }
-
-    self->device_ = found;
-    self->refreshAsync();
-    return 0;
-}
-
-void WifiBackend::refreshAsync() {
-    sd_bus* bus = bus_.get();
-    if ((bus == nullptr) || device_.empty()) { return; }
-
-    refreshStep_ = RefreshStep::WirelessEnabled;
-    pendingSnap_ = {};
-    asyncGetProp(bus, kNM, kNMPath, kNM, "WirelessEnabled", &WifiBackend::onRefreshStep, this);
-}
-
-int WifiBackend::onRefreshStep(sd_bus_message* reply, void* userdata, sd_bus_error* /*unused*/) {
-    auto* self = static_cast<WifiBackend*>(userdata);
-    if (sd_bus_message_is_method_error(reply, nullptr) != 0) { return 0; }
-    sd_bus* bus = self->bus_.get();
-    if (bus == nullptr) { return 0; }
-
-    switch (self->refreshStep_) {
-        case RefreshStep::WirelessEnabled: {
-            bool enabled = false;
-            if (!extractBool(reply, &enabled)) { return 0; }
-            self->pendingSnap_.enabled = enabled;
-            self->pendingSnap_.available = true;
-            if (!enabled) {
-                self->activeAp_.clear();
-                self->snap_ = self->pendingSnap_;
-                self->subscribeSignal();
-                self->notifyReady();
-                return 0;
-            }
-            // Publish the enabled/available state now so the module appears
-            // within a single round trip; the AP/SSID/strength steps below refine
-            // it in place. subscribeSignal() guards against a double subscribe.
-            self->snap_ = self->pendingSnap_;
-            self->subscribeSignal();
-            self->notifyReady();
-
-            self->refreshStep_ = RefreshStep::ActiveAccessPoint;
-            asyncGetProp(bus, kNM, self->device_.c_str(), kWirelessIface, "ActiveAccessPoint",
-                         &WifiBackend::onRefreshStep, self);
-            return 0;
-        }
-        case RefreshStep::ActiveAccessPoint: {
-            std::string ap;
-            if (!extractObjPath(reply, &ap) || ap.empty() || ap == "/") {
-                self->activeAp_.clear();
-                self->snap_ = self->pendingSnap_;
-                self->subscribeSignal();
-                self->notifyReady();
-                return 0;
-            }
-            self->activeAp_ = ap;
-            self->pendingSnap_.connected = true;
-            self->refreshStep_ = RefreshStep::Ssid;
-            asyncGetProp(bus, kNM, ap.c_str(), kApIface, "Ssid", &WifiBackend::onRefreshStep, self);
-            return 0;
-        }
-        case RefreshStep::Ssid: {
-            std::string ssid;
-            extractByteArray(reply, &ssid);
-            self->pendingSnap_.ssid = std::move(ssid);
-            self->refreshStep_ = RefreshStep::Strength;
-            asyncGetProp(bus, kNM, self->activeAp_.c_str(), kApIface, "Strength",
-                         &WifiBackend::onRefreshStep, self);
-            return 0;
-        }
-        case RefreshStep::Strength: {
-            uint8_t strength = 0;
-            extractByte(reply, &strength);
-            self->pendingSnap_.strength = strength;
-            self->snap_ = self->pendingSnap_;
-            self->subscribeSignal();
-            self->notifyReady();
-            return 0;
-        }
+    // Dispatch to the step the chain is currently waiting on; a reply can only
+    // arrive for the request the chain last issued.
+    switch (self->fetchStep_) {
+        case 0:
+            self->stepDevices(reply);
+            break;
+        case 1:
+            self->stepDeviceProps(reply);
+            break;
+        case 2:
+            self->stepWirelessProps(reply);
+            break;
+        case 3:
+            self->stepApProps(reply);
+            break;
+        default:
+            self->publishWifiFailure("internal: unexpected wifi fetch step");
+            self->endFetch();
     }
     return 0;
 }
 
-void WifiBackend::subscribeSignal() {
-    if (slot_ != nullptr) {
-        return;  // already subscribed
+// GetDevices → ao: collect the device paths; then GetAll on the NM root to
+// learn WirelessEnabled, then walk the devices to find the WiFi one.
+void WifiBackend::stepDevices(sd_bus_message* reply) {
+    devices_.clear();
+    if (sd_bus_message_enter_container(reply, 'a', "o") >= 0) {
+        const char* path = nullptr;
+        while (sd_bus_message_read(reply, "o", &path) > 0 && (path != nullptr)) {
+            devices_.emplace_back(path);
+        }
+        sd_bus_message_exit_container(reply);
     }
-    slot_ = bus_.addMatch("type='signal',sender='org.freedesktop.NetworkManager',"
-                          "interface='org.freedesktop.DBus.Properties',member='PropertiesChanged'",
-                          &WifiBackend::onPropsChanged, this);
+
+    if (devices_.empty()) {
+        finishNoWifi();
+        return;
+    }
+    sd_bus_call_method_async(bus_.get(), nullptr, kNM, kNMPath, kPropsIface, "GetAll",
+                             &WifiBackend::onFetchStep, this, "s", kNM);
+    fetchStep_ = 1;  // waiting for root GetAll
+}
+
+// GetAll on a device → DeviceType/State; the root object's GetAll carries
+// WirelessEnabled (GetAll returns every property, so the reply shape is
+// identical regardless of object).
+void WifiBackend::stepDeviceProps(sd_bus_message* reply) {
+    uint32_t devType = 0;
+    uint32_t state = 0;
+    bool sawWirelessEnabled = false;
+    if (sd_bus_message_enter_container(reply, 'a', "{sv}") >= 0) {
+        while (sd_bus_message_enter_container(reply, 'e', "sv") > 0) {
+            const char* key = nullptr;
+            sd_bus_message_read(reply, "s", &key);
+            if (key == nullptr) {
+                sd_bus_message_skip(reply, "v");
+                sd_bus_message_exit_container(reply);
+                continue;
+            }
+            if (std::strcmp(key, "WirelessEnabled") == 0) {
+                extractBool(reply, &wirelessEnabled_);
+                sawWirelessEnabled = true;
+            } else if (std::strcmp(key, "DeviceType") == 0) {
+                extractU32(reply, &devType);
+            } else if (std::strcmp(key, "State") == 0) {
+                extractU32(reply, &state);
+            } else {
+                sd_bus_message_skip(reply, "v");
+            }
+            sd_bus_message_exit_container(reply);
+        }
+        sd_bus_message_exit_container(reply);
+    }
+
+    if (sawWirelessEnabled) {
+        // Root GetAll: only WirelessEnabled is interesting; start walking the
+        // devices.
+        fetchDeviceAt(0);
+        return;
+    }
+    if (devType != kWifiDeviceType) {
+        fetchDeviceAt(devIndex_ + 1);
+        return;
+    }
+    // Found the WiFi device: remember it and its state, then read the active
+    // access point.
+    device_ = devices_.at(devIndex_);
+    devState_ = state;
+    fetchStep_ = 2;  // waiting for Wireless GetAll
+    sd_bus_call_method_async(bus_.get(), nullptr, kNM, device_.c_str(), kPropsIface, "GetAll",
+                             &WifiBackend::onFetchStep, this, "s", kWirelessIface);
+}
+
+// GetAll on the WiFi device (Wireless interface) → ActiveAccessPoint.
+void WifiBackend::stepWirelessProps(sd_bus_message* reply) {
+    std::string ap;
+    if (sd_bus_message_enter_container(reply, 'a', "{sv}") >= 0) {
+        while (sd_bus_message_enter_container(reply, 'e', "sv") > 0) {
+            const char* key = nullptr;
+            sd_bus_message_read(reply, "s", &key);
+            if (key == nullptr) {
+                sd_bus_message_skip(reply, "v");
+                sd_bus_message_exit_container(reply);
+                continue;
+            }
+            if (std::strcmp(key, "ActiveAccessPoint") == 0) {
+                extractObjPath(reply, &ap);
+            } else {
+                sd_bus_message_skip(reply, "v");
+            }
+            sd_bus_message_exit_container(reply);
+        }
+        sd_bus_message_exit_container(reply);
+    }
+
+    if (ap.empty() || ap == "/") {
+        // Not connected: publish the enabled/available state immediately.
+        activeAp_.clear();
+        apSsid_.clear();
+        apStrength_ = 0;
+        publish();
+        endFetch();
+        return;
+    }
+    activeAp_ = ap;
+    fetchStep_ = 3;  // waiting for AP GetAll
+    sd_bus_call_method_async(bus_.get(), nullptr, kNM, ap.c_str(), kPropsIface, "GetAll",
+                             &WifiBackend::onFetchStep, this, "s", kApIface);
+}
+
+// GetAll on the active AP → Ssid/Strength; terminal step of the chain.
+void WifiBackend::stepApProps(sd_bus_message* reply) {
+    if (sd_bus_message_enter_container(reply, 'a', "{sv}") >= 0) {
+        while (sd_bus_message_enter_container(reply, 'e', "sv") > 0) {
+            const char* key = nullptr;
+            sd_bus_message_read(reply, "s", &key);
+            if (key == nullptr) {
+                sd_bus_message_skip(reply, "v");
+                sd_bus_message_exit_container(reply);
+                continue;
+            }
+            if (std::strcmp(key, "Ssid") == 0) {
+                extractByteArray(reply, &apSsid_);
+            } else if (std::strcmp(key, "Strength") == 0) {
+                extractByte(reply, &apStrength_);
+            } else {
+                sd_bus_message_skip(reply, "v");
+            }
+            sd_bus_message_exit_container(reply);
+        }
+        sd_bus_message_exit_container(reply);
+    }
+    publish();
+    endFetch();
+}
+
+void WifiBackend::fetchDeviceAt(size_t index) {
+    devIndex_ = index;
+    if (devIndex_ >= devices_.size()) {
+        finishNoWifi();
+        return;
+    }
+    fetchStep_ = 1;  // waiting for device GetAll
+    sd_bus_call_method_async(bus_.get(), nullptr, kNM, devices_.at(devIndex_).c_str(), kPropsIface,
+                             "GetAll", &WifiBackend::onFetchStep, this, "s", kDeviceIface);
+}
+
+void WifiBackend::finishNoWifi() {
+    if (!ready_) {
+        std::fprintf(stderr, "qypr: no WiFi device via NetworkManager; wifi indicator disabled\n");
+    }
+    device_.clear();
+    activeAp_.clear();
+    apSsid_.clear();
+    apStrength_ = 0;
+    publish();
+    endFetch();
+}
+
+void WifiBackend::publishWifiFailure(const char* what) {
+    std::fprintf(stderr, "qypr: %s\n", what);
+    device_.clear();
+    activeAp_.clear();
+    apSsid_.clear();
+    apStrength_ = 0;
+    publish();
+}
+
+void WifiBackend::publish() {
+    WifiSnapshot next;
+    next.available = !device_.empty();
+    next.enabled = wirelessEnabled_ && next.available;
+    if (next.available) {
+        // Connection truth is the device state (100 = activated), not the mere
+        // presence of an access point.
+        next.connected = std::cmp_equal(devState_, kDeviceStateActivated);
+        if (next.connected && !apSsid_.empty()) {
+            next.ssid = apSsid_;
+            next.strength = apStrength_;
+        }
+    }
+    if (ready_ && next == snap_) { return; }  // no change: skip repaint
+    snap_ = next;
+    notifyReady();
 }
 
 int WifiBackend::onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_error* /*unused*/) {
@@ -338,12 +504,37 @@ int WifiBackend::onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_error*
     const char* path = sd_bus_message_get_path(m);
     if (path == nullptr) { return 0; }
 
+    // Only NM-wide and our-device/AP changes refresh; everything else is
+    // irrelevant to the module (serialized by refreshAsync anyway).
     if (std::strcmp(path, kNMPath) != 0 && self->device_ != path && self->activeAp_ != path) {
         return 0;
     }
-
-    // On any relevant property change, do a full async refresh.
     self->refreshAsync();
+    return 0;
+}
+
+int WifiBackend::onDeviceAdded(sd_bus_message* /*unused*/, void* userdata,
+                               sd_bus_error* /*unused*/) {
+    static_cast<WifiBackend*>(userdata)->refreshAsync();
+    return 0;
+}
+
+int WifiBackend::onDeviceRemoved(sd_bus_message* /*unused*/, void* userdata,
+                                 sd_bus_error* /*unused*/) {
+    static_cast<WifiBackend*>(userdata)->refreshAsync();
+    return 0;
+}
+
+int WifiBackend::onNameOwnerChanged(sd_bus_message* m, void* userdata, sd_bus_error* /*unused*/) {
+    auto* self = static_cast<WifiBackend*>(userdata);
+    const char* name = nullptr;
+    const char* oldOwner = nullptr;
+    const char* newOwner = nullptr;
+    if (sd_bus_message_read(m, "sss", &name, &oldOwner, &newOwner) < 0 || (name == nullptr)) {
+        return 0;
+    }
+    if (newOwner == nullptr || *newOwner == '\0') { return 0; }  // gone: keep last state
+    self->refreshAsync();                                        // (re)appeared: re-enumerate
     return 0;
 }
 

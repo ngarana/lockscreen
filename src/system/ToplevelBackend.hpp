@@ -24,6 +24,7 @@
 struct wl_display;
 struct wl_registry;
 struct wl_seat;
+struct wl_callback;
 struct zwlr_foreign_toplevel_manager_v1;
 struct zwlr_foreign_toplevel_handle_v1;
 
@@ -70,9 +71,11 @@ public:
     ToplevelBackend(const ToplevelBackend&) = delete;
     ToplevelBackend& operator=(const ToplevelBackend&) = delete;
 
-    // Bind the protocol on the given display and take one startup sync.
-    // Returns false when the compositor does not expose it.
-    bool start(wl_display* display);
+    // Bind the protocol on the given display. Non-blocking: the manager (if
+    // the compositor offers it) is bound from the registry callback and the
+    // initial toplevel set arrives as push events; a wl_display sync reports a
+    // missing protocol for diagnostics.
+    void start(wl_display* display);
 
     const ToplevelSnapshot& snapshot() const { return snap_; }
     void setOnChange(std::function<void()> cb) { onChange_ = std::move(cb); }
@@ -86,11 +89,12 @@ public:
     // --- C listener trampolines (public; not for external use) ---
     void onRegistryGlobal(wl_registry*, uint32_t name, const char* iface, uint32_t version);
     void onManagerToplevel(zwlr_foreign_toplevel_handle_v1* h);
-    void onHandleTitle(TlHandle*, const char* title);
-    void onHandleAppId(TlHandle*, const char* appId);
-    void onHandleState(TlHandle*, const uint32_t* states, size_t n);
+    static void onHandleTitle(TlHandle*, const char* title);
+    static void onHandleAppId(TlHandle*, const char* appId);
+    static void onHandleState(TlHandle*, const uint32_t* states, size_t n);
     void onHandleDone(TlHandle*);
     void onHandleClosed(TlHandle*);
+    void onSyncDone(wl_callback* cb, uint32_t time);
 
 private:
     void rebuildAndNotify();
@@ -98,6 +102,7 @@ private:
 
     wl_display* display_ = nullptr;
     wl_registry* registry_ = nullptr;
+    wl_callback* syncCallback_ = nullptr;
     zwlr_foreign_toplevel_manager_v1* manager_ = nullptr;
     wl_seat* seat_ = nullptr;  // for activate(); bound from the registry
     std::vector<std::unique_ptr<TlHandle>> handles_;

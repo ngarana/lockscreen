@@ -19,82 +19,109 @@ constexpr uint32_t kStateUrgent = 2;
 constexpr uint32_t kStateHidden = 4;
 
 // --- ext_workspace_handle_v1 listener trampolines ---
-void handleId(void*, ext_workspace_handle_v1*, const char*) {}
-void handleName(void* data, ext_workspace_handle_v1*, const char* name) {
+void handleId(void* /*unused*/, ext_workspace_handle_v1* /*unused*/, const char* /*unused*/) {}
+void handleName(void* data, ext_workspace_handle_v1* /*unused*/, const char* name) {
     auto* h = static_cast<WsHandle*>(data);
     h->backend->onHandleName(h, name);
 }
-void handleCoordinates(void* data, ext_workspace_handle_v1*, wl_array* coords) {
+void handleCoordinates(void* data, ext_workspace_handle_v1* /*unused*/, wl_array* coords) {
     auto* h = static_cast<WsHandle*>(data);
     h->backend->onHandleCoordinates(h, static_cast<const uint32_t*>(coords->data),
                                     coords->size / sizeof(uint32_t));
 }
-void handleState(void* data, ext_workspace_handle_v1*, uint32_t state) {
+void handleState(void* data, ext_workspace_handle_v1* /*unused*/, uint32_t state) {
     auto* h = static_cast<WsHandle*>(data);
     h->backend->onHandleState(h, state);
 }
-void handleCapabilities(void*, ext_workspace_handle_v1*, uint32_t) {}
-void handleRemoved(void* data, ext_workspace_handle_v1*) {
+void handleCapabilities(void* /*unused*/, ext_workspace_handle_v1* /*unused*/,
+                        uint32_t /*unused*/) {}
+void handleRemoved(void* data, ext_workspace_handle_v1* /*unused*/) {
     auto* h = static_cast<WsHandle*>(data);
     h->backend->onHandleRemoved(h);
 }
-const ext_workspace_handle_v1_listener kHandleListener = {
-    handleId, handleName, handleCoordinates, handleState, handleCapabilities, handleRemoved};
+const ext_workspace_handle_v1_listener kHandleListener = {.id = handleId,
+                                                          .name = handleName,
+                                                          .coordinates = handleCoordinates,
+                                                          .state = handleState,
+                                                          .capabilities = handleCapabilities,
+                                                          .removed = handleRemoved};
 
 // --- ext_workspace_manager_v1 listener trampolines ---
-void managerGroup(void*, ext_workspace_manager_v1*, ext_workspace_group_handle_v1*) {}
-void managerWorkspace(void* data, ext_workspace_manager_v1*, ext_workspace_handle_v1* ws) {
+void managerGroup(void* /*unused*/, ext_workspace_manager_v1* /*unused*/,
+                  ext_workspace_group_handle_v1* /*unused*/) {}
+void managerWorkspace(void* data, ext_workspace_manager_v1* /*unused*/,
+                      ext_workspace_handle_v1* ws) {
     static_cast<WorkspaceBackend*>(data)->onManagerWorkspace(ws);
 }
-void managerDone(void* data, ext_workspace_manager_v1*) {
+void managerDone(void* data, ext_workspace_manager_v1* /*unused*/) {
     static_cast<WorkspaceBackend*>(data)->onManagerDone();
 }
-void managerFinished(void*, ext_workspace_manager_v1*) {}
-const ext_workspace_manager_v1_listener kManagerListener = {managerGroup, managerWorkspace,
-                                                            managerDone, managerFinished};
+void managerFinished(void* /*unused*/, ext_workspace_manager_v1* /*unused*/) {}
+const ext_workspace_manager_v1_listener kManagerListener = {.workspace_group = managerGroup,
+                                                            .workspace = managerWorkspace,
+                                                            .done = managerDone,
+                                                            .finished = managerFinished};
 
 // --- registry ---
 void registryGlobal(void* data, wl_registry* reg, uint32_t name, const char* iface,
                     uint32_t version) {
-    if (std::strcmp(iface, ext_workspace_manager_v1_interface.name) == 0) {
-        auto** mgr = static_cast<ext_workspace_manager_v1**>(data);
-        *mgr = static_cast<ext_workspace_manager_v1*>(
-            wl_registry_bind(reg, name, &ext_workspace_manager_v1_interface, 1));
-    }
+    static_cast<WorkspaceBackend*>(data)->onRegistryGlobal(reg, name, iface, version);
 }
-void registryGlobalRemove(void*, wl_registry*, uint32_t) {}
-const wl_registry_listener kRegistryListener = {registryGlobal, registryGlobalRemove};
+void registryGlobalRemove(void* /*unused*/, wl_registry* /*unused*/, uint32_t /*unused*/) {}
+const wl_registry_listener kRegistryListener = {.global = registryGlobal,
+                                                .global_remove = registryGlobalRemove};
+
+// --- display sync (missing-global diagnostic, non-blocking) ---
+void syncDone(void* data, wl_callback* cb, uint32_t time) {
+    static_cast<WorkspaceBackend*>(data)->onSyncDone(cb, time);
+}
 
 }  // namespace
 
-WorkspaceBackend::~WorkspaceBackend() {
-    for (auto& h : handles_) {
-        if (h->handle) ext_workspace_handle_v1_destroy(h->handle);
+void WorkspaceBackend::onRegistryGlobal(wl_registry* reg, uint32_t name, const char* iface,
+                                        uint32_t /*version*/) {
+    if (std::strcmp(iface, ext_workspace_manager_v1_interface.name) == 0 && (manager_ == nullptr)) {
+        manager_ = static_cast<ext_workspace_manager_v1*>(
+            wl_registry_bind(reg, name, &ext_workspace_manager_v1_interface, 1));
+        // The initial workspace set arrives right after binding (create +
+        // name/state + done), pushed on the host's normal dispatch.
+        ext_workspace_manager_v1_add_listener(manager_, &kManagerListener, this);
+        snap_.available = true;
     }
-    if (manager_) ext_workspace_manager_v1_destroy(manager_);
-    if (registry_) wl_registry_destroy(registry_);
 }
 
-bool WorkspaceBackend::start(wl_display* display) {
-    if (!display) return false;
+WorkspaceBackend::~WorkspaceBackend() {
+    if (syncCallback_ != nullptr) { wl_callback_destroy(syncCallback_); }
+    for (auto& h : handles_) {
+        if (h->handle != nullptr) { ext_workspace_handle_v1_destroy(h->handle); }
+    }
+    if (manager_ != nullptr) { ext_workspace_manager_v1_destroy(manager_); }
+    if (registry_ != nullptr) { wl_registry_destroy(registry_); }
+}
+
+void WorkspaceBackend::start(wl_display* display) {
+    if ((display == nullptr) || (display_ != nullptr)) { return; }
     display_ = display;
 
+    // Non-blocking: no wl_display_roundtrip on the startup path — the first
+    // frame never waits on the compositor. The manager is bound from the
+    // registry callback; the initial workspace set follows as push events.
     registry_ = wl_display_get_registry(display);
-    wl_registry_add_listener(registry_, &kRegistryListener, &manager_);
-    // One startup sync: discover + bind the global, then pull the initial
-    // workspace set (create + name/state + done). Subsequent updates are
-    // delivered by the host's normal dispatch — no polling.
-    wl_display_roundtrip(display);
-    if (!manager_) {
-        std::fprintf(stderr, "qypr: no ext-workspace-v1; workspaces indicator disabled\n");
-        return false;
-    }
-    ext_workspace_manager_v1_add_listener(manager_, &kManagerListener, this);
-    wl_display_roundtrip(display);
+    wl_registry_add_listener(registry_, &kRegistryListener, this);
 
-    snap_.available = true;
-    rebuildAndNotify();
-    return true;
+    // One async sync: when it completes every advertised global has been
+    // delivered — if the manager never appeared, the protocol is missing.
+    syncCallback_ = wl_display_sync(display);
+    static const wl_callback_listener kSyncListener = {.done = syncDone};
+    wl_callback_add_listener(syncCallback_, &kSyncListener, this);
+}
+
+void WorkspaceBackend::onSyncDone(wl_callback* cb, uint32_t /*time*/) {
+    wl_callback_destroy(cb);
+    syncCallback_ = nullptr;
+    if (manager_ == nullptr) {
+        std::fprintf(stderr, "qypr: no ext-workspace-v1; workspaces indicator disabled\n");
+    }
 }
 
 void WorkspaceBackend::onManagerWorkspace(ext_workspace_handle_v1* ws) {
@@ -106,11 +133,11 @@ void WorkspaceBackend::onManagerWorkspace(ext_workspace_handle_v1* ws) {
 }
 
 void WorkspaceBackend::onHandleName(WsHandle* h, const char* name) {
-    h->name = name ? name : "";
+    h->name = (name != nullptr) ? name : "";
 }
 
 void WorkspaceBackend::onHandleCoordinates(WsHandle* h, const uint32_t* coords, size_t n) {
-    if (n > 0 && coords) {
+    if (n > 0 && (coords != nullptr)) {
         h->coord = coords[0];
         h->hasCoord = true;
     } else {
@@ -119,24 +146,24 @@ void WorkspaceBackend::onHandleCoordinates(WsHandle* h, const uint32_t* coords, 
 }
 
 void WorkspaceBackend::onHandleState(WsHandle* h, uint32_t state) {
-    h->active = state & kStateActive;
-    h->urgent = state & kStateUrgent;
-    h->hidden = state & kStateHidden;
+    h->active = ((state & kStateActive) != 0u);
+    h->urgent = ((state & kStateUrgent) != 0u);
+    h->hidden = ((state & kStateHidden) != 0u);
 }
 
 void WorkspaceBackend::onHandleRemoved(WsHandle* h) {
-    if (h->handle) {
+    if (h->handle != nullptr) {
         ext_workspace_handle_v1_destroy(h->handle);
         h->handle = nullptr;
     }
-    handles_.erase(std::remove_if(handles_.begin(), handles_.end(),
-                                  [&](const std::unique_ptr<WsHandle>& p) { return p.get() == h; }),
-                   handles_.end());
+    std::erase_if(handles_, [&](const std::unique_ptr<WsHandle>& p) { return p.get() == h; });
     // 'removed' arrives outside a manager transaction; refresh immediately.
     rebuildAndNotify();
 }
 
-void WorkspaceBackend::onManagerDone() { rebuildAndNotify(); }
+void WorkspaceBackend::onManagerDone() {
+    rebuildAndNotify();
+}
 
 void WorkspaceBackend::rebuildAndNotify() {
     WorkspaceSnapshot next;
@@ -144,36 +171,38 @@ void WorkspaceBackend::rebuildAndNotify() {
 
     std::vector<const WsHandle*> visible;
     for (const auto& h : handles_) {
-        if (h->hidden) continue;  // spec: hidden workspaces must not be displayed
+        if (h->hidden) {
+            continue;  // spec: hidden workspaces must not be displayed
+        }
         visible.push_back(h.get());
     }
     // Order by coordinate when the compositor supplies one, else keep a stable,
     // numeric-name-aware order so "1 2 … 10" reads naturally.
     auto sortKey = [](const WsHandle* h) -> long {
-        if (h->hasCoord) return static_cast<long>(h->coord);
+        if (h->hasCoord) { return static_cast<long>(h->coord); }
         char* end = nullptr;
-        long n = std::strtol(h->name.c_str(), &end, 10);
+        long const n = std::strtol(h->name.c_str(), &end, 10);
         return (end && *end == '\0' && !h->name.empty()) ? n : 1'000'000L;
     };
-    std::stable_sort(visible.begin(), visible.end(),
-                     [&](const WsHandle* a, const WsHandle* b) { return sortKey(a) < sortKey(b); });
+    std::ranges::stable_sort(
+        visible, [&](const WsHandle* a, const WsHandle* b) { return sortKey(a) < sortKey(b); });
 
     for (const WsHandle* h : visible) {
-        next.workspaces.push_back({h->name, h->active, h->urgent});
+        next.workspaces.push_back({.name = h->name, .active = h->active, .urgent = h->urgent});
     }
 
-    if (next == snap_) return;
+    if (next == snap_) { return; }
     snap_ = std::move(next);
-    if (onChange_) onChange_();
+    if (onChange_) { onChange_(); }
 }
 
 void WorkspaceBackend::activate(const std::string& name) {
-    if (!manager_) return;
+    if (manager_ == nullptr) { return; }
     for (const auto& h : handles_) {
-        if (h->handle && h->name == name) {
+        if ((h->handle != nullptr) && h->name == name) {
             ext_workspace_handle_v1_activate(h->handle);
             ext_workspace_manager_v1_commit(manager_);
-            if (display_) wl_display_flush(display_);
+            if (display_ != nullptr) { wl_display_flush(display_); }
             return;
         }
     }

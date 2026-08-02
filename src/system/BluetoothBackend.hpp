@@ -64,15 +64,25 @@ public:
 private:
     static int onGetManagedObjects(sd_bus_message* reply, void* userdata, sd_bus_error* err);
     void parseManagedObjects(sd_bus_message* m);
+    void refetch();
+    void endFetch();
     void subscribeSignals();
 
     static int onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
     static int onInterfacesChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
+    static int onNameOwnerChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
 
     SystemBus& bus_;
     sd_bus_slot* propsSlot_ = nullptr;
     sd_bus_slot* ifacesSlot_ = nullptr;
+    sd_bus_slot* ownerSlot_ = nullptr;  // BlueZ service (re)appearance
     std::string adapter_;
+    // Refetch serialization: one GetManagedObjects in flight at a time; a
+    // signal during a fetch only marks pendingFetch_ (interleaved replies used
+    // to regress the snapshot to stale state).
+    bool fetchInFlight_ = false;
+    bool pendingFetch_ = false;
+    bool subscribed_ = false;
     BluetoothSnapshot snap_;
     std::function<void()> onChange_;
     // Every result path calls this instead of onChange_ directly, so ready()

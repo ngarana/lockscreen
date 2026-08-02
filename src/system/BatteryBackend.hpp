@@ -53,14 +53,18 @@ private:
     static int onGetAllDisplay(sd_bus_message* reply, void* userdata, sd_bus_error* err);
     static int onEnumerateDevices(sd_bus_message* reply, void* userdata, sd_bus_error* err);
     static int onGetAllDevice(sd_bus_message* reply, void* userdata, sd_bus_error* err);
+    void fetchInitial();
     void subscribeSignal();
     bool parseProps(sd_bus_message* m);
 
     static int onPropertiesChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
+    static int onNameOwnerChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
 
     SystemBus& bus_;
     sd_bus_slot* signalSlot_ = nullptr;
+    sd_bus_slot* ownerSlot_ = nullptr;  // UPower service (re)appearance
     std::string devicePath_;
+    bool subscribed_ = false;
     BatterySnapshot snap_;
     std::function<void()> onChange_;
     // Every result path calls this instead of onChange_ directly, so ready()
