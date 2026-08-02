@@ -67,6 +67,8 @@ private:
     void refetch();
     void endFetch();
     void subscribeSignals();
+    void sendSetPowered(bool on);
+    static int onSetPowerReply(sd_bus_message* reply, void* userdata, sd_bus_error* err);
 
     static int onPropsChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
     static int onInterfacesChanged(sd_bus_message* m, void* userdata, sd_bus_error* err);
@@ -83,6 +85,10 @@ private:
     bool fetchInFlight_ = false;
     bool pendingFetch_ = false;
     bool subscribed_ = false;
+    // A toggle requested while the adapter path was still unknown: applied once
+    // a successful fetch (or BlueZ (re)appearance) has produced an adapter.
+    bool pendingPowerSet_ = false;
+    bool pendingPowerOn_ = false;
     BluetoothSnapshot snap_;
     std::function<void()> onChange_;
     // Every result path calls this instead of onChange_ directly, so ready()

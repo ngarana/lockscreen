@@ -68,8 +68,15 @@ void BluetoothBackend::refetch() {
         return;
     }
     fetchInFlight_ = true;
-    sd_bus_call_method_async(bus_.get(), nullptr, kBlueZ, "/", kObjectManagerIface,
-                             "GetManagedObjects", &BluetoothBackend::onGetManagedObjects, this, "");
+    const int r = sd_bus_call_method_async(bus_.get(), nullptr, kBlueZ, "/", kObjectManagerIface,
+                                           "GetManagedObjects",
+                                           &BluetoothBackend::onGetManagedObjects, this, "");
+    if (r < 0) {
+        std::fprintf(stderr, "qypr: failed to enqueue GetManagedObjects: %d\n", -r);
+        fetchInFlight_ = false;
+        snap_.available = false;
+        notifyReady();  // hide the placeholder
+    }
 }
 
 void BluetoothBackend::endFetch() {
@@ -96,10 +103,20 @@ int BluetoothBackend::onGetManagedObjects(sd_bus_message* reply, void* userdata,
 
     self->parseManagedObjects(reply);
     if (!self->snap_.available) {
+        // No adapter to toggle: drop any deferred toggle rather than apply it
+        // to a future adapter the user did not explicitly re-request.
+        self->pendingPowerSet_ = false;
         std::fprintf(stderr, "qypr: no Bluetooth adapter via BlueZ; indicator disabled\n");
         self->notifyReady();  // hide the placeholder
         self->endFetch();
         return 0;
+    }
+
+    // A toggle arrived while the adapter path was unknown; apply it now that
+    // the fetch produced one.
+    if (self->pendingPowerSet_) {
+        self->pendingPowerSet_ = false;
+        self->sendSetPowered(self->pendingPowerOn_);
     }
 
     self->notifyReady();
@@ -268,8 +285,22 @@ int BluetoothBackend::onNameOwnerChanged(sd_bus_message* m, void* userdata,
 }
 
 void BluetoothBackend::setPowered(bool on) {
-    if (!bus_.available() || adapter_.empty()) { return; }
+    if (!bus_.available()) { return; }
+    if (adapter_.empty()) {
+        // The adapter path is not known yet (startup fetch still in flight or a
+        // previous fetch failed). Defer the toggle and re-fetch instead of
+        // silently dropping the user's click.
+        std::fprintf(stderr,
+                     "qypr: Bluetooth adapter unknown; deferring power toggle, refetching\n");
+        pendingPowerSet_ = true;
+        pendingPowerOn_ = on;
+        refetch();
+        return;
+    }
+    sendSetPowered(on);
+}
 
+void BluetoothBackend::sendSetPowered(bool on) {
     snap_.powered = on;
     if (!on) {
         snap_.connectedCount = 0;
@@ -286,8 +317,30 @@ void BluetoothBackend::setPowered(bool on) {
     sd_bus_message_open_container(msg, 'v', "b");
     sd_bus_message_append(msg, "b", on ? 1 : 0);
     sd_bus_message_close_container(msg);
-    sd_bus_call_async(bus_.get(), nullptr, msg, nullptr, nullptr, 0);
+    const int r =
+        sd_bus_call_async(bus_.get(), nullptr, msg, &BluetoothBackend::onSetPowerReply, this, 0);
+    if (r < 0) {
+        std::fprintf(stderr, "qypr: failed to send BlueZ setPowered(%s): %d\n", on ? "on" : "off",
+                     -r);
+    }
     sd_bus_message_unref(msg);
+}
+
+int BluetoothBackend::onSetPowerReply(sd_bus_message* reply, void* userdata,
+                                      sd_bus_error* /*unused*/) {
+    auto* self = static_cast<BluetoothBackend*>(userdata);
+    if (sd_bus_message_is_method_error(reply, nullptr) != 0) {
+        const sd_bus_error* e = sd_bus_message_get_error(reply);
+        std::fprintf(stderr, "qypr: BlueZ setPowered failed (%s: %s)\n",
+                     e != nullptr && e->name != nullptr ? e->name : "unknown",
+                     e != nullptr && e->message != nullptr ? e->message : "");
+        // The optimistic snapshot no longer matches reality; re-fetch to
+        // converge on the true state.
+        self->refetch();
+        return 0;
+    }
+    // Success: the PropertiesChanged signal will drive the next fetch.
+    return 0;
 }
 
 void BluetoothBackend::connectDevice(const std::string& path) {
