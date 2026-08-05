@@ -21,6 +21,11 @@ void fire(Op* op) {
 VolumeBackend::VolumeBackend(EventLoop& loop) : pulseLoop_(loop) {}
 
 VolumeBackend::~VolumeBackend() {
+    stopped_ = true;  // the reconnect timer must not outlive the loop
+    if (retryTimer_ >= 0) {
+        pulseLoop_.loop().removeTimer(retryTimer_);
+        retryTimer_ = -1;
+    }
     if (ctx_ != nullptr) {
         // Silence callbacks first: disconnect() fires the TERMINATED state
         // callback synchronously, and consumers (StatusBar) may already be
@@ -36,6 +41,17 @@ VolumeBackend::~VolumeBackend() {
 }
 
 bool VolumeBackend::start() {
+    if (ctx_ != nullptr) {
+        // A previous attempt failed asynchronously; tear it down before
+        // retrying. Silence callbacks first: disconnect() fires TERMINATED
+        // synchronously, which must not publish a bogus state here.
+        pa_context_set_state_callback(ctx_, nullptr, nullptr);
+        pa_context_set_subscribe_callback(ctx_, nullptr, nullptr);
+        pa_context_disconnect(ctx_);
+        pa_context_unref(ctx_);
+        ctx_ = nullptr;
+    }
+
     ctx_ = pa_context_new(pulseLoop_.api(), "qypr");
     if (ctx_ == nullptr) { return false; }
 
@@ -43,15 +59,28 @@ bool VolumeBackend::start() {
     pa_context_set_subscribe_callback(ctx_, &VolumeBackend::onSubscribe, this);
 
     if (pa_context_connect(ctx_, nullptr, PA_CONTEXT_NOAUTOSPAWN, nullptr) < 0) {
-        std::fprintf(stderr, "qypr: pulse connect failed (%s); volume indicator disabled\n",
+        std::fprintf(stderr, "qypr: pulse connect failed (%s); retrying\n",
                      pa_strerror(pa_context_errno(ctx_)));
         pa_context_unref(ctx_);
         ctx_ = nullptr;
         snap_.available = false;
         notifyReady();  // hide the placeholder
+        scheduleReconnect();
         return false;
     }
     return true;
+}
+
+void VolumeBackend::scheduleReconnect() {
+    if (stopped_ || retryTimer_ >= 0) { return; }
+    // The server may still be coming up (pipewire-pulse starts slowly), so a
+    // dropped/refused connection is retried instead of leaving the indicator
+    // on its placeholder forever.
+    retryTimer_ = pulseLoop_.loop().addTimer(3000, /*repeat=*/false, [this] {
+        retryTimer_ = -1;
+        if (stopped_) { return; }
+        start();
+    });
 }
 
 void VolumeBackend::onContextState(pa_context* c, void* userdata) {
@@ -74,8 +103,13 @@ void VolumeBackend::onContextState(pa_context* c, void* userdata) {
         }
         case PA_CONTEXT_FAILED:
         case PA_CONTEXT_TERMINATED: {
-            VolumeSnapshot const gone;
-            self->changed(gone);
+            // Publish unconditionally: if the connection died before the first
+            // query (e.g. the server dropped us mid-startup), changed() would
+            // suppress the push as "unchanged" and ready_ would never flip,
+            // leaving the indicator on its placeholder forever.
+            self->snap_ = VolumeSnapshot{};
+            self->notifyReady();
+            self->scheduleReconnect();
             break;
         }
         default:

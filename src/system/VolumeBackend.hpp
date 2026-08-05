@@ -103,6 +103,9 @@ private:
     void querySinks();    // the full output-device list
     void queryStreams();  // the per-app stream list
     void changed(const VolumeSnapshot& next);
+    // Re-arm start() after a failed/dropped connection (the server may still be
+    // coming up). One 3s retry at a time; stopped_ guards the destructor path.
+    void scheduleReconnect();
     void notify() {
         if (onChange_) onChange_();
     }
@@ -117,6 +120,8 @@ private:
     std::vector<AudioStream> streams_;
     std::vector<AudioStream> streamsBuilding_;
     std::function<void()> onChange_;
+    int retryTimer_ = -1;   // pending reconnect timer fd (EventLoop)
+    bool stopped_ = false;  // destructor ran; never schedule/publish again
     // Every result path calls this instead of onChange_ directly, so ready()
     // flips true exactly when the first real snapshot is published.
     void notifyReady() {
