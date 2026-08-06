@@ -25,47 +25,51 @@ std::string to_str(const T& val) {
 int g_tests_run = 0;
 int g_tests_failed = 0;
 
-#define TEST(name) \
-    void test_##name(); \
-    struct Register_##name { \
-        Register_##name() { \
-            std::cout << "Running test: " << #name << "..." << std::endl; \
-            g_tests_run++; \
-            try { \
-                test_##name(); \
-                std::cout << "  PASS" << std::endl; \
-            } catch (const std::exception& e) { \
-                std::cout << "  FAIL: " << e.what() << std::endl; \
-                g_tests_failed++; \
-            } catch (...) { \
-                std::cout << "  FAIL: Unknown exception" << std::endl; \
-                g_tests_failed++; \
-            } \
-        } \
-    } register_##name; \
+#define TEST(name)                                                                                 \
+    void test_##name();                                                                            \
+    struct Register_##name {                                                                       \
+        Register_##name() {                                                                        \
+            std::cout << "Running test: " << #name << "..." << std::endl;                          \
+            g_tests_run++;                                                                         \
+            try {                                                                                  \
+                test_##name();                                                                     \
+                std::cout << "  PASS" << std::endl;                                                \
+            } catch (const std::exception& e) {                                                    \
+                std::cout << "  FAIL: " << e.what() << std::endl;                                  \
+                g_tests_failed++;                                                                  \
+            } catch (...) {                                                                        \
+                std::cout << "  FAIL: Unknown exception" << std::endl;                             \
+                g_tests_failed++;                                                                  \
+            }                                                                                      \
+        }                                                                                          \
+    } register_##name;                                                                             \
     void test_##name()
 
-#define EXPECT_TRUE(cond) \
-    do { \
-        if (!(cond)) { \
-            throw std::runtime_error(std::string("Assertion failed: ") + #cond + " at " + __FILE__ + ":" + std::to_string(__LINE__)); \
-        } \
+#define EXPECT_TRUE(cond)                                                                          \
+    do {                                                                                           \
+        if (!(cond)) {                                                                             \
+            throw std::runtime_error(std::string("Assertion failed: ") + #cond + " at " +          \
+                                     __FILE__ + ":" + std::to_string(__LINE__));                   \
+        }                                                                                          \
     } while (0)
 
 #define EXPECT_FALSE(cond) EXPECT_TRUE(!(cond))
 
-#define EXPECT_EQ(val1, val2) \
-    do { \
-        if ((val1) != (val2)) { \
-            throw std::runtime_error(std::string("Assertion failed: ") + #val1 + " == " + #val2 + " (value: " + to_str(val1) + " vs " + to_str(val2) + ") at " + __FILE__ + ":" + std::to_string(__LINE__)); \
-        } \
+#define EXPECT_EQ(val1, val2)                                                                      \
+    do {                                                                                           \
+        if ((val1) != (val2)) {                                                                    \
+            throw std::runtime_error(std::string("Assertion failed: ") + #val1 + " == " + #val2 +  \
+                                     " (value: " + to_str(val1) + " vs " + to_str(val2) +          \
+                                     ") at " + __FILE__ + ":" + std::to_string(__LINE__));         \
+        }                                                                                          \
     } while (0)
 
-#define EXPECT_NEAR(val1, val2, eps) \
-    do { \
-        if (std::abs((val1) - (val2)) > (eps)) { \
-            throw std::runtime_error(std::string("Assertion failed: ") + #val1 + " ≈ " + #val2 + " at " + __FILE__ + ":" + std::to_string(__LINE__)); \
-        } \
+#define EXPECT_NEAR(val1, val2, eps)                                                               \
+    do {                                                                                           \
+        if (std::abs((val1) - (val2)) > (eps)) {                                                   \
+            throw std::runtime_error(std::string("Assertion failed: ") + #val1 + " ≈ " + #val2 +   \
+                                     " at " + __FILE__ + ":" + std::to_string(__LINE__));          \
+        }                                                                                          \
     } while (0)
 
 // Enable access to private members for unit testing
@@ -122,6 +126,7 @@ int g_tests_failed = 0;
 #include "system/SystemStats.hpp"
 #include "system/IdleInhibitor.hpp"
 #include "system/DesktopIndex.hpp"
+#include "system/StateCache.hpp"
 #include "system/KeyboardLayout.hpp"
 #include "ui/indicators/IdleInhibitorIndicator.hpp"
 #include "ui/indicators/BluetoothIndicator.hpp"
@@ -173,7 +178,7 @@ TEST(Types) {
     EXPECT_NEAR(c1.a, 1.0, 0.01);
 
     qypr::Color c2 = qypr::Color::fromHex("#8000ff00");
-    EXPECT_NEAR(c2.a, 0.5, 0.05); // alpha first #AARRGGBB
+    EXPECT_NEAR(c2.a, 0.5, 0.05);  // alpha first #AARRGGBB
     EXPECT_NEAR(c2.r, 0.0, 0.01);
     EXPECT_NEAR(c2.g, 1.0, 0.01);
     EXPECT_NEAR(c2.b, 0.0, 0.01);
@@ -195,7 +200,7 @@ TEST(Types) {
     EXPECT_NEAR(r.cx(), 60.0, 0.01);
     EXPECT_NEAR(r.cy(), 120.0, 0.01);
     EXPECT_TRUE(r.valid());
-    
+
     qypr::Rect r_inv{0, 0, -10, 10};
     EXPECT_FALSE(r_inv.valid());
 
@@ -203,7 +208,7 @@ TEST(Types) {
     EXPECT_NEAR(qypr::clamp01(1.5), 1.0, 0.001);
     EXPECT_NEAR(qypr::clamp01(-0.5), 0.0, 0.001);
     EXPECT_NEAR(qypr::lerp(10.0, 20.0, 0.5), 15.0, 0.001);
-    
+
     EXPECT_NEAR(qypr::ease::linear(0.5), 0.5, 0.001);
     EXPECT_NEAR(qypr::ease::inOutQuad(0.0), 0.0, 0.001);
     EXPECT_NEAR(qypr::ease::inOutQuad(1.0), 1.0, 0.001);
@@ -217,12 +222,12 @@ TEST(Types) {
 
     anim.animateTo(1.0, 100, qypr::ease::linear);
     EXPECT_NEAR(anim.target(), 1.0, 0.001);
-    
+
     int64_t start = qypr::nowMs();
     EXPECT_TRUE(anim.active(start));
     EXPECT_NEAR(anim.value(start), 0.0, 0.001);
-    EXPECT_NEAR(anim.value(start + 50), 0.5, 0.1); // middle
-    EXPECT_NEAR(anim.value(start + 200), 1.0, 0.001); // past end
+    EXPECT_NEAR(anim.value(start + 50), 0.5, 0.1);     // middle
+    EXPECT_NEAR(anim.value(start + 200), 1.0, 0.001);  // past end
     EXPECT_FALSE(anim.active(start + 200));
 
     anim.set(5.0);
@@ -232,7 +237,7 @@ TEST(Types) {
 
 TEST(EventLoop) {
     qypr::EventLoop loop;
-    
+
     // Test post task
     bool posted_ran = false;
     loop.post([&] {
@@ -242,9 +247,7 @@ TEST(EventLoop) {
 
     // Test prepare callback
     bool prepare_ran = false;
-    loop.addPrepare([&] {
-        prepare_ran = true;
-    });
+    loop.addPrepare([&] { prepare_ran = true; });
 
     // Run the loop which should exit via post
     loop.run();
@@ -323,7 +326,8 @@ TEST(PamAuthenticator) {
     mock_pam_force_rc(-1);
 
     // ---- Empty password is rejected before any PAM call ------------------
-    bool started = auth.authenticate("", [&](qypr::PamAuthenticator::Result, const std::string&) {});
+    bool started =
+        auth.authenticate("", [&](qypr::PamAuthenticator::Result, const std::string&) {});
     EXPECT_FALSE(started);
 }
 
@@ -337,7 +341,7 @@ TEST(PowerManager) {
 TEST(MprisController) {
     qypr::MprisController mpris;
     EXPECT_TRUE(mpris.available());
-    
+
     mpris.refresh();
     EXPECT_TRUE(mpris.active());
     EXPECT_TRUE(mpris.playing());
@@ -354,10 +358,10 @@ TEST(MprisController) {
     EXPECT_TRUE(mpris.canSetVolume());
 
     mpris.togglePlaying();
-    EXPECT_FALSE(mpris.playing()); // toggled to paused
+    EXPECT_FALSE(mpris.playing());  // toggled to paused
 
     mpris.togglePlaying();
-    EXPECT_TRUE(mpris.playing()); // toggled back to playing
+    EXPECT_TRUE(mpris.playing());  // toggled back to playing
 
     mpris.next();
     EXPECT_EQ(mpris.title(), std::string("Next Song"));
@@ -372,7 +376,7 @@ TEST(MprisController) {
 TEST(NotificationMonitor) {
     qypr::EventLoop loop;
     qypr::NotificationMonitor mon(loop);
-    
+
     EXPECT_TRUE(mon.start(false));
     EXPECT_TRUE(mon.notifications().empty());
 
@@ -411,12 +415,12 @@ TEST(VideoPlayer) {
 TEST(WaylandDisplay) {
     qypr::EventLoop loop;
     qypr::WaylandDisplay disp(loop);
-    
+
     // Should connect using Wayland mock
     EXPECT_TRUE(disp.connect());
 
     disp.invalidateAll();
-    
+
     // Lock session
     qypr::LockSession lock(disp);
     EXPECT_TRUE(lock.lock());
@@ -426,7 +430,7 @@ TEST(WaylandDisplay) {
 TEST(AppAndUIHeadlessPreview) {
     qypr::App app;
     app.setIdleTimeout(10);
-    
+
     // Exercises App::preview which renders both idle and revealed states to PNG
     // This exercises the full Cairo widget tree draw pipeline and event callbacks!
     int rc = app.preview("qypr-test-preview.png", 800, 600);
@@ -455,19 +459,19 @@ TEST(LockScreenInputHandling) {
     qypr::App app;
     qypr::PamAuthenticator pam(loop);
     qypr::PowerManager power;
-    
+
     qypr::LockScreen screen(loop, app, pam, power);
 
     // Test text inputs
     screen.handleTextInput("a");
     screen.handleTextInput("b");
-    screen.handleSpecialKey(0xff08, 0); // Backspace keysym
-    screen.handleSpecialKey(0xff0d, 0); // Enter keysym (submits pam auth)
+    screen.handleSpecialKey(0xff08, 0);  // Backspace keysym
+    screen.handleSpecialKey(0xff0d, 0);  // Enter keysym (submits pam auth)
 
     // Test pointer events
     screen.handlePointerMotion(800, 600, 100, 100);
-    screen.handlePointerButton(800, 600, 100, 100, 272, true); // left press
-    screen.handlePointerButton(800, 600, 100, 100, 272, false); // left release
+    screen.handlePointerButton(800, 600, 100, 100, 272, true);   // left press
+    screen.handlePointerButton(800, 600, 100, 100, 272, false);  // left release
     screen.handlePointerLeave();
 
     // Verify clock layout & icon resolver
@@ -492,10 +496,10 @@ TEST(LockScreenUnlockGating) {
     mock_pam_set_expected_password("open-sesame");
 
     auto submit = [&](const std::string& pw) {
-        screen.password_ = pw;      // private, exposed for this test TU
+        screen.password_ = pw;  // private, exposed for this test TU
         screen.submitPassword();
-        while (pam.busy()) {}        // wait for the auth worker to finish
-        loop.dispatchPosted();       // run onAuthResult on the loop thread
+        while (pam.busy()) {}   // wait for the auth worker to finish
+        loop.dispatchPosted();  // run onAuthResult on the loop thread
     };
 
     // Wrong password: no unlock, error surfaced, secret wiped.
@@ -567,11 +571,14 @@ TEST(SeatInput) {
         bool lastPressed = false;
         void onTextInput(const std::string& s) override { text += s; }
         void onSpecialKey(uint32_t sym, uint32_t mods) override {
-            ++specials; lastSym = sym; lastMods = mods;
+            ++specials;
+            lastSym = sym;
+            lastMods = mods;
         }
         void onPointerMotion(int, int, double, double) override { ++motions; }
         void onPointerButton(int, int, double, double, uint32_t, bool pressed) override {
-            ++buttons; lastPressed = pressed;
+            ++buttons;
+            lastPressed = pressed;
         }
         void onPointerLeave() override { ++leaves; }
     } sink;
@@ -680,7 +687,10 @@ TEST(SeatLayoutReport) {
         void onPointerButton(int, int, double, double, uint32_t, bool) override {}
         void onPointerLeave() override {}
         void onLayoutChanged(const std::string& n, uint32_t i, uint32_t c) override {
-            ++changes; lastName = n; lastIndex = i; lastCount = c;
+            ++changes;
+            lastName = n;
+            lastIndex = i;
+            lastCount = c;
         }
     } sink;
 
@@ -757,7 +767,7 @@ TEST(LockSessionFinished) {
         EXPECT_TRUE(lockedCb);
 
         qypr::LockSession::onFinished(&session, nullptr);  // compositor revokes it
-        EXPECT_FALSE(session.locked());  // no longer secure
+        EXPECT_FALSE(session.locked());                    // no longer secure
         EXPECT_TRUE(finishedCb);
 
         session.unlock();  // safe: destroy (not unlock_and_destroy), no crash
@@ -802,10 +812,9 @@ TEST(LockSessionFinished) {
 TEST(IconResolver) {
     qypr::IconResolver r;
 
-    const std::string duri =
-        "data:image/png;base64,"
-        "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAABmJLR0QA/wD/AP+gvaeT"
-        "AAAAEElEQVQImWP8z4AATAxEcQAz0QEH1mUzKgAAAABJRU5ErkJggg==";
+    const std::string duri = "data:image/png;base64,"
+                             "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAABmJLR0QA/wD/AP+gvaeT"
+                             "AAAAEElEQVQImWP8z4AATAxEcQAz0QEH1mUzKgAAAABJRU5ErkJggg==";
     cairo_surface_t* s = r.get(duri);
     EXPECT_TRUE(s != nullptr);
     EXPECT_EQ(cairo_image_surface_get_width(s), 4);
@@ -841,8 +850,8 @@ TEST(IndicatorRegistryRegisterAndCreate) {
     auto& reg = qypr::IndicatorRegistry::instance();
     size_t before = reg.entries_.size();
 
-    reg.registerIndicator("test-indicator", qypr::Zone::Right, 999,
-        [](const qypr::SystemBackends&) {
+    reg.registerIndicator(
+        "test-indicator", qypr::Zone::Right, 999, [](const qypr::SystemBackends&) {
             return std::make_unique<TestIndicator>("test-indicator", qypr::Zone::Right, 999);
         });
 
@@ -877,10 +886,8 @@ TEST(StatusIndicatorBaseClass) {
 
 // Test QSToggleTile renders without crashing on a null Cairo context.
 TEST(QSToggleTileDraw) {
-    qypr::QSToggleTile tile("WiFi", "󰤨",
-        []() { return true; },
-        []() {},
-        []() { return std::string("MyHome"); });
+    qypr::QSToggleTile tile(
+        "WiFi", "󰤨", []() { return true; }, []() {}, []() { return std::string("MyHome"); });
 
     EXPECT_TRUE(tile.type() == qypr::QSTile::Type::Toggle);
     EXPECT_TRUE(tile.bounds.valid() == false);  // not yet laid out
@@ -899,9 +906,7 @@ TEST(QSToggleTileDraw) {
 // Test QSSliderTile renders and handles drag input.
 TEST(QSSliderTileDrawAndDrag) {
     double vol = 0.5;
-    qypr::QSSliderTile tile("󰕾",
-        [&]() { return vol; },
-        [&](double v) { vol = v; });
+    qypr::QSSliderTile tile("󰕾", [&]() { return vol; }, [&](double v) { vol = v; });
 
     EXPECT_TRUE(tile.type() == qypr::QSTile::Type::Slider);
 
@@ -926,12 +931,12 @@ TEST(QSSliderTileDrawAndDrag) {
 TEST(QuickSettingsPanelLayout) {
     qypr::QuickSettingsPanel panel;
 
-    panel.addTile(std::make_unique<qypr::QSToggleTile>("WiFi", "󰤨",
-        []() { return true; }, []() {}));
-    panel.addTile(std::make_unique<qypr::QSToggleTile>("BT", "󰂯",
-        []() { return false; }, []() {}));
-    panel.addTile(std::make_unique<qypr::QSSliderTile>("󰕾",
-        []() { return 0.6; }, [](double) {}));
+    panel.addTile(
+        std::make_unique<qypr::QSToggleTile>("WiFi", "󰤨", []() { return true; }, []() {}));
+    panel.addTile(
+        std::make_unique<qypr::QSToggleTile>("BT", "󰂯", []() { return false; }, []() {}));
+    panel.addTile(
+        std::make_unique<qypr::QSSliderTile>("󰕾", []() { return 0.6; }, [](double) {}));
 
     panel.anchorX = 800;
     panel.anchorY = 50;
@@ -948,7 +953,7 @@ TEST(QuickSettingsPanelLayout) {
 
     // Click inside the first toggle tile (below the header row).
     qypr::Rect pb = panel.getBounds();
-    double firstTileX = pb.x + 16.0 + 5.0;  // pad + small offset
+    double firstTileX = pb.x + 16.0 + 5.0;               // pad + small offset
     double firstTileY = pb.y + 16.0 + 52.0 + 8.0 + 5.0;  // pad + header + gap + offset
     EXPECT_TRUE(panel.handleClick(firstTileX, firstTileY));
 
@@ -1144,13 +1149,12 @@ TEST(ThemeLoadThemeDefaults) {
 // The bar backdrop tint/border colours follow the active palette (no hardcoded
 // macOS values), and icon-style + the legacy `macos` alias parse correctly.
 TEST(ThemeFollowsSystemPalette) {
-    const std::string path =
-        std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp") +
-        "/qypr-theme-test.conf";
+    const char* tmp = ::getenv("TMPDIR");
+    const std::string path = std::string(tmp ? tmp : "/tmp") + "/qypr-theme-test.conf";
     {
         std::ofstream f(path);
         f << "[theme]\n"
-          << "style = macos\n"          // legacy alias → glass rendering
+          << "style = macos\n"  // legacy alias → glass rendering
           << "icon-style = glyph\n"
           << "background = #112233\n"
           << "text = #ffeedd\n";
@@ -1776,8 +1780,8 @@ TEST(SensitiveIndicatorsGatedByDefault) {
 
 // Write a temp config and return its path.
 static std::string writeTempConfig(const std::string& body) {
-    std::string path = "/tmp/qypr-test-" + std::to_string(::getpid()) + "-" +
-                       std::to_string(::rand()) + ".conf";
+    std::string path =
+        "/tmp/qypr-test-" + std::to_string(::getpid()) + "-" + std::to_string(::rand()) + ".conf";
     std::ofstream f(path);
     f << body;
     f.close();
@@ -1785,12 +1789,11 @@ static std::string writeTempConfig(const std::string& body) {
 }
 
 TEST(ThemeLoadThemeOverrides) {
-    const std::string path = writeTempConfig(
-        "[theme]\n"
-        "font-family = JetBrains Mono\n"
-        "font-size = 20\n"
-        "primary = #ff0000\n"
-        "bar-height = 42.0\n");
+    const std::string path = writeTempConfig("[theme]\n"
+                                             "font-family = JetBrains Mono\n"
+                                             "font-size = 20\n"
+                                             "primary = #ff0000\n"
+                                             "bar-height = 42.0\n");
     qypr::Config c;
     c.load(path);
     qypr::theme::loadTheme(c);
@@ -1803,21 +1806,20 @@ TEST(ThemeLoadThemeOverrides) {
 }
 
 TEST(ConfigParsing) {
-    const std::string path = writeTempConfig(
-        "# a comment\n"
-        "// another comment\n"
-        "\n"
-        "[bar]\n"
-        "position = bottom\n"
-        "height = 40\n"
-        "backdrop = 0.5\n"
-        "auto-hide = yes\n"
-        "modules-left = workspaces, clock\n"
-        "  spaced-key   =   value with inner spaces  \n"
-        "junk line without equals\n"
-        "\n"
-        "[clock]\n"
-        "format = %H:%M\n");
+    const std::string path = writeTempConfig("# a comment\n"
+                                             "// another comment\n"
+                                             "\n"
+                                             "[bar]\n"
+                                             "position = bottom\n"
+                                             "height = 40\n"
+                                             "backdrop = 0.5\n"
+                                             "auto-hide = yes\n"
+                                             "modules-left = workspaces, clock\n"
+                                             "  spaced-key   =   value with inner spaces  \n"
+                                             "junk line without equals\n"
+                                             "\n"
+                                             "[clock]\n"
+                                             "format = %H:%M\n");
 
     qypr::Config c;
     EXPECT_TRUE(c.load(path));
@@ -1853,18 +1855,18 @@ TEST(ConfigMissingFileIsNotAnError) {
     qypr::Config c;
     EXPECT_FALSE(c.load("/tmp/qypr-definitely-does-not-exist-9182.conf"));
     EXPECT_FALSE(c.loaded());
-    EXPECT_EQ(c.getInt("bar", "height", 36), 36);       // default survives
+    EXPECT_EQ(c.getInt("bar", "height", 36), 36);  // default survives
     EXPECT_EQ(static_cast<int>(c.getList("bar", "modules-left").size()), 0);
 }
 
 TEST(ConfigMalformedValuesKeepDefaults) {
-    const std::string path = writeTempConfig(
-        "[bar]\nheight = not-a-number\nbackdrop = \nflag = maybe\n");
+    const std::string path =
+        writeTempConfig("[bar]\nheight = not-a-number\nbackdrop = \nflag = maybe\n");
     qypr::Config c;
     EXPECT_TRUE(c.load(path));
-    EXPECT_EQ(c.getInt("bar", "height", 36), 36);                       // stoi throws → default
+    EXPECT_EQ(c.getInt("bar", "height", 36), 36);  // stoi throws → default
     EXPECT_TRUE(std::fabs(c.getDouble("bar", "backdrop", 0.8) - 0.8) < 1e-9);
-    EXPECT_TRUE(c.getBool("bar", "flag", true));                        // unparseable → default
+    EXPECT_TRUE(c.getBool("bar", "flag", true));  // unparseable → default
     ::unlink(path.c_str());
 }
 
@@ -2007,13 +2009,18 @@ TEST(ClockFormatFromConfig) {
 
 TEST(StatusBarGeometryTopAndBottom) {
     qypr::EventLoop loop;
-    struct Inv : qypr::Invalidator { void invalidate() override {} } inv;
+    struct Inv : qypr::Invalidator {
+        void invalidate() override {}
+    } inv;
     qypr::SystemBackends b{};
     qypr::StatusBar bar(loop, inv, b);
 
     // Default (top): the strip sits `edgeMargin` below the top edge.
     qypr::BarGeometry top;
-    top.height = 36; top.edgeMargin = 24; top.sideMargin = 48; top.bottom = false;
+    top.height = 36;
+    top.edgeMargin = 24;
+    top.sideMargin = 48;
+    top.bottom = false;
     bar.setGeometry(top);
     bar.layout(1920, 66);
     EXPECT_TRUE(std::fabs(bar.bounds.y - 24.0) < 1e-9);
@@ -2038,7 +2045,9 @@ TEST(PopoverGrowsAwayFromBarEdge) {
         double contentWidth() const override { return 200.0; }
     } pop;
 
-    pop.anchorX = 500; pop.anchorY = 60; pop.growUp = false;
+    pop.anchorX = 500;
+    pop.anchorY = 60;
+    pop.growUp = false;
     EXPECT_TRUE(std::fabs(pop.getBounds().y - 60.0) < 1e-9);   // hangs down
     EXPECT_TRUE(std::fabs(pop.getBounds().x - 300.0) < 1e-9);  // right-aligned to anchor
 
@@ -2067,8 +2076,8 @@ TEST(SessionAppletsAbsentWithoutTheirBackends) {
 
 TEST(SessionAppletsAppearWithBackends) {
     qypr::EventLoop loop;
-    qypr::PowerManager pm;                 // TESTING: actions are no-ops
-    qypr::NotificationMonitor mon(loop);   // not started: empty, but present
+    qypr::PowerManager pm;                // TESTING: actions are no-ops
+    qypr::NotificationMonitor mon(loop);  // not started: empty, but present
     qypr::SystemBackends b{};
     b.power = &pm;
     b.notifications = &mon;
@@ -2156,11 +2165,10 @@ TEST(SystemStatsParsesCpuLine) {
 
 TEST(SystemStatsParsesMemPercent) {
     // MemTotal 1000, MemAvailable 250 → used 750 → 75%.
-    const std::string mi =
-        "MemTotal:        1000 kB\n"
-        "MemFree:          100 kB\n"
-        "MemAvailable:     250 kB\n"
-        "Buffers:           10 kB\n";
+    const std::string mi = "MemTotal:        1000 kB\n"
+                           "MemFree:          100 kB\n"
+                           "MemAvailable:     250 kB\n"
+                           "Buffers:           10 kB\n";
     double pct = qypr::SystemStats::parseMemUsedPercent(mi);
     EXPECT_TRUE(pct > 74.9 && pct < 75.1);
 
@@ -2174,7 +2182,7 @@ TEST(SystemStatsSampleCpuDelta) {
     // consistent on this machine.
     qypr::SystemStats s;
     qypr::SysSample a = s.sample();
-    EXPECT_TRUE(a.valid);                     // /proc exists on the test host
+    EXPECT_TRUE(a.valid);  // /proc exists on the test host
     EXPECT_TRUE(a.memPercent >= 0.0 && a.memPercent <= 100.0);
 }
 
@@ -2207,17 +2215,16 @@ TEST(IdleInhibitorGating) {
 // -----------------------------------------------------------------------------
 TEST(DesktopIndexParsesEntry) {
     qypr::DesktopEntry e;
-    const std::string ok =
-        "[Desktop Entry]\n"
-        "Type=Application\n"
-        "Name=Firefox\n"
-        "Name[de]=Feuerfuchs\n"
-        "Exec=firefox %u\n"
-        "Icon=firefox\n"
-        "Terminal=false\n";
+    const std::string ok = "[Desktop Entry]\n"
+                           "Type=Application\n"
+                           "Name=Firefox\n"
+                           "Name[de]=Feuerfuchs\n"
+                           "Exec=firefox %u\n"
+                           "Icon=firefox\n"
+                           "Terminal=false\n";
     EXPECT_TRUE(qypr::DesktopIndex::parseEntry(ok, e));
-    EXPECT_EQ(e.name, std::string("Firefox"));   // unlocalized Name wins
-    EXPECT_EQ(e.exec, std::string("firefox"));    // %u stripped
+    EXPECT_EQ(e.name, std::string("Firefox"));  // unlocalized Name wins
+    EXPECT_EQ(e.exec, std::string("firefox"));  // %u stripped
     EXPECT_EQ(e.icon, std::string("firefox"));
     EXPECT_FALSE(e.terminal);
 
@@ -2227,12 +2234,14 @@ TEST(DesktopIndexParsesEntry) {
         "[Desktop Entry]\nType=Application\nName=X\nExec=x\nNoDisplay=true\n", skip));
     EXPECT_FALSE(qypr::DesktopIndex::parseEntry(
         "[Desktop Entry]\nType=Application\nName=X\nExec=x\nHidden=true\n", skip));
-    EXPECT_FALSE(qypr::DesktopIndex::parseEntry("[Desktop Entry]\nType=Link\nName=X\nURL=y\n", skip));
+    EXPECT_FALSE(
+        qypr::DesktopIndex::parseEntry("[Desktop Entry]\nType=Link\nName=X\nURL=y\n", skip));
     // A trailing [Desktop Action] group must not leak into the main entry.
     qypr::DesktopEntry e2;
-    EXPECT_TRUE(qypr::DesktopIndex::parseEntry(
-        "[Desktop Entry]\nType=Application\nName=Term\nExec=st\n"
-        "[Desktop Action new]\nName=New\nExec=st -e other\n", e2));
+    EXPECT_TRUE(
+        qypr::DesktopIndex::parseEntry("[Desktop Entry]\nType=Application\nName=Term\nExec=st\n"
+                                       "[Desktop Action new]\nName=New\nExec=st -e other\n",
+                                       e2));
     EXPECT_EQ(e2.exec, std::string("st"));
 }
 
@@ -2281,10 +2290,10 @@ TEST(LauncherPopoverKeyboardAndEmptyState) {
     EXPECT_TRUE(pop.handleKey(XKB_KEY_Down));  // navigation is consumed
     EXPECT_TRUE(pop.handleKey(XKB_KEY_Up));
     EXPECT_TRUE(pop.handleKey(XKB_KEY_BackSpace));
-    EXPECT_TRUE(pop.handleKey(XKB_KEY_Return));       // Enter with no results: no-op, consumed
-    EXPECT_FALSE(pop.consumeCloseRequest());          // nothing launched → no close
-    EXPECT_FALSE(pop.handleKey(XKB_KEY_F1));          // unrelated key falls through
-    EXPECT_TRUE(pop.contentHeight() > 0.0);           // renders a "no matches" row
+    EXPECT_TRUE(pop.handleKey(XKB_KEY_Return));  // Enter with no results: no-op, consumed
+    EXPECT_FALSE(pop.consumeCloseRequest());     // nothing launched → no close
+    EXPECT_FALSE(pop.handleKey(XKB_KEY_F1));     // unrelated key falls through
+    EXPECT_TRUE(pop.contentHeight() > 0.0);      // renders a "no matches" row
 }
 
 // -----------------------------------------------------------------------------
@@ -2336,6 +2345,208 @@ TEST(KeyboardLayoutGating) {
 }
 
 // -----------------------------------------------------------------------------
+// StateCache — last-known indicator values, persisted so the first frame after a
+// reboot carries real numbers instead of neutral "unknown" glyphs. The daemons
+// that own this state (UPower especially) are usually not running yet when the
+// bar starts, so this is the only thing standing between the user and a row of
+// meaningless placeholders for the first few seconds.
+//
+// SystemBus is constructed against the unmocked sd_bus_open_system, which fails
+// in the test environment and leaves the connection null — exactly what we want
+// here, since none of this touches the bus.
+// -----------------------------------------------------------------------------
+TEST(StateCacheSeedFillsPlaceholderThenDefersToLiveData) {
+    qypr::EventLoop loop;
+    qypr::SystemBus bus(loop);
+    qypr::BatteryBackend battery(bus);
+
+    // Nothing has replied: the indicator would draw its neutral glyph.
+    EXPECT_FALSE(battery.ready());
+
+    qypr::BatterySnapshot cached;
+    cached.present = true;
+    cached.percentage = 61;
+    battery.seed(cached);
+    EXPECT_TRUE(battery.ready());
+    EXPECT_EQ(battery.snapshot().percentage, 61);
+
+    // Once the backend is live the daemon is the authority — a later seed (a
+    // second load, a reload) must never drag the display back to stale values.
+    qypr::BatterySnapshot stale;
+    stale.present = true;
+    stale.percentage = 5;
+    battery.seed(stale);
+    EXPECT_EQ(battery.snapshot().percentage, 61);
+}
+
+TEST(StateCacheRoundTripsThroughAFile) {
+    qypr::EventLoop loop;
+    qypr::SystemBus bus(loop);
+    qypr::BatteryBackend battery(bus);
+    qypr::WifiBackend wifi(bus);
+
+    qypr::BatterySnapshot b;
+    b.present = true;
+    b.percentage = 42;
+    battery.seed(b);
+
+    qypr::WifiSnapshot w;
+    w.available = true;
+    w.enabled = true;
+    w.connected = true;
+    w.ssid = "Test Net";  // spaces must survive: values are trimmed, not split
+    w.strength = 77;
+    wifi.seed(w);
+
+    qypr::SystemBackends backends{};
+    backends.battery = &battery;
+    backends.wifi = &wifi;
+
+    const std::string path = "/tmp/qypr-test-state";
+    ::unlink(path.c_str());
+
+    qypr::StateCache writer;
+    writer.path_ = path;
+    writer.track(loop, backends);
+    writer.flush();
+
+    // Read it back into fresh backends — the next boot's first frame.
+    qypr::BatteryBackend battery2(bus);
+    qypr::WifiBackend wifi2(bus);
+    qypr::SystemBackends restored{};
+    restored.battery = &battery2;
+    restored.wifi = &wifi2;
+
+    qypr::StateCache reader;
+    reader.path_ = path;
+    reader.load();
+    reader.seed(restored);
+
+    EXPECT_TRUE(battery2.ready());
+    EXPECT_EQ(battery2.snapshot().percentage, 42);
+    EXPECT_TRUE(wifi2.ready());
+    EXPECT_EQ(wifi2.snapshot().ssid, std::string("Test Net"));
+    EXPECT_EQ(wifi2.snapshot().strength, 77);
+    EXPECT_TRUE(wifi2.snapshot().connected);
+
+    ::unlink(path.c_str());
+}
+
+TEST(StateCacheToleratesMissingAndCorruptFiles) {
+    qypr::EventLoop loop;
+    qypr::SystemBus bus(loop);
+    qypr::BatteryBackend battery(bus);
+    qypr::SystemBackends backends{};
+    backends.battery = &battery;
+
+    // No file yet (first ever run): seeding does nothing and the indicator keeps
+    // its placeholder. This must never be an error path.
+    qypr::StateCache missing;
+    missing.path_ = "/tmp/qypr-test-state-absent";
+    missing.load();
+    missing.seed(backends);
+    EXPECT_FALSE(battery.ready());
+
+    // Corrupt input — the file is written asynchronously and the machine can
+    // lose power mid-write, so garbage has to be survivable. Every key falls
+    // back to its default, and a battery that is not "present" is never seeded,
+    // so nonsense never reaches the screen.
+    const std::string path = "/tmp/qypr-test-state-corrupt";
+    {
+        std::ofstream f(path);
+        f << "\x01\x02 not an ini file\n[batt\npercentage = \n= 99\n";
+    }
+    qypr::StateCache corrupt;
+    corrupt.path_ = path;
+    corrupt.load();
+    corrupt.seed(backends);
+    EXPECT_FALSE(battery.ready());
+    ::unlink(path.c_str());
+}
+
+TEST(HardwareIndicatorsHideUntilTheirBackendReports) {
+    qypr::EventLoop loop;
+    qypr::SystemBus bus(loop);
+    qypr::BatteryBackend battery(bus);
+    qypr::SystemBackends backends{};
+    backends.battery = &battery;
+
+    // Nothing has reported yet: the indicator draws nothing at all rather than a
+    // neutral glyph that looks live and says nothing. At login this is the state
+    // it would otherwise sit in for seconds, since UPower starts after the bar.
+    qypr::BatteryIndicator ind(backends);
+    EXPECT_FALSE(ind.visible);
+    EXPECT_TRUE(ind.label().empty());  // and never an invented "0%"
+
+    // A seeded snapshot is enough to reveal it — that is exactly why StateCache
+    // seeds before the first frame rather than waiting for the daemon.
+    qypr::BatterySnapshot s;
+    s.present = true;
+    s.percentage = 61;
+    battery.seed(s);
+    ind.onBackendUpdate();
+    EXPECT_TRUE(ind.visible);
+    EXPECT_EQ(ind.label(), std::string("61%"));
+
+    // A backend that reports a definitive "no battery here" (a desktop) keeps
+    // the indicator hidden even though it is now loaded.
+    qypr::SystemBus bus2(loop);
+    qypr::BatteryBackend absent(bus2);
+    qypr::BatterySnapshot none;
+    none.present = false;
+    absent.seed(none);  // seed() only gates on ready(), not on presence
+    absent.notifyReady();
+    qypr::SystemBackends deskBackends{};
+    deskBackends.battery = &absent;
+    qypr::BatteryIndicator deskInd(deskBackends);
+    deskInd.onBackendUpdate();
+    EXPECT_FALSE(deskInd.visible);
+}
+
+TEST(IndicatorWithNoBackendRendersImmediately) {
+    // Registry previews and the offline --preview path supply no backends at
+    // all; those must still draw their sample defaults rather than vanish.
+    qypr::SystemBackends none{};
+    qypr::BatteryIndicator battery(none);
+    qypr::WifiIndicator wifi(none);
+    EXPECT_TRUE(battery.visible);
+    EXPECT_TRUE(wifi.visible);
+}
+
+TEST(StateCacheSkipsRedundantWrites) {
+    // noteChanged() is wired to the repaint hook, which also fires for hover and
+    // animation. Unchanged content must not cause file I/O.
+    qypr::EventLoop loop;
+    qypr::SystemBus bus(loop);
+    qypr::BatteryBackend battery(bus);
+    qypr::BatterySnapshot b;
+    b.present = true;
+    b.percentage = 30;
+    battery.seed(b);
+
+    qypr::SystemBackends backends{};
+    backends.battery = &battery;
+
+    const std::string path = "/tmp/qypr-test-state-nowrite";
+    ::unlink(path.c_str());
+
+    qypr::StateCache cache;
+    cache.path_ = path;
+    cache.track(loop, backends);
+    cache.flush();
+
+    EXPECT_EQ(::access(path.c_str(), F_OK), 0);  // first flush wrote it
+
+    // Same state → flush() must leave the file completely alone. Deleting it and
+    // confirming it is not recreated proves no write happened at all.
+    ::unlink(path.c_str());
+    cache.flush();
+    EXPECT_TRUE(::access(path.c_str(), F_OK) != 0);
+
+    ::unlink(path.c_str());
+}
+
+// -----------------------------------------------------------------------------
 // Main Runner
 // -----------------------------------------------------------------------------
 int main() {
@@ -2347,8 +2558,8 @@ int main() {
     // They run automatically.
 
     std::cout << "========================================" << std::endl;
-    std::cout << " Results: Passed: " << (g_tests_run - g_tests_failed)
-              << " / " << g_tests_run << "   Failed: " << g_tests_failed << std::endl;
+    std::cout << " Results: Passed: " << (g_tests_run - g_tests_failed) << " / " << g_tests_run
+              << "   Failed: " << g_tests_failed << std::endl;
     std::cout << "========================================" << std::endl;
 
     return g_tests_failed == 0 ? 0 : 1;

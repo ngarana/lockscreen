@@ -48,27 +48,35 @@ void QSToggleTile::draw(Painter& p, int64_t now) {
         cairo_t* cr = p.cr();
         Color c1 = theme::color::primary;
         Color c2 = theme::color::mauve;
-        if (title_.find("Wired") != std::string::npos || title_.find("WiFi") != std::string::npos || title_.find("Wi-Fi") != std::string::npos || title_.find("Network") != std::string::npos) {
+        if (title_.find("Wired") != std::string::npos || title_.find("WiFi") != std::string::npos ||
+            title_.find("Wi-Fi") != std::string::npos ||
+            title_.find("Network") != std::string::npos) {
             c1 = theme::color::blue;
             c2 = theme::color::teal;
-        } else if (title_.find("Bluetooth") != std::string::npos || title_.find("BT") != std::string::npos) {
+        } else if (title_.find("Bluetooth") != std::string::npos ||
+                   title_.find("BT") != std::string::npos) {
             c1 = theme::color::blue;
             c2 = theme::color::mauve;
-        } else if (title_.find("Night") != std::string::npos || title_.find("Dark") != std::string::npos) {
+        } else if (title_.find("Night") != std::string::npos ||
+                   title_.find("Dark") != std::string::npos) {
             c1 = theme::color::warning;
             c2 = theme::color::peach;
-        } else if (title_.find("Keep") != std::string::npos || title_.find("Idle") != std::string::npos || title_.find("Awake") != std::string::npos) {
+        } else if (title_.find("Keep") != std::string::npos ||
+                   title_.find("Idle") != std::string::npos ||
+                   title_.find("Awake") != std::string::npos) {
             c1 = theme::color::success;
             c2 = theme::color::teal;
         } else if (title_.find("Screenshot") != std::string::npos) {
             c1 = theme::color::peach;
             c2 = theme::color::maroon;
-        } else if (title_.find("Disturb") != std::string::npos || title_.find("DND") != std::string::npos) {
+        } else if (title_.find("Disturb") != std::string::npos ||
+                   title_.find("DND") != std::string::npos) {
             c1 = theme::color::warning;
             c2 = theme::color::peach;
         }
 
-        cairo_pattern_t* pat = cairo_pattern_create_linear(badgeCx - badgeR, badgeCy - badgeR, badgeCx + badgeR, badgeCy + badgeR);
+        cairo_pattern_t* pat = cairo_pattern_create_linear(badgeCx - badgeR, badgeCy - badgeR,
+                                                           badgeCx + badgeR, badgeCy + badgeR);
         cairo_pattern_add_color_stop_rgba(pat, 0.0, c1.r, c1.g, c1.b, c1.a);
         cairo_pattern_add_color_stop_rgba(pat, 1.0, c2.r, c2.g, c2.b, c2.a);
         cairo_arc(cr, badgeCx, badgeCy, badgeR, 0, 2 * M_PI);
@@ -92,7 +100,8 @@ void QSToggleTile::draw(Painter& p, int64_t now) {
     if (sub.empty()) sub = active ? "On" : "Off";
 
     TextStyle titleStyle{theme::font::family, 11.5, PANGO_WEIGHT_BOLD, theme::color::text};
-    TextStyle subStyle{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL, active ? theme::color::primary : theme::color::textSubtle};
+    TextStyle subStyle{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL,
+                       active ? theme::color::primary : theme::color::textSubtle};
 
     Size titleSz = p.measureText(title_, titleStyle, maxW);
     Size subSz = p.measureText(sub, subStyle, maxW);
@@ -119,8 +128,12 @@ void QSSliderTile::onDrag(double x, double y) {
 
 bool QSSliderTile::handleKey(uint32_t keysym) {
     switch (keysym) {
-        case XKB_KEY_Up: case XKB_KEY_Right: return stepValue(true);
-        case XKB_KEY_Down: case XKB_KEY_Left: return stepValue(false);
+        case XKB_KEY_Up:
+        case XKB_KEY_Right:
+            return stepValue(true);
+        case XKB_KEY_Down:
+        case XKB_KEY_Left:
+            return stepValue(false);
     }
     return false;
 }
@@ -190,12 +203,14 @@ void QSInfoTile::draw(Painter& p, int64_t now) {
 
     double pad = 12.0;
 
-    Color icCol = progress > 0.5 ? theme::color::success : (progress > 0.2 ? theme::color::warning : theme::color::error);
+    Color icCol = progress > 0.5 ? theme::color::success
+                                 : (progress > 0.2 ? theme::color::warning : theme::color::error);
     TextStyle iconStyle{theme::font::iconFamily, 16.0, PANGO_WEIGHT_NORMAL, icCol};
-    Size iconSz = p.measureText(icon_, iconStyle);
+    const std::string ic = currentIcon();
+    Size iconSz = p.measureText(ic, iconStyle);
     double iconX = bounds.x + pad;
     double iconY = bounds.y + (bounds.h - iconSz.h) / 2.0;
-    p.drawText(iconX, iconY, icon_, iconStyle);
+    p.drawText(iconX, iconY, ic, iconStyle);
 
     double textX = iconX + iconSz.w + 10.0;
     double maxW = bounds.w - (textX - bounds.x) - pad;
@@ -224,9 +239,12 @@ void QSHeaderTile::draw(Painter& p, int64_t) {
 
     // Gradient ring around avatar
     cairo_t* cr = p.cr();
-    cairo_pattern_t* pat = cairo_pattern_create_linear(avatarCX - avatarR, avatarCY - avatarR, avatarCX + avatarR, avatarCY + avatarR);
-    cairo_pattern_add_color_stop_rgba(pat, 0.0, theme::color::primary.r, theme::color::primary.g, theme::color::primary.b, 1.0);
-    cairo_pattern_add_color_stop_rgba(pat, 1.0, theme::color::mauve.r, theme::color::mauve.g, theme::color::mauve.b, 1.0);
+    cairo_pattern_t* pat = cairo_pattern_create_linear(avatarCX - avatarR, avatarCY - avatarR,
+                                                       avatarCX + avatarR, avatarCY + avatarR);
+    cairo_pattern_add_color_stop_rgba(pat, 0.0, theme::color::primary.r, theme::color::primary.g,
+                                      theme::color::primary.b, 1.0);
+    cairo_pattern_add_color_stop_rgba(pat, 1.0, theme::color::mauve.r, theme::color::mauve.g,
+                                      theme::color::mauve.b, 1.0);
     cairo_arc(cr, avatarCX, avatarCY, avatarR, 0, 2 * M_PI);
     cairo_set_source(cr, pat);
     cairo_fill(cr);
@@ -293,7 +311,8 @@ void QSWifiComboTile::draw(Painter& p, int64_t now) {
         cairo_t* cr = p.cr();
         Color c1 = theme::color::blue;
         Color c2 = theme::color::teal;
-        cairo_pattern_t* pat = cairo_pattern_create_linear(badgeCx - badgeR, badgeCy - badgeR, badgeCx + badgeR, badgeCy + badgeR);
+        cairo_pattern_t* pat = cairo_pattern_create_linear(badgeCx - badgeR, badgeCy - badgeR,
+                                                           badgeCx + badgeR, badgeCy + badgeR);
         cairo_pattern_add_color_stop_rgba(pat, 0.0, c1.r, c1.g, c1.b, c1.a);
         cairo_pattern_add_color_stop_rgba(pat, 1.0, c2.r, c2.g, c2.b, c2.a);
         cairo_arc(cr, badgeCx, badgeCy, badgeR, 0, 2 * M_PI);
@@ -320,7 +339,8 @@ void QSWifiComboTile::draw(Painter& p, int64_t now) {
         wifiGlyph = "󰤯";  // weak
     }
 
-    TextStyle iconStyle{theme::font::iconFamily, 14.0, PANGO_WEIGHT_NORMAL, enabled_ ? theme::color::background : theme::color::textSubtle};
+    TextStyle iconStyle{theme::font::iconFamily, 14.0, PANGO_WEIGHT_NORMAL,
+                        enabled_ ? theme::color::background : theme::color::textSubtle};
     Size iconSz = p.measureText(wifiGlyph, iconStyle);
     p.drawText(badgeCx - iconSz.w / 2.0, badgeCy - iconSz.h / 2.0, wifiGlyph, iconStyle);
 
@@ -338,7 +358,8 @@ void QSWifiComboTile::draw(Painter& p, int64_t now) {
     }
 
     TextStyle titleStyle{theme::font::family, 11.5, PANGO_WEIGHT_BOLD, theme::color::text};
-    TextStyle subStyle{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL, enabled_ ? theme::color::primary : theme::color::textSubtle};
+    TextStyle subStyle{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL,
+                       enabled_ ? theme::color::primary : theme::color::textSubtle};
 
     Size titleSz = p.measureText("Wi-Fi", titleStyle, maxW);
     Size subSz = p.measureText(text, subStyle, maxW);
@@ -350,13 +371,13 @@ void QSWifiComboTile::draw(Painter& p, int64_t now) {
 
 // ─── Volume section tile ──────────────────────────────────────────────────
 
-QSVolumeTile::QSVolumeTile(std::function<double()> getValue,
-                           std::function<void(double)> onChange,
+QSVolumeTile::QSVolumeTile(std::function<double()> getValue, std::function<void(double)> onChange,
                            std::function<std::string()> dynamicIcon,
-                           std::function<void()> onIconClick,
-                           std::function<bool()> dimmed)
-    : getValue_(std::move(getValue)), onValueChange_(std::move(onChange)),
-      dynamicIcon_(std::move(dynamicIcon)), onIconClick_(std::move(onIconClick)),
+                           std::function<void()> onIconClick, std::function<bool()> dimmed)
+    : getValue_(std::move(getValue)),
+      onValueChange_(std::move(onChange)),
+      dynamicIcon_(std::move(dynamicIcon)),
+      onIconClick_(std::move(onIconClick)),
       dimmed_(std::move(dimmed)) {}
 
 void QSVolumeTile::onClick(double x, double y) {
@@ -374,8 +395,12 @@ void QSVolumeTile::onDrag(double x, double y) {
 
 bool QSVolumeTile::handleKey(uint32_t keysym) {
     switch (keysym) {
-        case XKB_KEY_Up: case XKB_KEY_Right: return stepValue(true);
-        case XKB_KEY_Down: case XKB_KEY_Left: return stepValue(false);
+        case XKB_KEY_Up:
+        case XKB_KEY_Right:
+            return stepValue(true);
+        case XKB_KEY_Down:
+        case XKB_KEY_Left:
+            return stepValue(false);
     }
     return false;
 }
@@ -415,14 +440,16 @@ void QSVolumeTile::draw(Painter& p, int64_t) {
     iconBounds_ = {bounds.x, bounds.y, iconX + iconSz.w + 6.0 - bounds.x, bounds.h};
 
     // Right chevron + percentage readout
-    TextStyle arrStyle{theme::font::iconFamily, 12.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
+    TextStyle arrStyle{theme::font::iconFamily, 12.0, PANGO_WEIGHT_NORMAL,
+                       theme::color::textSubtle};
     Size arrSz = p.measureText("󰅂", arrStyle);
     double arrX = bounds.x + bounds.w - pad - arrSz.w;
     double arrY = bounds.y + (bounds.h - arrSz.h) / 2.0;
     p.drawText(arrX, arrY, "󰅂", arrStyle);
 
     std::string pctText = std::to_string(static_cast<int>(std::round(val * 100))) + "%";
-    TextStyle pctStyle{theme::font::family, 11.5, PANGO_WEIGHT_BOLD, isMuted ? theme::color::textMuted : theme::color::primary};
+    TextStyle pctStyle{theme::font::family, 11.5, PANGO_WEIGHT_BOLD,
+                       isMuted ? theme::color::textMuted : theme::color::primary};
     Size pctSz = p.measureText(pctText, pctStyle);
     double pctX = arrX - 8.0 - pctSz.w;
     double pctY = bounds.y + (bounds.h - pctSz.h) / 2.0;
@@ -447,9 +474,12 @@ void QSVolumeTile::draw(Painter& p, int64_t) {
 
 void QSMediaTile::onClick(double x, double y) {
     if (!mpris_ || !mpris_->active()) return;
-    if (prevBounds_.contains(x, y))   mpris_->previous();
-    else if (playBounds_.contains(x, y)) mpris_->togglePlaying();
-    else if (nextBounds_.contains(x, y)) mpris_->next();
+    if (prevBounds_.contains(x, y))
+        mpris_->previous();
+    else if (playBounds_.contains(x, y))
+        mpris_->togglePlaying();
+    else if (nextBounds_.contains(x, y))
+        mpris_->next();
 }
 
 void QSMediaTile::draw(Painter& p, int64_t) {
@@ -467,19 +497,22 @@ void QSMediaTile::draw(Painter& p, int64_t) {
 
     cairo_t* cr = p.cr();
     cairo_pattern_t* pat = cairo_pattern_create_linear(artX, artY, artX + artW, artY + artH);
-    cairo_pattern_add_color_stop_rgba(pat, 0.0, theme::color::primary.r, theme::color::primary.g, theme::color::primary.b, 1.0);
-    cairo_pattern_add_color_stop_rgba(pat, 1.0, theme::color::mauve.r, theme::color::mauve.g, theme::color::mauve.b, 1.0);
+    cairo_pattern_add_color_stop_rgba(pat, 0.0, theme::color::primary.r, theme::color::primary.g,
+                                      theme::color::primary.b, 1.0);
+    cairo_pattern_add_color_stop_rgba(pat, 1.0, theme::color::mauve.r, theme::color::mauve.g,
+                                      theme::color::mauve.b, 1.0);
     cairo_new_sub_path(cr);
-    cairo_arc(cr, artRect.x + artRect.w - 10.0, artRect.y + 10.0, 10.0, -M_PI/2, 0);
-    cairo_arc(cr, artRect.x + artRect.w - 10.0, artRect.y + artRect.h - 10.0, 10.0, 0, M_PI/2);
-    cairo_arc(cr, artRect.x + 10.0, artRect.y + artRect.h - 10.0, 10.0, M_PI/2, M_PI);
-    cairo_arc(cr, artRect.x + 10.0, artRect.y + 10.0, 10.0, M_PI, 3*M_PI/2);
+    cairo_arc(cr, artRect.x + artRect.w - 10.0, artRect.y + 10.0, 10.0, -M_PI / 2, 0);
+    cairo_arc(cr, artRect.x + artRect.w - 10.0, artRect.y + artRect.h - 10.0, 10.0, 0, M_PI / 2);
+    cairo_arc(cr, artRect.x + 10.0, artRect.y + artRect.h - 10.0, 10.0, M_PI / 2, M_PI);
+    cairo_arc(cr, artRect.x + 10.0, artRect.y + 10.0, 10.0, M_PI, 3 * M_PI / 2);
     cairo_close_path(cr);
     cairo_set_source(cr, pat);
     cairo_fill(cr);
     cairo_pattern_destroy(pat);
 
-    TextStyle noteStyle{theme::font::iconFamily, 18.0, PANGO_WEIGHT_NORMAL, theme::color::background};
+    TextStyle noteStyle{theme::font::iconFamily, 18.0, PANGO_WEIGHT_NORMAL,
+                        theme::color::background};
     Size noteSz = p.measureText("󰎈", noteStyle);
     p.drawText(artX + (artW - noteSz.w) / 2.0, artY + (artH - noteSz.h) / 2.0, "󰎈", noteStyle);
 
@@ -517,20 +550,25 @@ void QSMediaTile::draw(Painter& p, int64_t) {
     prevBounds_ = {rightX - 86.0, btnY + 4.0, 20.0, 20.0};
 
     // Prev button
-    TextStyle ctrlStyle{theme::font::iconFamily, 14.0, PANGO_WEIGHT_NORMAL, theme::color::textSubtle};
+    TextStyle ctrlStyle{theme::font::iconFamily, 14.0, PANGO_WEIGHT_NORMAL,
+                        theme::color::textSubtle};
     Size prevSz = p.measureText("󰒮", ctrlStyle);
-    p.drawText(prevBounds_.x + (prevBounds_.w - prevSz.w) / 2.0, prevBounds_.y + (prevBounds_.h - prevSz.h) / 2.0, "󰒮", ctrlStyle);
+    p.drawText(prevBounds_.x + (prevBounds_.w - prevSz.w) / 2.0,
+               prevBounds_.y + (prevBounds_.h - prevSz.h) / 2.0, "󰒮", ctrlStyle);
 
     // Play/Pause circle button
     p.fillCircle(playBounds_.x + 14.0, playBounds_.y + 14.0, 14.0, theme::color::primary);
     const char* playGlyph = playing ? "󰏤" : "󰐊";
-    TextStyle playStyle{theme::font::iconFamily, 13.0, PANGO_WEIGHT_NORMAL, theme::color::background};
+    TextStyle playStyle{theme::font::iconFamily, 13.0, PANGO_WEIGHT_NORMAL,
+                        theme::color::background};
     Size playSz = p.measureText(playGlyph, playStyle);
-    p.drawText(playBounds_.x + 14.0 - playSz.w / 2.0, playBounds_.y + 14.0 - playSz.h / 2.0, playGlyph, playStyle);
+    p.drawText(playBounds_.x + 14.0 - playSz.w / 2.0, playBounds_.y + 14.0 - playSz.h / 2.0,
+               playGlyph, playStyle);
 
     // Next button
     Size nextSz = p.measureText("󰒭", ctrlStyle);
-    p.drawText(nextBounds_.x + (nextBounds_.w - nextSz.w) / 2.0, nextBounds_.y + (nextBounds_.h - nextSz.h) / 2.0, "󰒭", ctrlStyle);
+    p.drawText(nextBounds_.x + (nextBounds_.w - nextSz.w) / 2.0,
+               nextBounds_.y + (nextBounds_.h - nextSz.h) / 2.0, "󰒭", ctrlStyle);
 }
 
 }  // namespace qypr

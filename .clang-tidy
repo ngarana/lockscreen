@@ -64,7 +64,6 @@ WarningsAsErrors: >
   clang-analyzer-cplusplus.NewDelete,
   clang-analyzer-cplusplus.NewDeleteLeaks,
   cppcoreguidelines-pro-type-member-init,
-  concurrency-mt-unsafe,
   misc-use-after-move
 
 # Suppress noise from generated Wayland / protocol headers and third-party code

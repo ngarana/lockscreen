@@ -123,6 +123,38 @@ list(REMOVE_ITEM QYPR_SOURCES
     "${CMAKE_SOURCE_DIR}/src/notifications/NotificationLog.cpp"
 )
 
+# Lock-only sources: the session-lock app and everything reachable only from it
+# (its UI, the video wallpaper, PAM). qypr-bar links none of these.
+#
+# This split is a startup-latency guard, not just tidiness. VideoPlayer.cpp is
+# the sole reason libmpv appears in a link line, and libmpv drags in the whole
+# ffmpeg stack — measured at 201 extra shared objects and 213 MB of mapped
+# closure that the bar never calls into. On a cold boot the dynamic loader must
+# open and fault every one of them before main() runs, which is what made the
+# bar appear seconds after the desktop. Keep this list in sync when a new
+# lock-only file lands: the include graph must never take the bar back to mpv
+# or PAM.
+set(QYPR_LOCK_ONLY_SOURCES
+    src/core/App.cpp
+    src/ui/Shell.cpp
+    src/ui/LockScreen.cpp
+    src/ui/AudioController.cpp
+    src/ui/ActionButton.cpp
+    src/ui/PasswordField.cpp
+    src/ui/Clock.cpp
+    src/ui/PowerDialog.cpp
+    src/ui/StatusMessage.cpp
+    src/wayland/LockSession.cpp
+    src/wayland/WaylandDisplay.cpp
+    src/video/VideoPlayer.cpp
+    src/auth/PamAuthenticator.cpp
+)
+
+set(QYPR_BAR_SOURCES ${QYPR_SOURCES})
+foreach(f ${QYPR_LOCK_ONLY_SOURCES})
+    list(REMOVE_ITEM QYPR_BAR_SOURCES "${CMAKE_SOURCE_DIR}/${f}")
+endforeach()
+
 # 1. Main Lock Screen target (links all graphics, mpv, PAM, sdbus-c++, etc.)
 add_executable(qypr-lock
     ${QYPR_SOURCES}
@@ -151,19 +183,18 @@ target_link_libraries(qypr-lock PRIVATE
     Threads::Threads)
 
 # 1b. Standalone status-bar target (qypr-bar): the unlocked-desktop bar on
-# wlr-layer-shell. Shares the whole object set with qypr-lock (only the entry
-# point differs), so it links the same libraries even though the bar itself
-# never drives video/PAM/lock.
+# wlr-layer-shell. Shares the *bar* object set with qypr-lock — the lock app,
+# its UI, the video wallpaper and PAM are excluded (QYPR_LOCK_ONLY_SOURCES
+# above), so neither libmpv nor libpam is on the bar's startup path.
 add_executable(qypr-bar
-    ${QYPR_SOURCES}
+    ${QYPR_BAR_SOURCES}
     src/bar_main.cpp
     ${PROTO_SOURCES})
 
 target_include_directories(qypr-bar PRIVATE
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_BINARY_DIR}/generated"
-    "${GEN_DIR}"
-    "${PAM_INCLUDE_DIR}")
+    "${GEN_DIR}")
 
 target_link_libraries(qypr-bar PRIVATE
     PkgConfig::WAYLAND
@@ -175,9 +206,7 @@ target_link_libraries(qypr-bar PRIVATE
     PkgConfig::SYSTEMD
     PkgConfig::UDEV
     PkgConfig::PULSE
-    PkgConfig::MPV
     PkgConfig::RSVG
-    "${PAM_LIBRARY}"
     Threads::Threads)
 
 # 2. Standalone Recorder target (only needs systemd for sd-bus)

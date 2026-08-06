@@ -36,12 +36,14 @@ public:
 
 class QSToggleTile : public QSTile {
 public:
-    QSToggleTile(const std::string& title, const std::string& icon,
-                 std::function<bool()> isActive, std::function<void()> onToggle,
-                 std::function<std::string()> subtitle = nullptr,
+    QSToggleTile(const std::string& title, const std::string& icon, std::function<bool()> isActive,
+                 std::function<void()> onToggle, std::function<std::string()> subtitle = nullptr,
                  Color accent = {0, 0, 0, 0})
-        : title_(title), icon_(icon), isActive_(std::move(isActive)),
-          onToggle_(std::move(onToggle)), subtitle_(std::move(subtitle)),
+        : title_(title),
+          icon_(icon),
+          isActive_(std::move(isActive)),
+          onToggle_(std::move(onToggle)),
+          subtitle_(std::move(subtitle)),
           accent_(accent) {}
 
     Type type() const override { return Type::Toggle; }
@@ -71,16 +73,18 @@ public:
     // speaker-muted), `onIconClick` fires when the icon itself is clicked (the
     // track still adjusts the value), and `dimmed` greys the row to show the
     // control is currently inert (muted). Omit them for a plain slider.
-    QSSliderTile(const std::string& icon,
-                 std::function<double()> getValue,
+    QSSliderTile(const std::string& icon, std::function<double()> getValue,
                  std::function<void(double)> onValueChange,
                  std::function<std::string()> dynamicIcon = nullptr,
                  std::function<void()> onIconClick = nullptr,
-                 std::function<bool()> dimmed = nullptr,
-                 const std::string& title = "Q27G41ZDF")
-        : icon_(icon), getValue_(std::move(getValue)), onValueChange_(std::move(onValueChange)),
-          dynamicIcon_(std::move(dynamicIcon)), onIconClick_(std::move(onIconClick)),
-          dimmed_(std::move(dimmed)), title_(title) {}
+                 std::function<bool()> dimmed = nullptr, const std::string& title = "Q27G41ZDF")
+        : icon_(icon),
+          getValue_(std::move(getValue)),
+          onValueChange_(std::move(onValueChange)),
+          dynamicIcon_(std::move(dynamicIcon)),
+          onIconClick_(std::move(onIconClick)),
+          dimmed_(std::move(dimmed)),
+          title_(title) {}
 
     Type type() const override { return Type::Slider; }
     std::string title() const override { return title_; }
@@ -108,21 +112,33 @@ private:
 
 class QSInfoTile : public QSTile {
 public:
+    // `icon` is the static fallback; the optional `dynamicIcon` re-reads the
+    // glyph every frame, the same way QSSliderTile does. Prefer the dynamic form
+    // whenever the glyph encodes state (a battery level, a signal tier): tiles
+    // are constructed once, before any backend has reported, so a captured
+    // string freezes whatever placeholder was current at construction and never
+    // tracks the value again.
     QSInfoTile(const std::string& title, const std::string& icon,
-               std::function<double()> getProgress,
-               std::function<std::string()> getInfo)
-        : title_(title), icon_(icon), getProgress_(std::move(getProgress)),
-          getInfo_(std::move(getInfo)) {}
+               std::function<double()> getProgress, std::function<std::string()> getInfo,
+               std::function<std::string()> dynamicIcon = nullptr)
+        : title_(title),
+          icon_(icon),
+          getProgress_(std::move(getProgress)),
+          getInfo_(std::move(getInfo)),
+          dynamicIcon_(std::move(dynamicIcon)) {}
 
     Type type() const override { return Type::Info; }
     std::string title() const override { return title_; }
     void draw(Painter& p, int64_t now) override;
 
 private:
+    std::string currentIcon() const { return dynamicIcon_ ? dynamicIcon_() : icon_; }
+
     std::string title_;
     std::string icon_;
     std::function<double()> getProgress_;
     std::function<std::string()> getInfo_;
+    std::function<std::string()> dynamicIcon_;
 };
 
 // ─── Header (avatar + name) ────────────────────────────────────────────────
@@ -132,7 +148,8 @@ private:
 class QSHeaderTile : public QSTile {
 public:
     QSHeaderTile(std::string title, std::string subtitle, Color avatarColor)
-        : title_(std::move(title)), subtitle_(std::move(subtitle)),
+        : title_(std::move(title)),
+          subtitle_(std::move(subtitle)),
           avatarColor_(avatarColor) {}
 
     Type type() const override { return Type::Header; }
@@ -167,21 +184,31 @@ private:
 // visual.
 class QSWifiComboTile : public QSTile {
 public:
-    QSWifiComboTile(std::string ssid, int strength, bool enabled, bool connected,
-                    Color accent, std::function<void()> onToggle = {})
-        : ssid_(std::move(ssid)), strength_(strength), enabled_(enabled),
-          connected_(connected), accent_(accent), onToggle_(std::move(onToggle)) {}
+    QSWifiComboTile(std::string ssid, int strength, bool enabled, bool connected, Color accent,
+                    std::function<void()> onToggle = {})
+        : ssid_(std::move(ssid)),
+          strength_(strength),
+          enabled_(enabled),
+          connected_(connected),
+          accent_(accent),
+          onToggle_(std::move(onToggle)) {}
 
     // Legacy 4-arg constructor (assumes connected when ssid is non-empty)
     QSWifiComboTile(std::string ssid, int strength, bool enabled, Color accent,
                     std::function<void()> onToggle = {})
-        : ssid_(std::move(ssid)), strength_(strength), enabled_(enabled),
-          connected_(!ssid_.empty()), accent_(accent), onToggle_(std::move(onToggle)) {}
+        : ssid_(std::move(ssid)),
+          strength_(strength),
+          enabled_(enabled),
+          connected_(!ssid_.empty()),
+          accent_(accent),
+          onToggle_(std::move(onToggle)) {}
 
     Type type() const override { return Type::WifiCombo; }
     std::string title() const override { return "Wi-Fi"; }
     void draw(Painter& p, int64_t now) override;
-    void onClick(double, double) override { if (onToggle_) onToggle_(); }
+    void onClick(double, double) override {
+        if (onToggle_) onToggle_();
+    }
 
     void setEnabled(bool e) { enabled_ = e; }
     void setConnected(bool c) { connected_ = c; }
@@ -203,8 +230,7 @@ private:
 class QSVolumeTile : public QSTile {
 public:
     QSVolumeTile(std::function<double()> getValue, std::function<void(double)> onChange,
-                 std::function<std::string()> dynamicIcon,
-                 std::function<void()> onIconClick,
+                 std::function<std::string()> dynamicIcon, std::function<void()> onIconClick,
                  std::function<bool()> dimmed);
 
     Type type() const override { return Type::Volume; }
@@ -244,9 +270,9 @@ public:
 
 private:
     MprisController* mpris_ = nullptr;
-    Rect prevBounds_{0,0,0,0};
-    Rect playBounds_{0,0,0,0};
-    Rect nextBounds_{0,0,0,0};
+    Rect prevBounds_{0, 0, 0, 0};
+    Rect playBounds_{0, 0, 0, 0};
+    Rect nextBounds_{0, 0, 0, 0};
 };
 
 }  // namespace qypr

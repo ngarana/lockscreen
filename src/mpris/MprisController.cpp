@@ -34,14 +34,30 @@ bool matchesPriority(const std::string& name) {
     return false;
 }
 
+// Ceiling for the synchronous reads below.
+//
+// These block the event loop, and an MPRIS peer is an arbitrary application: a
+// browser still restoring its session at login owns its bus name long before it
+// is answering calls on it. Left at D-Bus's 25-second default that is up to
+// 25 seconds *per property*, with the whole bar frozen — no repaints, no input.
+// The media applet is a nicety, so failing fast and showing nothing is the
+// right trade; the next PropertiesChanged signal fills it in anyway.
+constexpr uint64_t kCallTimeoutUs = 1'000'000;
+
 template <typename T>
 std::optional<T> getProp(sdbus::IProxy& proxy, const char* iface, const char* name) {
     try {
-        sdbus::Variant v = proxy.getProperty(name).onInterface(iface);
+        // Properties.Get by hand rather than getProperty(): sdbus-c++'s
+        // PropertyGetter has no withTimeout(), and a bounded wait is the whole
+        // point here.
+        sdbus::Variant v;
+        proxy.callMethod("Get")
+            .onInterface("org.freedesktop.DBus.Properties")
+            .withTimeout(kCallTimeoutUs)
+            .withArguments(std::string(iface), std::string(name))
+            .storeResultsTo(v);
         return v.get<T>();
-    } catch (...) {
-        return std::nullopt;
-    }
+    } catch (...) { return std::nullopt; }
 }
 }  // namespace
 #endif
@@ -82,17 +98,15 @@ void MprisController::enablePush(EventLoop& loop) {
         // One match for every MPRIS player's property changes — cheaper and
         // simpler than a proxy per player that must be torn down and rebuilt as
         // the active player changes.
-        conn_->addMatch(
-            "type='signal',interface='org.freedesktop.DBus.Properties',"
-            "member='PropertiesChanged',path='/org/mpris/MediaPlayer2'",
-            [this](sdbus::Message) { refreshAndNotify(); });
+        conn_->addMatch("type='signal',interface='org.freedesktop.DBus.Properties',"
+                        "member='PropertiesChanged',path='/org/mpris/MediaPlayer2'",
+                        [this](sdbus::Message) { refreshAndNotify(); });
 
         // Players appearing/quitting: the active player may change entirely.
-        conn_->addMatch(
-            "type='signal',sender='org.freedesktop.DBus',"
-            "interface='org.freedesktop.DBus',member='NameOwnerChanged',"
-            "arg0namespace='org.mpris.MediaPlayer2'",
-            [this](sdbus::Message) { refreshAndNotify(); });
+        conn_->addMatch("type='signal',sender='org.freedesktop.DBus',"
+                        "interface='org.freedesktop.DBus',member='NameOwnerChanged',"
+                        "arg0namespace='org.mpris.MediaPlayer2'",
+                        [this](sdbus::Message) { refreshAndNotify(); });
     } catch (...) {
         pushEnabled_ = false;  // no matches: caller keeps polling
         return;
@@ -103,8 +117,7 @@ void MprisController::enablePush(EventLoop& loop) {
     const int fd = conn_->getEventLoopPollData().fd;
     loop.addFd(fd, [this](uint32_t) {
         try {
-            while (conn_->processPendingEvent()) {
-            }
+            while (conn_->processPendingEvent()) {}
         } catch (...) {
             // A broken session bus must not take the bar down; the media applet
             // simply stops updating.
@@ -125,11 +138,13 @@ std::vector<std::string> MprisController::listPlayers() {
     if (!dbusProxy_) return players;
     try {
         std::vector<std::string> names;
-        dbusProxy_->callMethod("ListNames").onInterface("org.freedesktop.DBus").storeResultsTo(names);
+        dbusProxy_->callMethod("ListNames")
+            .onInterface("org.freedesktop.DBus")
+            .withTimeout(kCallTimeoutUs)
+            .storeResultsTo(names);
         for (auto& n : names)
             if (startsWith(n, kPrefix)) players.push_back(n);
-    } catch (...) {
-    }
+    } catch (...) {}
     return players;
 }
 
@@ -159,10 +174,10 @@ std::string MprisController::pickActive(const std::vector<std::string>& players)
         }
     }
 
-    if (!prioPlaying.empty()) return prioPlaying;  // playing, preferred app
-    if (!firstPlaying.empty()) return firstPlaying;  // playing anywhere
-    if (!prioPaused.empty()) return prioPaused;    // paused, preferred app
-    if (!firstPaused.empty()) return firstPaused;  // paused anywhere
+    if (!prioPlaying.empty()) return prioPlaying;          // playing, preferred app
+    if (!firstPlaying.empty()) return firstPlaying;        // playing anywhere
+    if (!prioPaused.empty()) return prioPaused;            // paused, preferred app
+    if (!firstPaused.empty()) return firstPaused;          // paused anywhere
     if (!prioritized.empty()) return prioritized.front();  // stopped, preferred
     if (!players.empty()) return players.front();
     return "";
@@ -185,12 +200,15 @@ MprisController::Snapshot MprisController::readSnapshot(const std::string& name)
     }
 
     // Metadata (a{sv}): title, artist(s), album, length.
-    if (auto md = getProp<std::map<std::string, sdbus::Variant>>(*proxy, kPlayerIface, "Metadata")) {
+    if (auto md =
+            getProp<std::map<std::string, sdbus::Variant>>(*proxy, kPlayerIface, "Metadata")) {
         auto& m = *md;
         auto strOf = [&](const char* key) -> std::string {
             auto it = m.find(key);
             if (it == m.end()) return "";
-            try { return it->second.get<std::string>(); } catch (...) {}
+            try {
+                return it->second.get<std::string>();
+            } catch (...) {}
             try {
                 auto arr = it->second.get<std::vector<std::string>>();
                 std::string out;
@@ -204,7 +222,9 @@ MprisController::Snapshot MprisController::readSnapshot(const std::string& name)
         s.album = strOf("xesam:album");
         auto it = m.find("mpris:length");
         if (it != m.end()) {
-            try { s.lengthUs = it->second.get<int64_t>(); } catch (...) {}
+            try {
+                s.lengthUs = it->second.get<int64_t>();
+            } catch (...) {}
         }
     }
 
@@ -251,9 +271,11 @@ void MprisController::togglePlaying() {
 #else
     if (!snap_.valid || !snap_.canControl) return;
     try {
-        playerProxy(snap_.dbusName)->callMethod("PlayPause").onInterface(kPlayerIface).dontExpectReply();
-    } catch (...) {
-    }
+        playerProxy(snap_.dbusName)
+            ->callMethod("PlayPause")
+            .onInterface(kPlayerIface)
+            .dontExpectReply();
+    } catch (...) {}
     refresh();
 #endif
 }
@@ -267,8 +289,7 @@ void MprisController::next() {
     if (!snap_.valid || !snap_.canGoNext) return;
     try {
         playerProxy(snap_.dbusName)->callMethod("Next").onInterface(kPlayerIface).dontExpectReply();
-    } catch (...) {
-    }
+    } catch (...) {}
     refresh();
 #endif
 }
@@ -285,8 +306,7 @@ void MprisController::previous() {
             ->callMethod("Previous")
             .onInterface(kPlayerIface)
             .dontExpectReply();
-    } catch (...) {
-    }
+    } catch (...) {}
     refresh();
 #endif
 }
@@ -299,10 +319,12 @@ void MprisController::setVolume(double level) {
     if (!snap_.valid || !snap_.volumeSupported) return;
     double clamped = std::clamp(level, 0.0, 1.0);
     try {
-        playerProxy(snap_.dbusName)->setProperty("Volume").onInterface(kPlayerIface).toValue(clamped);
+        playerProxy(snap_.dbusName)
+            ->setProperty("Volume")
+            .onInterface(kPlayerIface)
+            .toValue(clamped);
         snap_.volume = clamped;
-    } catch (...) {
-    }
+    } catch (...) {}
 #endif
 }
 

@@ -167,14 +167,18 @@ private:
 BluetoothIndicator::BluetoothIndicator(const SystemBackends& backends)
     : StatusIndicator("bluetooth", Zone::Right, 350),
       backend_(backends.bluetooth) {
-    // Reserve the slot and show a neutral placeholder until the first push
-    // (instant load, no reflow). Render defaults without a backend.
+    // Hidden until this indicator's own backend publishes a snapshot — no
+    // placeholder glyph standing in for data we do not have. StateCache
+    // normally seeds that snapshot before the first frame, so this is only
+    // visibly empty on a first-ever run or when the daemon never answers.
+    // Without a backend (tests, registry previews) render sample defaults.
     loaded_ = (backend_ == nullptr);
+    visible = loaded_;
 }
 
 std::string BluetoothIndicator::icon() const {
     if (!loaded_) {
-        return "󰂯";  // generic bluetooth glyph while state is pending
+        return "󰂯";  // no data yet: neutral glyph for the QS tile (the bar hides)
     }
     if (!lastSnap_.powered) { return "󰂲"; }
     return lastSnap_.connectedCount > 0 ? "󰂱" : "󰂯";
@@ -182,7 +186,7 @@ std::string BluetoothIndicator::icon() const {
 
 std::string BluetoothIndicator::themedIcon() const {
     if (!loaded_) {
-        return "";  // fall back to the neutral glyph until loaded
+        return "";  // no data yet: fall back to the neutral glyph
     }
     if (!lastSnap_.powered) { return "bluetooth-disabled-symbolic"; }
     return lastSnap_.connectedCount > 0 ? "bluetooth-active-symbolic" : "bluetooth-paired-symbolic";
@@ -204,10 +208,10 @@ Color BluetoothIndicator::iconColor() const {
 void BluetoothIndicator::onBackendUpdate() {
     if (backend_ == nullptr) { return; }
     lastSnap_ = backend_->snapshot();
-    // Only *this* backend's readiness clears the placeholder — a push from an
+    // Only *this* backend's readiness reveals the indicator — a push from an
     // unrelated backend must not mark us loaded with a still-empty snapshot.
     loaded_ = backend_->ready();
-    visible = loaded_ ? lastSnap_.available : true;
+    visible = loaded_ && lastSnap_.available;
 }
 
 std::unique_ptr<QSTile> BluetoothIndicator::createTile() {

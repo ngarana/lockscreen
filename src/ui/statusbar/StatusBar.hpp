@@ -103,6 +103,13 @@ public:
     // Right-group chip bounds (for preview click targeting).
     const Rect& rightGroupBounds() const { return rightGroupBounds_; }
 
+    // Pull current state out of every backend, exactly as a backend push would.
+    // Needed after StateCache seeds the backends from the previous session:
+    // indicators cache their snapshot in onBackendUpdate(), and at that point no
+    // daemon has replied yet, so nothing else would move the restored values
+    // into the first frame.
+    void refreshFromBackends() { notifyBackendUpdate(); }
+
 private:
     void toggleQuickSettings();
     void activateIndicator(StatusIndicator& ind);

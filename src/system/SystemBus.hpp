@@ -34,6 +34,23 @@ public:
     // (sd_bus_slot_unref to unsubscribe); nullptr on failure.
     sd_bus_slot* addMatch(const char* rule, sd_bus_message_handler_t handler, void* userdata);
 
+    // Ceiling for every method call on this connection, applied at open time.
+    //
+    // sd-bus defaults to 25 seconds. That is a sane ceiling for a call the user
+    // deliberately triggered, but several of ours are *synchronous* — tray item
+    // properties, watcher presence — and block the event loop, so one wedged
+    // peer would freeze the whole bar for 25 seconds: no repaints, no input.
+    // Third-party tray applets, which are exactly the peers most likely to be
+    // wedged or still starting at login, are the realistic case.
+    //
+    // Five seconds rather than one because the same bound applies to async
+    // calls, and an async call is what *activates* a D-Bus service — UPower is
+    // not running when the bar starts and takes a second or two to come up.
+    // Five is comfortably above that and far below a visible freeze. A call that
+    // does time out is not fatal either way: every backend re-fetches on the
+    // NameOwnerChanged that fires when its daemon finally appears.
+    static constexpr uint64_t kCallTimeoutUs = 5'000'000;
+
 private:
     void drain();
     void teardown();

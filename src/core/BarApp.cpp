@@ -11,7 +11,7 @@
 #include "render/Painter.hpp"
 #include "ui/Theme.hpp"
 #include "ui/indicators/NotificationIndicator.hpp"  // previewNotificationCentre()
-#include "wayland/Seat.hpp"  // Mod bits
+#include "wayland/Seat.hpp"                         // Mod bits
 
 namespace qypr {
 
@@ -21,9 +21,7 @@ namespace qypr {
 // -----------------------------------------------------------------------------
 Config BarApp::loadConfig() {
     Config c;
-    if (c.load()) {
-        std::fprintf(stderr, "qypr-bar: config %s\n", c.path().c_str());
-    }
+    if (c.load()) { std::fprintf(stderr, "qypr-bar: config %s\n", c.path().c_str()); }
     theme::loadTheme(c);
     return c;
 }
@@ -72,8 +70,7 @@ BarApp::BarApp() = default;
 
 int BarApp::run() {
     if (!display_.connect()) {
-        std::fprintf(stderr,
-                     "qypr-bar: no Wayland display or no wlr-layer-shell support\n");
+        std::fprintf(stderr, "qypr-bar: no Wayland display or no wlr-layer-shell support\n");
         return 1;
     }
 
@@ -102,10 +99,39 @@ int BarApp::run() {
     workspace_.start(display_.display());
     toplevel_.start(display_.display());
 
-    // Start all backends eagerly so modules have data on the first frame.
-    // Each backend's start() is non-blocking (async D-Bus or filesystem);
-    // a missing daemon simply hides its indicator. This eliminates the
-    // one-frame-empty lag that a deferred start would cause.
+    // Seed every hardware indicator from the last session's values so the very
+    // first frame carries real numbers (battery %, SSID, volume) instead of the
+    // neutral "unknown" glyphs. Purely a local file read — no daemon involved,
+    // which is the whole point: at boot the daemons that own this state are
+    // typically not running yet (UPower in particular is D-Bus-activated and
+    // starts *after* the bar). Live pushes overwrite these within moments.
+    stateCache_.load();
+    stateCache_.seed(backends_);
+    statusBar_.refreshFromBackends();  // pull the seeded values into the indicators
+
+    // Paint the strip *now*, before touching a single daemon. The layer
+    // surface's initial configure is only dispatched when we pump the
+    // connection, so every call made before this point is time the desktop
+    // spends with no bar on screen. One roundtrip is enough: the configure
+    // arrives, BarWindow::render() draws and commits the first frame.
+    display_.roundtrip();
+
+    // Live config reload: watch bar.conf for edits and re-apply all sections
+    // without a restart (theme, geometry, modules, per-indicator config).
+    configWatcher_.watch(config_.path(), [this] { reloadConfig(); });
+
+    // Everything that can reach an external daemon now runs *behind* that first
+    // frame, dispatched by the loop rather than ahead of it.
+    loop_.post([this] { startBackends(); });
+
+    loop_.run();
+    return 0;
+}
+
+// Bring the applets to life. Called from the event loop after the first frame
+// is on screen, so a daemon that is slow, missing, or still being activated
+// delays only its own indicator — never the bar itself.
+void BarApp::startBackends() {
     battery_.start();
     brightness_.start();
     wifi_.start();
@@ -119,14 +145,9 @@ int BarApp::run() {
         std::fprintf(stderr, "qypr-bar: notification monitor unavailable\n");
     }
     mpris_.enablePush(loop_);
-    desktopIndex_.load();
 
-    // Live config reload: watch bar.conf for edits and re-apply all sections
-    // without a restart (theme, geometry, modules, per-indicator config).
-    configWatcher_.watch(config_.path(), [this] { reloadConfig(); });
-
-    loop_.run();
-    return 0;
+    // Persist each push so the *next* start has fresh values to seed from.
+    stateCache_.track(loop_, backends_);
 }
 
 void BarApp::draw(cairo_t* cr, int w, int h, int scale) {
@@ -223,8 +244,7 @@ int BarApp::preview(const std::string& path, int width, int height) {
         cairo_t* cr = cairo_create(s);
         Painter p(cr);
         previewNotificationCentre(p, width - 20.0, statusBar_.bounds.y + statusBar_.bounds.h + 6.0,
-                                  geom_.bottom, true,
-                                  config_.getDouble("bar", "backdrop", -1.0));
+                                  geom_.bottom, true, config_.getDouble("bar", "backdrop", -1.0));
         cairo_destroy(cr);
         cairo_surface_write_to_png(s, (stripExt(path) + "-notif.png").c_str());
         cairo_surface_destroy(s);
@@ -234,7 +254,15 @@ int BarApp::preview(const std::string& path, int width, int height) {
     return 0;
 }
 
-void BarApp::invalidate() { display_.invalidateAll(); }
+void BarApp::invalidate() {
+    display_.invalidateAll();
+    // Every backend push funnels through here on its way to a repaint, which
+    // makes this the one place that sees all of them without competing for the
+    // backends' single onChange_ slot (StatusBar owns that). Hover and animation
+    // repaints arrive here too, but the cache debounces and skips writes whose
+    // content is unchanged, so they cost nothing.
+    stateCache_.noteChanged();
+}
 
 void BarApp::reloadConfig() {
     Config c;

@@ -81,7 +81,9 @@ struct SystemBackends {
 class StatusIndicator : public Widget {
 public:
     StatusIndicator(const std::string& id, Zone zone, int priority)
-        : id_(id), zone_(zone), priority_(priority) {}
+        : id_(id),
+          zone_(zone),
+          priority_(priority) {}
 
     ~StatusIndicator() override;
 
@@ -131,7 +133,13 @@ public:
     // `x,y` are pointer coordinates, so multi-element indicators (the tray host)
     // can route the gesture to the specific sub-item under the cursor. Indicators
     // that don't use the position can leave the args bound but unused.
-    virtual bool onScroll(double dx, double dy, double x, double y) { (void)x; (void)y; (void)dx; (void)dy; return false; }
+    virtual bool onScroll(double dx, double dy, double x, double y) {
+        (void)x;
+        (void)y;
+        (void)dx;
+        (void)dy;
+        return false;
+    }
     // Custom per-position click handling (e.g. the tray host, which maps the
     // click to one of several sub-icons). Return true to consume; false falls
     // through to the default activate (tile/popover).
@@ -174,14 +182,27 @@ protected:
     Zone zone_;
     int priority_;
 
-    // Placeholder-until-loaded (instant startup, waybar/polybar style). A
-    // hardware-presence indicator (battery, wifi, bluetooth, volume, brightness)
-    // reserves its slot and draws a neutral resting glyph with no value text from
-    // the first frame, then flips this true on the first backend push so real
-    // data replaces the placeholder in place — no appear-and-reflow lag. It is
-    // set true immediately when the indicator has no backend (tests / registry
-    // previews render their sample defaults). Content indicators (media, tray,
-    // taskbar, …) ignore this and stay hidden until they have something to show.
+    // True once this indicator's own backend has published a snapshot — real
+    // data, seeded state from the previous session (see StateCache), or a
+    // definitive "absent". Set true immediately when there is no backend at all
+    // (tests / registry previews render their sample defaults).
+    //
+    // A hardware-presence indicator (battery, wifi, bluetooth, volume,
+    // brightness) stays *hidden* until this flips, rather than reserving its
+    // slot behind a neutral resting glyph. This reverses an earlier decision, so
+    // it is worth recording why: the placeholder existed to avoid an
+    // appear-and-reflow shift when data landed, but it bought that by showing a
+    // slot that looks live and carries no information — and it held that state
+    // for as long as the owning daemon took to appear, which at login is
+    // seconds (UPower is D-Bus-activated and starts *after* the bar). A status
+    // bar reporting nothing is worse than a status bar that is briefly shorter.
+    // The reflow it was guarding against is now rare anyway: StateCache seeds
+    // these backends before the first frame, so on every boot after the first
+    // they are already loaded by the time anything is drawn.
+    //
+    // Content indicators (media, tray, taskbar, …) never used a placeholder —
+    // they have always hidden until they had something to show. This makes the
+    // hardware indicators agree with them.
     bool loaded_ = false;
 
     // ── Icon crossfade (Phase 6 polish) ─────────────────────────────────
@@ -190,9 +211,9 @@ protected:
     // ease-in-out). Both share the icon footprint so the swap reads as a
     // dissolve, not a hard cut. Battery (level/charging) and WiFi (signal
     // tiers) get this for free by going through the base draw.
-    std::string lastDrawnIcon_;     // most-recent icon() the base has rendered
-    std::string prevDrawnIcon_;     // outgoing glyph during a crossfade
-    int64_t crossfadeStartMs_ = 0;  // wall clock the swap started
+    std::string lastDrawnIcon_;               // most-recent icon() the base has rendered
+    std::string prevDrawnIcon_;               // outgoing glyph during a crossfade
+    int64_t crossfadeStartMs_ = 0;            // wall clock the swap started
     static constexpr int kCrossfadeMs = 300;  // cf. theme::anim::medium
 
     // ── Symbolic icon cache (recolourable surfaces from the active theme) ──

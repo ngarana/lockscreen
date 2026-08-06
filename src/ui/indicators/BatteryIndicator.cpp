@@ -222,15 +222,18 @@ BatteryIndicator::BatteryIndicator(const SystemBackends& backends)
     : StatusIndicator("battery", Zone::Right, 500),
       backend_(backends.battery),
       profiles_(backends.powerProfiles) {
-    // Reserve the slot and show a neutral placeholder until the first push
-    // (instant load, no reflow). Without a backend (tests, registry previews)
-    // render the sample defaults immediately.
+    // Hidden until this indicator's own backend publishes a snapshot — no
+    // placeholder glyph standing in for data we do not have. StateCache
+    // normally seeds that snapshot before the first frame, so this is only
+    // visibly empty on a first-ever run or when the daemon never answers.
+    // Without a backend (tests, registry previews) render sample defaults.
     loaded_ = (backend_ == nullptr);
+    visible = loaded_;
 }
 
 std::string BatteryIndicator::icon() const {
     if (!loaded_) {
-        return "󰂑";  // neutral "unknown" battery while loading
+        return "󰂑";  // no data yet: neutral glyph for the QS tile (the bar hides)
     }
     bool const charging = lastSnap_.state == BatterySnapshot::Charging ||
                           lastSnap_.state == BatterySnapshot::PendingCharge;
@@ -239,7 +242,7 @@ std::string BatteryIndicator::icon() const {
 
 std::string BatteryIndicator::themedIcon() const {
     if (!loaded_) {
-        return "";  // fall back to the neutral glyph until loaded
+        return "";  // no data yet: fall back to the neutral glyph
     }
     bool const charging = lastSnap_.state == BatterySnapshot::Charging ||
                           lastSnap_.state == BatterySnapshot::PendingCharge;
@@ -249,7 +252,7 @@ std::string BatteryIndicator::themedIcon() const {
 
 std::string BatteryIndicator::label() const {
     if (!loaded_) {
-        return "";  // no fake "0%" during the placeholder frame
+        return "";  // no data yet: never invent a "0%"
     }
     return std::to_string(lastSnap_.percentage) + "%";
 }
@@ -262,7 +265,7 @@ std::string BatteryIndicator::tooltip() const {
 
 Color BatteryIndicator::iconColor() const {
     if (!loaded_) {
-        return theme::color::text;  // neutral placeholder, not a red "0%" alarm
+        return theme::color::text;  // no data yet: neutral, not a red "0%" alarm
     }
     int const pct = lastSnap_.percentage;
     if (pct > 50) { return theme::color::success; }
@@ -322,10 +325,10 @@ void BatteryIndicator::draw(Painter& p, int64_t now) {
 void BatteryIndicator::onBackendUpdate() {
     if (backend_ == nullptr) { return; }
     lastSnap_ = backend_->snapshot();
-    // Only *this* backend's readiness clears the placeholder — a push from an
+    // Only *this* backend's readiness reveals the indicator — a push from an
     // unrelated backend must not mark us loaded with a still-empty snapshot.
     loaded_ = backend_->ready();
-    visible = loaded_ ? lastSnap_.present : true;
+    visible = loaded_ && lastSnap_.present;
 }
 
 std::unique_ptr<QSTile> BatteryIndicator::createTile() {
@@ -343,7 +346,13 @@ std::unique_ptr<QSTile> BatteryIndicator::createTile() {
                 info += "  •  " + std::to_string(static_cast<int>(snap->energyRate)) + "W";
             }
             return info;
-        });
+        },
+        // Re-read the glyph per frame. Tiles are built in the StatusBar
+        // constructor, before any backend has reported, so the static `icon()`
+        // above is captured while the indicator is still unloaded — it would
+        // freeze the neutral "unknown" glyph into the panel permanently and
+        // never follow the charge level afterwards.
+        [this]() { return icon(); });
 }
 
 std::unique_ptr<DetailedPopover> BatteryIndicator::createDetailedView() {

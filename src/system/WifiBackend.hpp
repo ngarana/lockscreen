@@ -55,6 +55,19 @@ public:
     // an unrelated backend's push cannot prematurely mark this one loaded.
     bool ready() const { return ready_; }
 
+    // Seed from the previous session's persisted snapshot (see StateCache).
+    // The daemon that owns this state is often not running yet when the bar
+    // starts — UPower in particular is D-Bus-activated and comes up *after* it
+    // — so without a seed the indicator sits on its neutral "unknown" glyph for
+    // seconds. Seeding marks the backend ready() so the very first frame
+    // carries real values; the first live reply overwrites both the snapshot
+    // and this flag. A no-op once a live reply has landed.
+    void seed(const WifiSnapshot& s) {
+        if (ready_) { return; }
+        snap_ = s;
+        ready_ = true;
+    }
+
     void setEnabled(bool on);
     std::vector<WifiAp> scanNetworks() const;
     void requestScan();

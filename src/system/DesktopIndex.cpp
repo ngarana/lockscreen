@@ -43,8 +43,10 @@ std::vector<std::string> appDirs() {
     std::vector<std::string> dirs;
     const char* home = std::getenv("HOME");
     const char* dataHome = std::getenv("XDG_DATA_HOME");
-    if (dataHome && *dataHome) dirs.push_back(std::string(dataHome) + "/applications");
-    else if (home) dirs.push_back(std::string(home) + "/.local/share/applications");
+    if (dataHome && *dataHome)
+        dirs.push_back(std::string(dataHome) + "/applications");
+    else if (home)
+        dirs.push_back(std::string(home) + "/.local/share/applications");
 
     const char* dataDirs = std::getenv("XDG_DATA_DIRS");
     std::string list = (dataDirs && *dataDirs) ? dataDirs : "/usr/local/share:/usr/share";
@@ -113,13 +115,20 @@ bool DesktopIndex::parseEntry(const std::string& body, DesktopEntry& out) {
         const std::string key = line.substr(0, eq);
         const std::string val = line.substr(eq + 1);
         // Ignore localized keys (Name[de]=…): take the unlocalized value only.
-        if (key == "Type") type = val;
-        else if (key == "Name") name = val;
-        else if (key == "Exec") exec = val;
-        else if (key == "Icon") icon = val;
-        else if (key == "NoDisplay") noDisplay = truthy(val);
-        else if (key == "Hidden") hidden = truthy(val);
-        else if (key == "Terminal") terminal = truthy(val);
+        if (key == "Type")
+            type = val;
+        else if (key == "Name")
+            name = val;
+        else if (key == "Exec")
+            exec = val;
+        else if (key == "Icon")
+            icon = val;
+        else if (key == "NoDisplay")
+            noDisplay = truthy(val);
+        else if (key == "Hidden")
+            hidden = truthy(val);
+        else if (key == "Terminal")
+            terminal = truthy(val);
     }
 
     if (type != "Application") return false;
@@ -134,6 +143,7 @@ bool DesktopIndex::parseEntry(const std::string& body, DesktopEntry& out) {
 }
 
 void DesktopIndex::load() {
+    loaded_ = true;
     entries_.clear();
     std::unordered_set<std::string> seen;  // desktop-file id dedup (earlier dir wins)
 
@@ -154,8 +164,9 @@ void DesktopIndex::load() {
         closedir(d);
     }
 
-    std::sort(entries_.begin(), entries_.end(),
-              [](const DesktopEntry& a, const DesktopEntry& b) { return lower(a.name) < lower(b.name); });
+    std::sort(entries_.begin(), entries_.end(), [](const DesktopEntry& a, const DesktopEntry& b) {
+        return lower(a.name) < lower(b.name);
+    });
 }
 
 std::vector<const DesktopEntry*> DesktopIndex::search(const std::string& query) const {
@@ -168,8 +179,10 @@ std::vector<const DesktopEntry*> DesktopIndex::search(const std::string& query) 
         }
         const std::string n = lower(e.name);
         const size_t pos = n.find(q);
-        if (pos == 0) prefix.push_back(&e);
-        else if (pos != std::string::npos) substr.push_back(&e);
+        if (pos == 0)
+            prefix.push_back(&e);
+        else if (pos != std::string::npos)
+            substr.push_back(&e);
     }
     prefix.insert(prefix.end(), substr.begin(), substr.end());  // both already alphabetical
     return prefix;

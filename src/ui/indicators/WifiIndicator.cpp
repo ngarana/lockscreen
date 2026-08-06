@@ -243,21 +243,25 @@ private:
 WifiIndicator::WifiIndicator(const SystemBackends& backends)
     : StatusIndicator("wifi", Zone::Right, 300),
       backend_(backends.wifi) {
-    // Reserve the slot and show a neutral placeholder until the first push
-    // (instant load, no reflow). Render defaults without a backend.
+    // Hidden until this indicator's own backend publishes a snapshot — no
+    // placeholder glyph standing in for data we do not have. StateCache
+    // normally seeds that snapshot before the first frame, so this is only
+    // visibly empty on a first-ever run or when the daemon never answers.
+    // Without a backend (tests, registry previews) render sample defaults.
     loaded_ = (backend_ == nullptr);
+    visible = loaded_;
 }
 
 std::string WifiIndicator::icon() const {
     if (!loaded_) {
-        return "󰖩";  // neutral wifi glyph while state is pending
+        return "󰖩";  // no data yet: neutral glyph for the QS tile (the bar hides)
     }
     return wifiIcon(lastSnap_);
 }
 
 std::string WifiIndicator::themedIcon() const {
     if (!loaded_) {
-        return "";  // fall back to the neutral glyph until loaded
+        return "";  // no data yet: fall back to the neutral glyph
     }
     return wifiThemedIcon(lastSnap_);
 }
@@ -271,10 +275,10 @@ std::string WifiIndicator::tooltip() const {
 void WifiIndicator::onBackendUpdate() {
     if (backend_ == nullptr) { return; }
     lastSnap_ = backend_->snapshot();
-    // Only *this* backend's readiness clears the placeholder — a push from an
+    // Only *this* backend's readiness reveals the indicator — a push from an
     // unrelated backend must not mark us loaded with a still-empty snapshot.
     loaded_ = backend_->ready();
-    visible = loaded_ ? lastSnap_.available : true;
+    visible = loaded_ && lastSnap_.available;
 }
 
 std::unique_ptr<QSTile> WifiIndicator::createTile() {

@@ -278,6 +278,7 @@ bool SNIBackend::detectExternalWatcher() {
     if (!bus) return false;
 
     // Call org.freedesktop.DBus.NameHasOwner (not available in all systemd versions).
+    // Bounded by the connection-wide timeout set in SystemBus's constructor.
     sd_bus_error err = SD_BUS_ERROR_NULL;
     sd_bus_message* reply = nullptr;
     int r = sd_bus_call_method(bus, kDBusName, "/", kDBusIface, "NameHasOwner", &err, &reply, "s",
@@ -396,9 +397,9 @@ void SNIBackend::emitItemUnregistered(const std::string& service) {
 void SNIBackend::watchItemOwnership(const std::string& service) {
     sd_bus* bus = bus_.get();
     if (!bus) return;
-    std::string match = "type='signal',sender='" + std::string(kDBusIface) +
-                        "',interface='" + std::string(kDBusIface) +
-                        "',member='NameOwnerChanged',arg0='" + service + "'";
+    std::string match = "type='signal',sender='" + std::string(kDBusIface) + "',interface='" +
+                        std::string(kDBusIface) + "',member='NameOwnerChanged',arg0='" + service +
+                        "'";
     sd_bus_slot* slot = bus_.addMatch(match.c_str(), &SNIBackend::onItemOwnerChanged, this);
     if (slot) ownerWatchSlots_.push_back(slot);
 }
@@ -443,7 +444,8 @@ void SNIBackend::refresh() {
         return;
     }
 
-    // Host mode: query the external watcher.
+    // Host mode: query the external watcher. Bounded by the connection-wide
+    // timeout set in SystemBus's constructor.
     sd_bus_error err = SD_BUS_ERROR_NULL;
     sd_bus_message* reply = nullptr;
     int r = sd_bus_get_property(bus, kWatcher, kWatcherPath, kWatcherIface,
@@ -483,6 +485,9 @@ SNIItem SNIBackend::fetchItem(const std::string& service, const std::string& pat
     sd_bus* bus = bus_.get();
     if (!bus) return item;
 
+    // A tray applet is third-party code that may be wedged or still starting,
+    // and this call blocks the event loop — so it leans on the connection-wide
+    // timeout set in SystemBus's constructor rather than sd-bus's 25s default.
     sd_bus_error err = SD_BUS_ERROR_NULL;
     sd_bus_message* reply = nullptr;
     int r = sd_bus_call_method(bus, service.c_str(), path.c_str(), kPropsIface, "GetAll", &err,

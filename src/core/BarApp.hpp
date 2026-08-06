@@ -33,6 +33,7 @@
 #include "system/DndState.hpp"
 #include "system/NightLightBackend.hpp"
 #include "system/SNIBackend.hpp"
+#include "system/StateCache.hpp"
 #include "system/SystemBus.hpp"
 #include "system/ToplevelBackend.hpp"
 #include "system/VolumeBackend.hpp"
@@ -67,6 +68,10 @@ public:
 
 private:
     void draw(cairo_t* cr, int w, int h, int scale);
+    // Start every backend that can reach an external daemon. Runs from the event
+    // loop *after* the first frame is on screen, so a daemon that is missing or
+    // still being activated delays only its own indicator, never the bar.
+    void startBackends();
     // Grow/shrink the layer surfaces when the open-overlay state flips.
     void syncOverlay();
     // Grab/release keyboard focus when a search popover (launcher) opens/closes.
@@ -135,9 +140,9 @@ private:
                              .dbusMenu = &dbusMenu_,
                              .workspace = &workspace_,
                              .toplevel = &toplevel_,
-                              .dnd = &dnd_,
-                              .nightLight = &nightLight_,
-                              .power = &power_,
+                             .dnd = &dnd_,
+                             .nightLight = &nightLight_,
+                             .power = &power_,
                              .powerProfiles = &powerProfiles_,
                              .idleInhibitor = &idleInhibitor_,
                              .desktopIndex = &desktopIndex_,
@@ -150,6 +155,9 @@ private:
 
     StatusBar statusBar_{loop_, *this, backends_, modules_ ? &*modules_ : nullptr};
     ConfigWatcher configWatcher_{loop_};
+    // Last-known indicator values, so the first frame shows real numbers instead
+    // of neutral placeholders while the daemons are still starting.
+    StateCache stateCache_;
     int overlayHeight_ = 0;  // last surface height requested (logical px)
     bool kbActive_ = false;  // current keyboard-grab state (launcher search box)
 };

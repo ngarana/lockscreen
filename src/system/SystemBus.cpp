@@ -15,12 +15,18 @@ SystemBus::SystemBus(EventLoop& loop, BusKind kind) : loop_(loop) {
         bus_ = nullptr;
         return;
     }
+    // Bound every call on this connection (see kCallTimeoutUs): the synchronous
+    // ones block the event loop, and 25 seconds of frozen bar is not a failure
+    // mode worth keeping.
+    sd_bus_set_method_call_timeout(bus_, kCallTimeoutUs);
     fd_ = sd_bus_get_fd(bus_);
     loop_.addFd(fd_, [this](uint32_t) { drain(); });
     drain();
 }
 
-SystemBus::~SystemBus() { teardown(); }
+SystemBus::~SystemBus() {
+    teardown();
+}
 
 sd_bus_slot* SystemBus::addMatch(const char* rule, sd_bus_message_handler_t handler,
                                  void* userdata) {
@@ -36,8 +42,7 @@ sd_bus_slot* SystemBus::addMatch(const char* rule, sd_bus_message_handler_t hand
 
 void SystemBus::drain() {
     int r;
-    while ((r = sd_bus_process(bus_, nullptr)) > 0) {
-    }
+    while ((r = sd_bus_process(bus_, nullptr)) > 0) {}
     if (r < 0) {
         std::fprintf(stderr, "qypr: system bus error (%d); disconnecting\n", r);
         // Deferred: tearing down from inside the fd callback would destroy the

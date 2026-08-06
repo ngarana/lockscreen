@@ -29,10 +29,10 @@ namespace qypr {
 
 namespace {
 
-constexpr const char* kBell = "󰂚";     // nf-md-bell
-constexpr const char* kBellOff = "󰂛";  // nf-md-bell_off (DND)
-constexpr const char* kBellRing = "󰂞"; // nf-md-bell_ring (empty-state)
-constexpr const char* kClose = "󰅖";    // nf-md-close
+constexpr const char* kBell = "󰂚";      // nf-md-bell
+constexpr const char* kBellOff = "󰂛";   // nf-md-bell_off (DND)
+constexpr const char* kBellRing = "󰂞";  // nf-md-bell_ring (empty-state)
+constexpr const char* kClose = "󰅖";     // nf-md-close
 constexpr const char* kChevronDown = "󰅀";
 constexpr const char* kChevronRight = "󰅂";
 
@@ -104,13 +104,13 @@ std::vector<NotifyGroup> buildGroups(const std::vector<Notification>& notes) {
 struct Item {
     enum Kind { Header, Card } kind;
     Rect bounds;
-    Rect closeBtn;   // card dismiss / group clear-all (drawn on hover)
-    Rect chevron;    // header expand/collapse toggle
+    Rect closeBtn;  // card dismiss / group clear-all (drawn on hover)
+    Rect chevron;   // header expand/collapse toggle
     std::vector<Rect> actionBtns;
     std::vector<int> actionIdx;  // index into the note's full actions array
     // Card payload.
     uint32_t daemonId = 0;
-    bool isNewest = false;       // only the newest note's actions are invokable
+    bool isNewest = false;  // only the newest note's actions are invokable
     std::string desktopEntry;
     std::string app;
     // Header payload.
@@ -122,11 +122,12 @@ class NotificationPopover : public DetailedPopover {
 public:
     NotificationPopover(const NotificationMonitor* mon, NotificationActions* actions,
                         DesktopIndex* apps)
-        : mon_(mon), actions_(actions), apps_(apps) {}
+        : mon_(mon),
+          actions_(actions),
+          apps_(apps) {}
 
     // Offline preview: render from a fixed set instead of a live monitor.
-    explicit NotificationPopover(std::vector<Notification> demo)
-        : previewNotes_(std::move(demo)) {}
+    explicit NotificationPopover(std::vector<Notification> demo) : previewNotes_(std::move(demo)) {}
 
     double contentWidth() const override { return kMenuW; }
 
@@ -177,7 +178,8 @@ public:
             const double cx = b.x + b.w - kPad - sz.w;
             clearAll_ = {cx - 8.0, y - 4.0, sz.w + 16.0, 22.0};
             if (clearAll_.contains(hoverX_, hoverY_))
-            p.fillRoundedRectSource(clearAll_, 6.0, theme::statusbar::panelSurfaceHover().withAlpha(0.5));
+                p.fillRoundedRectSource(clearAll_, 6.0,
+                                        theme::statusbar::panelSurfaceHover().withAlpha(0.5));
             p.drawText(cx, y, "Clear all", ca);
         }
         y += kHeaderH;
@@ -287,6 +289,9 @@ private:
     void activate(const Item& it) {
         const DesktopEntry* e = nullptr;
         if (apps_) {
+            // The index is built on demand (it is a full .desktop directory
+            // scan, kept off the startup path); this click is a demand for it.
+            if (!apps_->loaded()) apps_->load();
             if (!it.desktopEntry.empty()) e = apps_->resolve(it.desktopEntry);
             if (!e && !it.app.empty()) e = apps_->resolve(it.app);
         }
@@ -355,8 +360,8 @@ private:
         p.fillRoundedRectSource(r, 10.0,
                                 hot ? theme::statusbar::panelSurfaceHover()
                                     : theme::statusbar::panelSurface());
-        p.strokeRoundedRectSource(r, 10.0,
-                                  theme::statusbar::panelSurfaceHover().withAlpha(0.5), 1.0);
+        p.strokeRoundedRectSource(r, 10.0, theme::statusbar::panelSurfaceHover().withAlpha(0.5),
+                                  1.0);
         // Accent spine.
         p.fillRoundedRect({r.x, r.y + 8.0, kAccentBarW, r.h - 16.0}, 1.5, accent);
 
@@ -392,7 +397,8 @@ private:
         } else {
             const std::string age = ageLabel(n.postedAt, now);
             if (!age.empty()) {
-                TextStyle as{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL, theme::color::textMuted};
+                TextStyle as{theme::font::family, 10.0, PANGO_WEIGHT_NORMAL,
+                             theme::color::textMuted};
                 const Size asz = p.measureText(age, as);
                 p.drawText(r.x + r.w - rightPad - asz.w, r.y + 13.0, age, as);
                 titleW = textW - asz.w - 8.0;
@@ -400,8 +406,8 @@ private:
         }
 
         // Title + body (single line each, ellipsised).
-        const std::string title = n.title.empty() ? (n.app.empty() ? "Notification" : n.app)
-                                                   : n.title;
+        const std::string title =
+            n.title.empty() ? (n.app.empty() ? "Notification" : n.app) : n.title;
         TextStyle ts{theme::font::family, 12.0, PANGO_WEIGHT_BOLD, theme::color::text};
         p.drawText(textX, r.y + 12.0, title, ts, HAlign::Left, titleW);
         if (!n.body.empty()) {
@@ -431,8 +437,8 @@ private:
                     p.fillRoundedRect(btn, 6.0,
                                       bhot ? theme::statusbar::panelSurfaceHover()
                                            : theme::color::background);
-                    p.strokeRoundedRectSource(btn, 6.0,
-                                              theme::statusbar::panelSurfaceHover().withAlpha(0.6), 1.0);
+                    p.strokeRoundedRectSource(
+                        btn, 6.0, theme::statusbar::panelSurfaceHover().withAlpha(0.6), 1.0);
                     TextStyle bt{theme::font::family, 10.0, PANGO_WEIGHT_BOLD,
                                  bhot ? theme::color::text : theme::color::textSubtle};
                     const Size bsz = p.measureText(labels[k], bt);
@@ -511,8 +517,7 @@ std::string NotificationIndicator::icon() const {
 
 std::string NotificationIndicator::themedIcon() const {
     // notification-* symbolic from the active icon theme.
-    return (dnd_ && dnd_->enabled()) ? "notification-alert-symbolic"
-                                      : "notification-new-symbolic";
+    return (dnd_ && dnd_->enabled()) ? "notification-alert-symbolic" : "notification-new-symbolic";
 }
 
 std::string NotificationIndicator::label() const {

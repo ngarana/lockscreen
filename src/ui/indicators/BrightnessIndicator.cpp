@@ -30,21 +30,25 @@ const char* brightnessThemedIcon(double frac) {
 BrightnessIndicator::BrightnessIndicator(const SystemBackends& backends)
     : StatusIndicator("brightness", Zone::Right, 100),
       backend_(backends.brightness) {
-    // Reserve the slot and show a neutral placeholder until the first push
-    // (instant load, no reflow). Render defaults without a backend.
+    // Hidden until this indicator's own backend publishes a snapshot — no
+    // placeholder glyph standing in for data we do not have. StateCache
+    // normally seeds that snapshot before the first frame, so this is only
+    // visibly empty on a first-ever run or when the daemon never answers.
+    // Without a backend (tests, registry previews) render sample defaults.
     loaded_ = (backend_ == nullptr);
+    visible = loaded_;
 }
 
 std::string BrightnessIndicator::icon() const {
     if (!loaded_) {
-        return "󰃟";  // neutral mid-brightness glyph while loading
+        return "󰃟";  // no data yet: neutral glyph for the QS tile (the bar hides)
     }
     return brightnessIcon(lastSnap_.fraction());
 }
 
 std::string BrightnessIndicator::themedIcon() const {
     if (!loaded_) {
-        return "";  // fall back to the neutral glyph until loaded
+        return "";  // no data yet: fall back to the neutral glyph
     }
     return brightnessThemedIcon(lastSnap_.fraction());
 }
@@ -57,10 +61,10 @@ std::string BrightnessIndicator::tooltip() const {
 void BrightnessIndicator::onBackendUpdate() {
     if (backend_ == nullptr) { return; }
     lastSnap_ = backend_->snapshot();
-    // Only *this* backend's readiness clears the placeholder — a push from an
+    // Only *this* backend's readiness reveals the indicator — a push from an
     // unrelated backend must not mark us loaded with a still-empty snapshot.
     loaded_ = backend_->ready();
-    visible = loaded_ ? lastSnap_.available : true;
+    visible = loaded_ && lastSnap_.available;
 }
 
 bool BrightnessIndicator::onScroll(double dx, double dy, double x, double y) {
