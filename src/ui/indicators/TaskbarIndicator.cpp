@@ -1,12 +1,9 @@
 // TaskbarIndicator.cpp - Icons-only window list implementation.
+#include "ui/indicators/AppTile.hpp"
 #include "ui/indicators/TaskbarIndicator.hpp"
-
-#include <algorithm>
-#include <cctype>
 
 #include "render/Painter.hpp"
 #include "system/ToplevelBackend.hpp"
-#include "ui/IconResolver.hpp"
 #include "ui/Theme.hpp"
 #include "ui/statusbar/IndicatorRegistry.hpp"
 
@@ -18,48 +15,11 @@ constexpr double kIconPx = 20.0;  // icon glyph/surface size
 constexpr double kGap = 4.0;      // between buttons
 constexpr double kSidePad = 4.0;  // hover-zone padding each side
 constexpr double kUnderlineH = 2.0;
-
-// A themed initial-letter tile when the app id resolves to no icon (D5's
-// fallback). The hue is derived from the app id so the same app is always the
-// same colour, and different apps are distinguishable.
-const Color& fallbackColor(const std::string& appId) {
-    static const Color palette[] = {
-        Color::fromHex("#89b4fa"), Color::fromHex("#a6e3a1"), Color::fromHex("#f9e2af"),
-        Color::fromHex("#f38ba8"), Color::fromHex("#cba6f7"), Color::fromHex("#94e2d5"),
-        Color::fromHex("#fab387"), Color::fromHex("#74c7ec"),
-    };
-    uint32_t h = 2166136261u;
-    for (char c : appId) h = (h ^ static_cast<unsigned char>(c)) * 16777619u;
-    return palette[h % (sizeof(palette) / sizeof(palette[0]))];
-}
-
-// The letter for the fallback tile: last dotted segment's first char, upper.
-// "org.kde.dolphin" → 'D', "firefox" → 'F', "" → '?'.
-std::string initialFor(const std::string& appId) {
-    if (appId.empty()) return "?";
-    size_t start = appId.find_last_of('.');
-    start = (start == std::string::npos) ? 0 : start + 1;
-    if (start >= appId.size()) start = 0;
-    char c = appId[start];
-    return std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
-}
-
-// Try the app id, then its lowercase form, as a freedesktop icon name.
-cairo_surface_t* resolveIcon(const std::string& appId) {
-    if (appId.empty()) return nullptr;
-    if (auto* s = IconResolver::instance().get(appId)) return s;
-    std::string lower = appId;
-    std::transform(lower.begin(), lower.end(), lower.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
-    if (lower != appId) {
-        if (auto* s = IconResolver::instance().get(lower)) return s;
-    }
-    return nullptr;
-}
 }  // namespace
 
 TaskbarIndicator::TaskbarIndicator(const SystemBackends& backends)
-    : StatusIndicator("taskbar", Zone::Left, 100), backend_(backends.toplevel) {
+    : StatusIndicator("taskbar", Zone::Left, 100),
+      backend_(backends.toplevel) {
     visible = false;  // hidden until at least one window exists
 }
 
@@ -103,7 +63,7 @@ void TaskbarIndicator::draw(Painter& p, int64_t now) {
         const double iconX = x + (kBtnW - kIconPx) / 2.0;
         const double iconY = bounds.y + (bounds.h - kIconPx) / 2.0;
 
-        cairo_surface_t* s = resolveIcon(w.appId);
+        cairo_surface_t* s = apptile::resolveIcon(w.appId);
         // Minimized windows are dimmed so the focused/visible set reads clearly.
         const double alpha = w.minimized ? 0.45 : 1.0;
 
@@ -114,10 +74,10 @@ void TaskbarIndicator::draw(Painter& p, int64_t now) {
         } else {
             // Initial-letter tile.
             const Rect tile{iconX, iconY, kIconPx, kIconPx};
-            p.fillRoundedRect(tile, 5.0, fallbackColor(w.appId).withAlpha(alpha));
+            p.fillRoundedRect(tile, 5.0, apptile::fallbackColor(w.appId).withAlpha(alpha));
             TextStyle st{theme::font::family, 12.0, PANGO_WEIGHT_BOLD,
                          Color::fromHex("#1e1e2e").withAlpha(alpha)};
-            const std::string ch = initialFor(w.appId);
+            const std::string ch = apptile::initialFor(w.appId);
             const Size cs = p.measureText(ch, st);
             p.drawText(iconX + (kIconPx - cs.w) / 2.0, iconY + (kIconPx - cs.h) / 2.0, ch, st);
         }

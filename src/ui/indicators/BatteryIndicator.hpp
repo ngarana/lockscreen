@@ -22,14 +22,7 @@ public:
     Color iconColor() const override;
 
     void draw(Painter& p, int64_t now) override;
-    void poll(int64_t now) override;
     void onBackendUpdate() override;
-
-    // The 1Hz charging pulse drives a redraw every frame; while charging we
-    // report "animating" so the host keeps the loop alive at full rate.
-    bool animating(int64_t now) const override {
-        return StatusIndicator::animating(now) || charging_;
-    }
 
     std::unique_ptr<QSTile> createTile() override;
     bool hasDetailedView() const override { return true; }
@@ -39,10 +32,6 @@ private:
     BatteryBackend* backend_ = nullptr;
     PowerProfilesBackend* profiles_ = nullptr;  // null on the lock screen
     BatterySnapshot lastSnap_;
-    // Phase 6 polish: charging-pulse glow. Re-evaluated each poll() frame so a
-    // freshly-snapshot even when the icon glyph itself did not change still
-    // drives the 1Hz oscillation.
-    bool charging_ = false;
 };
 
 }  // namespace qypr

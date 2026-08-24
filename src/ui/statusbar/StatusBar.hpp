@@ -142,6 +142,10 @@ private:
     // Settings (Ubuntu-style reveal).
     Rect rightGroupBounds_;
 
+    // Centered content area: the span of visible indicators, centered within
+    // bounds. Used for backdrop drawing and content clipping.
+    Rect contentBounds_;
+
     // Popover Management
     QuickSettingsPanel qsPanel_;
     PopoverManager popovers_;

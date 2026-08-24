@@ -123,6 +123,7 @@ int g_tests_failed = 0;
 #include "system/SNIBackend.hpp"
 #include "system/WorkspaceBackend.hpp"
 #include "system/ToplevelBackend.hpp"
+#include "system/SessionMapper.hpp"
 #include "system/SystemStats.hpp"
 #include "system/IdleInhibitor.hpp"
 #include "system/DesktopIndex.hpp"
@@ -136,6 +137,7 @@ int g_tests_failed = 0;
 #include "ui/indicators/WifiIndicator.hpp"
 #include "ui/indicators/SNITrayHost.hpp"
 #include "ui/indicators/WorkspacesIndicator.hpp"
+#include "ui/indicators/PagerIndicator.hpp"
 #include "ui/indicators/ActiveWindowIndicator.hpp"
 #include "ui/indicators/LauncherIndicator.hpp"
 #include "ui/indicators/KeyboardLayoutIndicator.hpp"
@@ -1759,6 +1761,231 @@ TEST(ActiveWindowIndicatorTruncatesUtf8) {
     // 60 codepoints kept (60*3 bytes) + "…" (3 bytes).
     EXPECT_EQ(shown.size(), static_cast<size_t>(60 * 3 + 3));
     EXPECT_TRUE(shown.size() < title.size());
+}
+
+// -----------------------------------------------------------------------------
+// SessionMapper — focus-correlation window↔workspace inference
+// -----------------------------------------------------------------------------
+
+TEST(SessionMapperBirthAssignsActiveWorkspace) {
+    qypr::SessionMapper m;
+    qypr::WorkspaceSnapshot ws;
+    ws.available = true;
+    ws.workspaces = {{"1", true, false}, {"2", false, false}};
+    qypr::ToplevelSnapshot tl;
+    tl.available = true;
+
+    m.ingest(ws, tl);
+    EXPECT_EQ(m.view().clusters.size(), static_cast<size_t>(2));
+
+    // kitty spawns (focused) while ws "1" is active → born there.
+    tl.windows.push_back({1, "kitty", "", true, false});
+    m.ingest(ws, tl);
+    EXPECT_EQ(m.homeOf(1), std::string("1"));
+
+    // firefox spawns unfocused — still on the active workspace.
+    tl.windows.push_back({2, "firefox", "", false, false});
+    m.ingest(ws, tl);
+    EXPECT_EQ(m.homeOf(2), std::string("1"));
+    EXPECT_EQ(m.view().clusters[0].windows.size(), static_cast<size_t>(2));
+}
+
+TEST(SessionMapperCarriesFocusedWindowOnMove) {
+    qypr::SessionMapper m;
+    qypr::WorkspaceSnapshot ws;
+    ws.available = true;
+    ws.workspaces = {{"1", true, false}, {"2", false, false}};
+    qypr::ToplevelSnapshot tl;
+    tl.available = true;
+    tl.windows.push_back({1, "kitty", "", true, false});
+    m.ingest(ws, tl);
+    EXPECT_EQ(m.homeOf(1), std::string("1"));
+
+    // Moving the focused window keeps it activated while the destination
+    // workspace flips to active: the mapper must carry it across.
+    ws.workspaces[0].active = false;
+    ws.workspaces[1].active = true;
+    m.ingest(ws, tl);
+    EXPECT_EQ(m.homeOf(1), std::string("2"));
+}
+
+TEST(SessionMapperPlainSwitchDoesNotDragHomes) {
+    qypr::SessionMapper m;
+    qypr::WorkspaceSnapshot ws;
+    ws.available = true;
+    ws.workspaces = {{"1", true, false}, {"2", false, false}};
+    qypr::ToplevelSnapshot tl;
+    tl.available = true;
+    tl.windows.push_back({1, "kitty", "", true, false});
+    m.ingest(ws, tl);
+
+    // A plain switch to an empty workspace deactivates the window in the same
+    // batch — its home must not be dragged to the destination.
+    ws.workspaces[0].active = false;
+    ws.workspaces[1].active = true;
+    tl.windows[0].active = false;
+    m.ingest(ws, tl);
+    EXPECT_EQ(m.homeOf(1), std::string("1"));
+    EXPECT_EQ(m.view().unassigned.size(), static_cast<size_t>(0));
+}
+
+TEST(SessionMapperBindFollowsActivation) {
+    qypr::SessionMapper m;
+    qypr::WorkspaceSnapshot ws;
+    ws.available = true;
+    ws.workspaces = {{"1", true, false}, {"2", false, false}};
+    qypr::ToplevelSnapshot tl;
+    tl.available = true;
+    tl.windows.push_back({1, "kitty", "", true, false});  // on 1
+    tl.windows.push_back({2, "code", "", false, false});  // on 1 too (born)
+    m.ingest(ws, tl);
+
+    // User focuses code while switching to ws 2 (clicking it on the other
+    // workspace): activation + workspace flip in one batch → code re-homes.
+    ws.workspaces[0].active = false;
+    ws.workspaces[1].active = true;
+    tl.windows[0].active = false;
+    tl.windows[1].active = true;
+    m.ingest(ws, tl);
+    EXPECT_EQ(m.homeOf(2), std::string("2"));
+    EXPECT_EQ(m.homeOf(1), std::string("1"));  // kitty stays put
+}
+
+TEST(SessionMapperAdoptsResidentsWhenWorkspaceVanishes) {
+    qypr::SessionMapper m;
+    qypr::WorkspaceSnapshot ws;
+    ws.available = true;
+    ws.workspaces = {{"1", true, false}, {"2", false, false}, {"3", false, false}};
+    qypr::ToplevelSnapshot tl;
+    tl.available = true;
+    tl.windows.push_back({1, "kitty", "", true, false});
+    m.ingest(ws, tl);
+    EXPECT_EQ(m.homeOf(1), std::string("1"));
+    EXPECT_EQ(m.homeOf(1), m.view().clusters[0].name);
+
+    // ws "1" closes; its resident lands wherever becomes active next ("2").
+    ws.workspaces.erase(ws.workspaces.begin());
+    ws.workspaces[0].active = true;  // now "2"
+    m.ingest(ws, tl);
+    EXPECT_EQ(m.homeOf(1), std::string("2"));
+}
+
+TEST(SessionMapperWithoutWorkspacesEverythingUnassigned) {
+    qypr::SessionMapper m;
+    qypr::WorkspaceSnapshot ws;  // protocol absent
+    qypr::ToplevelSnapshot tl;
+    tl.available = true;
+    tl.windows.push_back({1, "kitty", "", true, false});
+    m.ingest(ws, tl);
+
+    EXPECT_FALSE(m.view().hasWorkspaces);
+    EXPECT_TRUE(m.view().clusters.empty());
+    EXPECT_EQ(m.view().unassigned.size(), static_cast<size_t>(1));
+    EXPECT_TRUE(m.view().window(1) != nullptr);
+}
+
+// -----------------------------------------------------------------------------
+// PagerIndicator — the merged workspaces+taskbar module
+// -----------------------------------------------------------------------------
+
+TEST(PagerIndicatorConstruction) {
+    qypr::SystemBackends backends{};  // no backends
+    qypr::PagerIndicator pg(backends);
+
+    EXPECT_EQ(pg.id(), std::string("pager"));
+    EXPECT_EQ(pg.priority(), -100);
+    EXPECT_TRUE(pg.sensitive());  // session content: gated off while locked
+
+    pg.onBackendUpdate();
+    EXPECT_FALSE(pg.visible);  // nothing anywhere → hidden
+}
+
+TEST(PagerIndicatorRendersClustersAndConsumesClicks) {
+    qypr::WorkspaceBackend wsb;
+    wsb.snap_.available = true;
+    wsb.snap_.workspaces = {{"1", true, false}, {"2", false, false}};
+    qypr::ToplevelBackend tlb;
+    tlb.snap_.available = true;
+    tlb.snap_.windows = {{1, "kitty", "", true, false},
+                         {2, "firefox", "", false, false},
+                         {3, "org.kde.dolphin", "", false, true}};
+
+    qypr::SystemBackends backends{};
+    backends.workspace = &wsb;
+    backends.toplevel = &tlb;
+    qypr::PagerIndicator pg(backends);
+    pg.onBackendUpdate();
+    EXPECT_TRUE(pg.visible);
+    // Tooltip names apps via their pretty id.
+    EXPECT_TRUE(pg.tooltip().find("dolphin") != std::string::npos);
+
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 800, 40);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    const double w = pg.measureWidth(p);
+    EXPECT_TRUE(w > 0);
+    pg.bounds = {0, 0, w, 36};
+    pg.draw(p, qypr::nowMs());
+
+    // Clicks inside the module are consumed (activate calls are no-ops without
+    // a live compositor but must route without crashing); outside is refused.
+    EXPECT_TRUE(pg.onClick(pg.bounds.x + 6.0, 18));
+    EXPECT_FALSE(pg.onClick(9000, 18));
+    // Middle/right clicks only act on icons; over chip bodies they are no-ops.
+    (void)pg.onMiddleClick(pg.bounds.x + 6.0, 18);
+    (void)pg.onSecondaryClick(pg.bounds.x + 6.0, 18);
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+TEST(PagerIndicatorDegradesToFlatTaskbar) {
+    // No ext-workspace-v1: the pager must still render every open window as a
+    // flat strip (the old taskbar behaviour), never hide.
+    qypr::ToplevelBackend tlb;
+    tlb.snap_.available = true;
+    tlb.snap_.windows = {{1, "kitty", "", true, false}};
+
+    qypr::SystemBackends backends{};
+    backends.toplevel = &tlb;
+    qypr::PagerIndicator pg(backends);
+    pg.onBackendUpdate();
+    EXPECT_TRUE(pg.visible);
+    EXPECT_FALSE(pg.tooltip().empty());
+
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 400, 40);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    pg.bounds = {0, 0, pg.measureWidth(p), 36};
+    pg.draw(p, qypr::nowMs());
+    EXPECT_TRUE(pg.onClick(pg.bounds.x + 5.0, 18));
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
+}
+
+TEST(PagerIndicatorOverflowCapsIconsPerCluster) {
+    qypr::WorkspaceBackend wsb;
+    wsb.snap_.available = true;
+    wsb.snap_.workspaces = {{"1", true, false}};
+    qypr::ToplevelBackend tlb;
+    tlb.snap_.available = true;
+    for (uint64_t i = 1; i <= 10; ++i) tlb.snap_.windows.push_back({i, "kitty", "", i == 1, false});
+
+    qypr::SystemBackends backends{};
+    backends.workspace = &wsb;
+    backends.toplevel = &tlb;
+    qypr::PagerIndicator pg(backends);
+    pg.onBackendUpdate();
+    EXPECT_TRUE(pg.visible);
+
+    cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 800, 40);
+    cairo_t* cr = cairo_create(surf);
+    qypr::Painter p(cr);
+    pg.bounds = {0, 0, pg.measureWidth(p), 36};
+    // Collapsed caps at 3 icons (+badge); must stay narrow and draw cleanly.
+    EXPECT_TRUE(pg.measureWidth(p) < 200.0);
+    pg.draw(p, qypr::nowMs());
+    cairo_destroy(cr);
+    cairo_surface_destroy(surf);
 }
 
 TEST(SensitiveIndicatorsGatedByDefault) {

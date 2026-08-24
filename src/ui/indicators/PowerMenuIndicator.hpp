@@ -23,8 +23,8 @@ class PowerMenuIndicator : public StatusIndicator {
 public:
     explicit PowerMenuIndicator(const SystemBackends& backends);
 
-    std::string icon() const override { return "󰒓"; }  // nf-md-toggle_switch (glyph fallback)
-    std::string themedIcon() const override { return "applications-system-symbolic"; }
+    std::string icon() const override { return ""; }
+    std::string themedIcon() const override { return "system-shutdown-symbolic"; }
     std::string tooltip() const override { return "Control Center"; }
     Color iconColor() const override;
 

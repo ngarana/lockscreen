@@ -956,11 +956,26 @@ other compositor that implements the protocols.
 |--------|----------|-------|
 | Workspaces (`WorkspacesIndicator`, left zone) | `ext-workspace-v1` (standard) | a pill per workspace, the active one accented, urgent tinted; click switches (`activate` + `commit`). Hidden workspaces are filtered per spec. |
 | Active window (`ActiveWindowIndicator`, center) | `wlr-foreign-toplevel-management` (vendored) | the focused window's title (app id fallback), following keyboard focus |
+| Pager (`PagerIndicator`, left zone) | both of the above, **correlated** | one chip per workspace holding the app icons believed to live there; click chip = switch workspace, click icon = focus window, middle = close, right = minimize, scroll = cycle. The merged workspaces+taskbar module. |
 
 The active window uses the wlr protocol, not the standard
 `ext-foreign-toplevel-list-v1`, because the latter is list-only — it carries no
 per-window *focus/activated* state, so it cannot answer "which window is
 focused". The wlr protocol is the only broadly supported one that does.
+
+**The pager's window↔workspace inference.** Neither protocol associates
+toplevels with workspaces, and per-WM IPC is off the table (above). But a
+compositor's own focus behaviour leaks the mapping continuously: switching
+workspaces activates some window on the destination, and moving the *focused*
+window elsewhere keeps it activated while a different workspace flips to
+active. `SessionMapper` (src/system/SessionMapper.{hpp,cpp}) diffs consecutive
+snapshot pairs from both backends and maintains a window→workspace map from
+four rules: **birth** (new toplevel → active workspace), **bind** (newly
+activated toplevel → active workspace, which also carries moved focused
+windows), **stickiness** (unobserved windows keep their last home), and
+**adoption** (when a workspace vanishes, its residents join whatever becomes
+active next — the neighbour that received them). Pure diffable logic, no I/O,
+fully unit tested; transient mislabels self-heal on the next activation event.
 
 Both backends (`WorkspaceBackend`, `ToplevelBackend`) bind their own registry
 on the host's `wl_display`, so the same classes serve the lock screen and the

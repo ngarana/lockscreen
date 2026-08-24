@@ -41,7 +41,9 @@ A waybar replacement that shares the lock screen's StatusBar and indicators,
 hosted on wlr-layer-shell for the unlocked desktop.
 
 - **Modular indicators**: battery, bluetooth, brightness, clock, DND, media,
-  night-light, notifications, SNI tray, volume, wifi, workspaces, active window.
+  night-light, notifications, SNI tray, volume, wifi, workspaces, active window,
+  pager (workspace chips with per-workspace app icons — the merged
+  workspaces+taskbar module).
 - **Quick Settings panel** (gear icon): brightness slider, volume slider, DND
   toggle, power menu.
 - Configurable via `$XDG_CONFIG_HOME/qypr/bar.conf` (position, height, margin,

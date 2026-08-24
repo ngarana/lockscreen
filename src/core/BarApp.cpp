@@ -292,15 +292,10 @@ void BarApp::reloadConfig() {
 }
 
 void BarApp::syncOverlay() {
-    // Size the surface to exactly fit the open popover (0 → back to the idle
-    // strip), never the whole output. A full-window layer surface is what a
-    // compositor animates/blurs "across the window" when a popover opens.
     const int overlay = statusBar_.overlayHeight();
     const int want = overlay > 0 ? overlay : reservedFor(geom_);
     if (want == overlayHeight_) return;
     overlayHeight_ = want;
-    // Defer the resize+commit off the current dispatch/render so we never
-    // double-commit a surface that is mid-frame.
     loop_.post([this, want] { display_.setOverlayHeight(want); });
 }
 

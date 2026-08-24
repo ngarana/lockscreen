@@ -19,7 +19,9 @@ const wl_registry_listener kRegistryListener = {
 }  // namespace
 
 BarDisplay::BarDisplay(EventLoop& loop, int reservedHeight, bool bottom)
-    : loop_(loop), reservedHeight_(reservedHeight), bottom_(bottom) {}
+    : loop_(loop),
+      reservedHeight_(reservedHeight),
+      bottom_(bottom) {}
 
 BarDisplay::~BarDisplay() {
     windows_.clear();
@@ -49,12 +51,9 @@ bool BarDisplay::connect() {
 
     if (!compositor_ || !shm_ || !layerShell_) return false;
 
-    // Now that the layer shell is bound, give every discovered output its
-    // surface. Later hotplugged outputs are handled inline in onGlobal.
     for (auto& win : windows_) win->createLayerSurface(layerShell_);
     connected_ = true;
 
-    // Integrate the Wayland socket into the loop; flush before every wait.
     loop_.addPrepare([this] { flush(); });
     loop_.addFd(wl_display_get_fd(display_), [this](uint32_t) {
         if (wl_display_dispatch(display_) < 0) loop_.quit();
@@ -103,8 +102,8 @@ std::vector<wl_output*> BarDisplay::outputs() const {
     return out;
 }
 
-void BarDisplay::onGlobal(void* data, wl_registry* registry, uint32_t name,
-                          const char* interface, uint32_t version) {
+void BarDisplay::onGlobal(void* data, wl_registry* registry, uint32_t name, const char* interface,
+                          uint32_t version) {
     auto* self = static_cast<BarDisplay*>(data);
 
     if (std::strcmp(interface, wl_compositor_interface.name) == 0) {
@@ -112,8 +111,7 @@ void BarDisplay::onGlobal(void* data, wl_registry* registry, uint32_t name,
             wl_registry_bind(registry, name, &wl_compositor_interface, std::min(version, 4u)));
         self->env_.compositor = self->compositor_;
     } else if (std::strcmp(interface, wl_shm_interface.name) == 0) {
-        self->shm_ = static_cast<wl_shm*>(
-            wl_registry_bind(registry, name, &wl_shm_interface, 1));
+        self->shm_ = static_cast<wl_shm*>(wl_registry_bind(registry, name, &wl_shm_interface, 1));
         self->env_.shm = self->shm_;
     } else if (std::strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
         self->layerShell_ = static_cast<zwlr_layer_shell_v1*>(wl_registry_bind(
@@ -139,8 +137,6 @@ void BarDisplay::onGlobal(void* data, wl_registry* registry, uint32_t name,
     } else if (std::strcmp(interface, wl_output_interface.name) == 0) {
         auto* output = static_cast<wl_output*>(
             wl_registry_bind(registry, name, &wl_output_interface, std::min(version, 4u)));
-        // Construct now so the wl_output listener catches mode/scale; only wire
-        // the layer surface once the shell is bound (immediately if hotplugged).
         auto win = std::make_unique<BarWindow>(output, name, &self->env_, self->reservedHeight_,
                                                self->bottom_);
         if (self->connected_ && self->layerShell_) win->createLayerSurface(self->layerShell_);

@@ -273,53 +273,8 @@ Color BatteryIndicator::iconColor() const {
     return theme::color::error;
 }
 
-void BatteryIndicator::poll(int64_t now) {
-    (void)now;
-    // onBackendUpdate() already updates from UPower pushes; this refreshes the
-    // charging_ flag from the backend so the pulse glow reflects a mid-session
-    // state change without depending on a separate redraw trigger.
-    if (backend_ == nullptr) { return; }
-    charging_ = lastSnap_.state == BatterySnapshot::Charging ||
-                lastSnap_.state == BatterySnapshot::PendingCharge;
-}
-
 void BatteryIndicator::draw(Painter& p, int64_t now) {
     StatusIndicator::draw(p, now);
-    if (!visible || !charging_) { return; }
-
-    // Phase 6 polish: 1Hz charging pulse. A soft ring around the icon (success
-    // green) oscillates alpha in a sine wave. We compute the icon centre the
-    // same way the base draw does (icon left of label, both centred in the
-    // strip) so the ring tracks the glyph, not the whole bounds.
-    const std::string ic = icon();
-    if (ic.empty()) { return; }
-    TextStyle const iconStyle{.family = theme::font::iconFamily,
-                              .size = theme::statusbar::iconSize,
-                              .weight = PANGO_WEIGHT_NORMAL,
-                              .color = iconColor()};
-    Size const iconSz = p.measureText(ic, iconStyle);
-    const double iconY = bounds.y + ((bounds.h - iconSz.h) / 2.0);
-    const std::string lbl = label();
-    double contentW = iconSz.w;
-    if (!lbl.empty()) {
-        const TextStyle lblStyle{.family = theme::font::family,
-                                 .size = labelFontSize(),
-                                 .weight = PANGO_WEIGHT_NORMAL,
-                                 .color = iconColor()};
-        contentW += 8.0 + p.measureText(lbl, lblStyle).w;
-    }
-    const double iconCX = bounds.x + ((bounds.w - contentW) / 2.0) + (iconSz.w / 2.0);
-    const double iconCY = iconY + (iconSz.h / 2.0);
-    const double periodMs = 1000.0;  // 1Hz, per spec table.
-    const double phase = static_cast<double>(now % static_cast<int64_t>(periodMs)) / periodMs;
-    const double s = std::sin(phase * 2.0 * M_PI);  // −1..+1
-    const double alpha = 0.35 + (0.20 * s);         // 0.15..0.55
-    const double r = (std::max(iconSz.w, iconSz.h) * 0.55) + 2.0;
-
-    // Outer halo + inner tinted ring; both painted over the icon so the glyph
-    // body picks up a green wash, not just a coloured outline.
-    p.fillCircle(iconCX, iconCY, r + 3.0, theme::color::success.withAlpha(alpha * 0.25));
-    p.fillCircle(iconCX, iconCY, r + 1.0, theme::color::success.withAlpha(alpha));
 }
 
 void BatteryIndicator::onBackendUpdate() {

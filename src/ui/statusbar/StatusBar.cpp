@@ -35,7 +35,8 @@ namespace {
 
 StatusBar::StatusBar(EventLoop& loop, Invalidator& host, const SystemBackends& backends,
                      const IndicatorRegistry::ModuleSelection* sel)
-    : loop_(loop), host_(host) {
+    : loop_(loop),
+      host_(host) {
     // A bar preview and the lock screen can coexist in the same test process;
     // do not let the standalone bar's nested-surface alpha leak into a new
     // lock-screen StatusBar before its host configures the bar backdrop.
@@ -185,7 +186,10 @@ void StatusBar::reloadModules(const SystemBackends& backends,
 }
 
 void StatusBar::resetAutoDismiss() {
-    if (dismissTimer_ >= 0) { loop_.removeTimer(dismissTimer_); dismissTimer_ = -1; }
+    if (dismissTimer_ >= 0) {
+        loop_.removeTimer(dismissTimer_);
+        dismissTimer_ = -1;
+    }
     DetailedPopover* p = popovers_.active();
     if (!p) return;
     const int ms = p->autoDismissMs();
@@ -230,11 +234,8 @@ void StatusBar::setBackdrop(bool enabled, double alpha) {
     // Nested QS tiles and popup cards must use the same opacity as the outer
     // slab; otherwise the panel still looks opaque even when its shell is
     // translucent.
-    theme::statusbar::panelSurfaceAlpha = enabled
-                                               ? clamp01(alpha >= 0.0
-                                                             ? alpha
-                                                             : theme::statusbar::barTintAlpha)
-                                               : 0.0;
+    theme::statusbar::panelSurfaceAlpha =
+        enabled ? clamp01(alpha >= 0.0 ? alpha : theme::statusbar::barTintAlpha) : 0.0;
     // Keep every overlay in lock-step with the strip, including the borrowed
     // Quick Settings panel and popovers created later by indicators.
     qsPanel_.setBackdrop(enabled, alpha);
@@ -266,6 +267,9 @@ void StatusBar::layout(int screenW, int screenH) {
     // the strip itself, and when the surface grows for an overlay screenH is the
     // whole output — the bar stays pinned to the same physical edge either way.
     const double y = geom_.bottom ? screenH - geom_.edgeMargin - barH : geom_.edgeMargin;
+
+    // First pass: lay out indicators at their natural positions within a
+    // full-width bounds to measure the content span.
     bounds = {sideMargin, y, screenW - 2 * sideMargin, barH};
 
     Painter meas(measureCr_);
@@ -330,12 +334,84 @@ void StatusBar::layout(int screenW, int screenH) {
         cx += w + sp;
     }
 
+    // Compute content width from the positioned indicator bounds — the span
+    // from the leftmost to the rightmost visible indicator, plus padding.
+    // Used to center the content within the full-width surface.
+    double contentLeft = bounds.x + bounds.w;  // rightmost possible
+    double contentRight = bounds.x;            // leftmost possible
+    auto updateContentSpan = [&](const StatusIndicator& ind) {
+        if (ind.bounds.w <= 0) return;
+        if (ind.bounds.x < contentLeft) contentLeft = ind.bounds.x;
+        double right = ind.bounds.x + ind.bounds.w;
+        if (right > contentRight) contentRight = right;
+    };
+    for (const auto& ind : leftIndicators_) updateContentSpan(*ind);
+    for (const auto& ind : rightIndicators_) updateContentSpan(*ind);
+    for (const auto& ind : centerIndicators_) updateContentSpan(*ind);
+    int contentW = 0;
+    if (contentRight > contentLeft) {
+        contentW = static_cast<int>(contentRight - contentLeft + 2 * pad + 0.5);
+    }
+    if (contentW > screenW) contentW = screenW;
+
+    // Default: content fills the full surface.
+    contentBounds_ = bounds;
+
+    // Center the bar content within the full-width surface. bounds stays at
+    // full surface width (for popover anchoring); only the indicator positions
+    // are shifted so the content is visually centered.
+    if (contentW > 0 && contentW < static_cast<int>(screenW - 2 * sideMargin)) {
+        const double offset = (screenW - 2 * sideMargin - contentW) / 2.0;
+        contentBounds_ = {bounds.x + offset, bounds.y, static_cast<double>(contentW), barH};
+
+        // Re-layout left indicators starting from the centered content edge.
+        double newLx = bounds.x + offset + pad;
+        for (auto& ind : leftIndicators_) {
+            if (!isShown(*ind)) continue;
+            ind->bounds.x = newLx;
+            newLx += ind->bounds.w + sp;
+        }
+
+        // Re-layout right indicators ending at the centered content edge.
+        double newRx = bounds.x + offset + contentW - pad;
+        for (auto it = rightIndicators_.rbegin(); it != rightIndicators_.rend(); ++it) {
+            if (!isShown(**it)) continue;
+            newRx -= (*it)->bounds.w;
+            (*it)->bounds.x = newRx;
+            newRx -= sp;
+        }
+
+        // Update right-group bounds to match centered positions.
+        rightGroupBounds_ = {0, 0, 0, 0};
+        rightMinX = bounds.x + bounds.w;
+        rightMaxX = 0;
+        for (const auto& ind : rightIndicators_) {
+            if (!isShown(*ind)) continue;
+            if (ind->bounds.x < rightMinX) rightMinX = ind->bounds.x;
+            if (ind->bounds.x + ind->bounds.w > rightMaxX)
+                rightMaxX = ind->bounds.x + ind->bounds.w;
+        }
+        if (rightMinX < rightMaxX) {
+            rightGroupBounds_ = {rightMinX, bounds.y, rightMaxX - rightMinX, barH};
+        }
+
+        // Re-center the center zone within the centered content area.
+        double newCx = bounds.x + offset + (contentW - totalCenterW) / 2.0;
+        for (auto& ind : centerIndicators_) {
+            if (!isShown(*ind)) continue;
+            ind->bounds.x = newCx;
+            newCx += ind->bounds.w + sp;
+        }
+    }
+
     // 4. Anchor active popovers
     //    right edge of the bar, opening away from the anchored screen edge.
     if (popovers_.active()) {
         DetailedPopover* p = popovers_.active();
         if (p == &qsPanel_ || p->contentWidth() >= 300.0) {
-            p->anchorX = bounds.x + bounds.w;
+            // Anchor to the rightmost visible indicator, or contentBounds right edge.
+            p->anchorX = rightGroupBounds_.w > 0 ? rightGroupBounds_.x + rightGroupBounds_.w
+                                                 : contentBounds_.x + contentBounds_.w;
         }
         anchorPopoverY(*p);
     }
@@ -351,19 +427,19 @@ void StatusBar::draw(Painter& p, int64_t now) {
     if (!visible) return;
 
     // Translucent menu-bar backdrop: a single frosted-glass slab spans the
-    // entire bar surface, with a subtle hairline bottom (or top) border.
+    // centered content area, with a subtle hairline bottom (or top) border.
     // The lock screen stays chromeless against its dark background.
-    if (backdrop_ && bounds.w > 0) {
-        const double tintAlpha = backdropAlpha_ >= 0.0
-                                     ? backdropAlpha_
-                                     : theme::statusbar::barTintAlpha;
-        p.fillRoundedRect(bounds, theme::statusbar::cornerRadius,
+    if (backdrop_ && contentBounds_.w > 0) {
+        const double tintAlpha =
+            backdropAlpha_ >= 0.0 ? backdropAlpha_ : theme::statusbar::barTintAlpha;
+        p.fillRoundedRect(contentBounds_, theme::statusbar::cornerRadius,
                           theme::statusbar::barTint.withAlpha(tintAlpha));
         // Hairline separator along the anchored edge
         if (theme::statusbar::barBorderEnabled && theme::statusbar::barBorderAlpha > 0.0) {
-            const double borderY = geom_.bottom ? bounds.y : bounds.y + bounds.h;
-            p.fillRect({bounds.x, borderY - 0.5, bounds.w, 1.0},
-                        theme::statusbar::barBorder.withAlpha(theme::statusbar::barBorderAlpha));
+            const double borderY =
+                geom_.bottom ? contentBounds_.y : contentBounds_.y + contentBounds_.h;
+            p.fillRect({contentBounds_.x, borderY - 0.5, contentBounds_.w, 1.0},
+                       theme::statusbar::barBorder.withAlpha(theme::statusbar::barBorderAlpha));
         }
     }
 
@@ -469,10 +545,8 @@ void StatusBar::activateIndicator(StatusIndicator& ind) {
     if (ind.hasDetailedView()) {
         if (auto view = ind.createDetailedView()) {
             DetailedPopover* p = view.get();
-            const double anchorX = ind.zone() == Zone::Left
-                                       ? ind.bounds.x + p->contentWidth()
-                                       : (ind.zone() == Zone::Right ? bounds.x + bounds.w
-                                                                     : ind.bounds.x + ind.bounds.w);
+            const double anchorX = ind.zone() == Zone::Left ? ind.bounds.x + p->contentWidth()
+                                                            : ind.bounds.x + ind.bounds.w;
             popovers_.open(std::move(view), anchorX, 0);
             anchorPopoverY(*p);
             resetAutoDismiss();  // arm auto-dismiss if this popover opts in
@@ -585,9 +659,7 @@ void StatusBar::handlePointerLeave(int64_t now) {
     popoverDragging_ = false;
     // Dismiss Quick Settings when the pointer leaves the surface entirely
     // (switching to another window/desktop).
-    if (popovers_.active() == &qsPanel_) {
-        popovers_.closeActive();
-    }
+    if (popovers_.active() == &qsPanel_) { popovers_.closeActive(); }
     auto clear = [&](auto& list) {
         for (auto& ind : list) ind->hovered = false;
     };
@@ -679,7 +751,9 @@ void StatusBar::toggleQuickSettings() {
     if (popovers_.active() == &qsPanel_) {
         popovers_.closeActive();
     } else {
-        popovers_.openBorrowed(&qsPanel_, bounds.x + bounds.w, 0);
+        const double qsAnchorX = rightGroupBounds_.w > 0 ? rightGroupBounds_.x + rightGroupBounds_.w
+                                                         : contentBounds_.x + contentBounds_.w;
+        popovers_.openBorrowed(&qsPanel_, qsAnchorX, 0);
         anchorPopoverY(qsPanel_);
     }
     resetAutoDismiss();  // QS opts out; this cancels any pending transient timer
@@ -764,7 +838,7 @@ void StatusBar::drawTooltip(Painter& p, int64_t now) const {
     const int64_t dwell = now - tooltipHoverStartMs_;
     if (dwell >= kTooltipDelayMs && tooltipAlpha_.target() < 0.99) {
         const_cast<StatusBar*>(this)->tooltipAlpha_.animateTo(1.0, theme::anim::fast,
-                                                               ease::inOutQuad);
+                                                              ease::inOutQuad);
     }
 
     const double alpha = tooltipAlpha_.value(now);

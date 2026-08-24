@@ -1,12 +1,16 @@
+// BarWindow.cpp - One monitor's wlr-layer-shell surface for the standalone bar.
 #include "wayland/BarWindow.hpp"
 
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 
-#include <cairo/cairo.h>
+#include <algorithm>
+#include <cstring>
 
 namespace qypr {
 
 namespace {
+constexpr int kFallbackOutputHeight = 2160;
+
 const wl_output_listener kOutputListener = {
     .geometry = BarWindow::onGeometry,
     .mode = BarWindow::onMode,
@@ -20,10 +24,6 @@ const zwlr_layer_surface_v1_listener kLayerSurfaceListener = {
     .configure = BarWindow::onConfigure,
     .closed = BarWindow::onClosed,
 };
-
-// Fallback output height (logical) if the compositor never sent a mode before
-// we needed to size an overlay — generous enough for any Quick Settings panel.
-constexpr int kFallbackOutputHeight = 2160;
 }  // namespace
 
 BarWindow::BarWindow(wl_output* output, uint32_t name, OutputEnv* env, int reservedHeight,
@@ -32,7 +32,6 @@ BarWindow::BarWindow(wl_output* output, uint32_t name, OutputEnv* env, int reser
       name_(name),
       env_(env),
       reservedHeight_(reservedHeight),
-      inputHeight_(reservedHeight),
       bottom_(bottom) {
     wl_output_add_listener(output_, &kOutputListener, this);
 }
@@ -60,11 +59,10 @@ void BarWindow::createLayerSurface(zwlr_layer_shell_v1* shell) {
     // perpendicular ones) — rather than to both top and bottom — is what keeps
     // the exclusive zone effective and lets the strip/popover extend inward from
     // that edge.
-    zwlr_layer_surface_v1_set_anchor(layerSurface_,
-                                     (bottom_ ? ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM
-                                              : ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) |
-                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
-                                         ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
+    zwlr_layer_surface_v1_set_anchor(layerSurface_, (bottom_ ? ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM
+                                                             : ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP) |
+                                                        ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT |
+                                                        ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
     // Fixed full-output height: the surface is sized once and never resized,
     // because a layer-surface resize is what the compositor animates (the
     // popover "bounce"). The exclusive zone still reserves only the strip, so
@@ -85,9 +83,6 @@ void BarWindow::createLayerSurface(zwlr_layer_shell_v1* shell) {
 void BarWindow::setKeyboardInteractive(bool on) {
     if (!layerSurface_ || on == kbInteractive_) return;
     kbInteractive_ = on;
-    // EXCLUSIVE while a launcher/search popover is open (grab the keyboard so the
-    // user can type immediately), NONE the rest of the time so the bar never
-    // steals input from the focused application.
     zwlr_layer_surface_v1_set_keyboard_interactivity(
         layerSurface_, on ? ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE
                           : ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE);
@@ -95,17 +90,11 @@ void BarWindow::setKeyboardInteractive(bool on) {
 }
 
 void BarWindow::setOverlayHeight(int logicalH) {
-    // Grow/shrink only the pointer input region — never the surface. The region
-    // covers the strip (idle) or the strip plus the open popover (logicalH),
-    // measured from the anchored edge; everywhere else the transparent surface
-    // passes clicks through. Clamp to [strip, output].
     const int full = outputHeight_ > 0 ? outputHeight_ : kFallbackOutputHeight;
     int h = logicalH < reservedHeight_ ? reservedHeight_ : logicalH;
     if (h > full) h = full;
     if (!layerSurface_ || h == inputHeight_) return;
     inputHeight_ = h;
-    // render() re-applies the input region (folded into the same commit as the
-    // frame that draws/undraws the popover). The surface size never changes.
     if (configured_) render();
 }
 
@@ -119,7 +108,8 @@ void BarWindow::onScale(void* data, wl_output*, int32_t factor) {
 void BarWindow::onMode(void* data, wl_output*, uint32_t flags, int32_t, int32_t height, int32_t) {
     auto* self = static_cast<BarWindow*>(data);
     constexpr uint32_t kCurrent = 0x1;  // WL_OUTPUT_MODE_CURRENT
-    if ((flags & kCurrent) && height > 0) self->outputHeight_ = height / (self->scale_ > 0 ? self->scale_ : 1);
+    if ((flags & kCurrent) && height > 0)
+        self->outputHeight_ = height / (self->scale_ > 0 ? self->scale_ : 1);
 }
 void BarWindow::onGeometry(void*, wl_output*, int32_t, int32_t, int32_t, int32_t, int32_t,
                            const char*, const char*, int32_t) {}
@@ -184,10 +174,6 @@ ShmBuffer* BarWindow::acquireBuffer(int pxW, int pxH) {
 void BarWindow::render() {
     if (!configured_ || width_ <= 0 || height_ <= 0) return;
 
-    // The surface is a fixed full-output-height buffer — it never resizes, so
-    // there is no size change for the compositor to animate. Popovers are drawn
-    // into this same buffer at their absolute coordinates; only the input region
-    // (below) changes as they open and close.
     const int pxW = width_ * scale_;
     const int pxH = height_ * scale_;
     ShmBuffer* buf = acquireBuffer(pxW, pxH);
@@ -237,10 +223,6 @@ void BarWindow::render() {
 }
 
 void BarWindow::applyInputRegion() {
-    // A single rect covering inputHeight_ from the anchored edge: the strip when
-    // idle, the strip plus the open popover otherwise. Coordinates are surface-
-    // local logical px (the surface uses set_buffer_scale). Setting an empty-of-
-    // that-area region elsewhere is what lets clicks fall through to the desktop.
     wl_region* region = wl_compositor_create_region(env_->compositor);
     const int h = inputHeight_ < height_ ? inputHeight_ : height_;
     const int y = bottom_ ? height_ - h : 0;
